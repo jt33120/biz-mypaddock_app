@@ -1,0 +1,6 @@
+# QO-1 est ouverte : MyPaddock est un nom de code, le nom exact est exploité
+# par Oracle Red Bull Racing et ThePaddock est déjà le même produit.
+# Rien de public sous ce nom — donc rien d'indexable non plus.
+# À rouvrir quand le nom public est tranché et les préconditions de QO-11 levées.
+User-agent: *
+Disallow: /
