@@ -1,0 +1,9 @@
+# Vercel construit depuis GitHub : rien de tout ceci n'a besoin de monter.
+context/
+_bmad/
+_bmad-output/
+.agents/
+.claude/
+node_modules/
+dist/
+*.pdf
