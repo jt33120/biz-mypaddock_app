@@ -36,10 +36,36 @@ explicitement à Julian plutôt que de la contourner en silence.
 3. **Le coût au tour ne s'affiche jamais seul**, toujours contre le budget de saison consommé.
    Isolé, il récompense le fait de rouler plus : plus de tours font un tour moins cher, et le
    produit célébrerait une victoire qui s'obtient en dépensant davantage.
-4. **Le catalogue d'achievements équilibre bravoure et discipline, et aucun n'est à série ni à
-   durée limitée.** Récompenser le coude au sol pousse à aller le chercher — c'est exactement
-   l'enchaînement qui a causé la chute fondatrice. Les séries et les compteurs à échéance
-   fabriquent la pression du « encore une session » ; ils sont exclus.
+4. **ARBITRAGE DU 18 AOÛT 2026 — LE PRODUIT DEVIENT UN JEU, MACHINE ET PILOTAGE.**
+
+   La clause précédente disait : « le catalogue d'achievements équilibre bravoure et discipline,
+   et aucun n'est à série ni à durée limitée. Récompenser le coude au sol pousse à aller le
+   chercher — c'est exactement l'enchaînement qui a causé la chute fondatrice. Les séries et les
+   compteurs à échéance fabriquent la pression du "encore une session" ; ils sont exclus. »
+
+   **Julian lève cette clause en connaissance de cause.** Le produit s'organise désormais autour
+   de la machine comme personnage et d'une progression qui porte **aussi sur le pilotage**. Les
+   séries, les objectifs et les caps annoncés redeviennent possibles. FR-6bis — « un cap se
+   constate, il ne se vise pas », que le PRD qualifiait de clause de sécurité — tombe avec elle.
+
+   **Ce qui a été mis dans la balance, écrit pour qu'on puisse le relire :** le projet est né
+   d'une chute causée par la recherche d'un geste. La clause existait pour ça. L'arbitrage a été
+   posé explicitement, avec ses conséquences nommées, et Julian a tranché. Un skill aval
+   **applique** cette décision et ne la redébat pas.
+
+   **CE QUI SURVIT, ET CE N'EST PAS UNE PRÉFÉRENCE DE TON — FR-39bis.** Un cap de bravoure ne se
+   partage **jamais automatiquement** au cercle. Le partage reste une décision explicite du
+   pilote, geste par geste. Motif : c'est le **seul mécanisme établi** de tout le dossier
+   académique — la présence de pairs augmente la prise de risque **en augmentant la sensibilité
+   à la récompense du choix risqué** (trois essais randomisés, substrat neuro-imagé), et le signe
+   **s'inverse** pour une audience passive. Le danger documenté n'est ni dans le catalogue seul
+   ni dans le cercle seul : il est dans **leur conjonction automatique**. Coûte un tap, retire le
+   mécanisme le mieux étayé du dossier.
+
+   **Et une distinction de conception qui reste utile même dans le jeu :** célébrer un geste
+   **accompli** et proposer un geste **à aller chercher** ne sont pas la même chose. Le premier
+   énonce, le second dirige. Les deux sont désormais permis — mais quand le choix se présente et
+   que rien ne tranche, préférer le premier.
 5. **Le coefficient d'usure est un paramètre à calibrer, jamais une constante affichée.** Aucune
    source ne l'étaye à ce jour.
 6. **La conformité organisateur porte sa source et sa date, et ne certifie pas l'admission.**
@@ -147,6 +173,26 @@ générale. Détail dans `DIRECTION.md`.
 **Piège de licence à ne pas oublier :** Racing Catalogue (Octotype / Thomas Boucherie) est gratuite
 pour usage **personnel uniquement**. Toute diffusion publique de l'application exige une licence
 commerciale. Prévoir une alternative sous licence libre si le produit sort du bac à sable.
+
+## 6bis. Le garage est le centre — direction du 18 août 2026
+
+**Le produit s'organise autour de la machine, pas autour du roulage.** Décision de Julian, et elle
+est cohérente avec deux choses que le projet portait déjà sans les montrer : AD-2 fait de la machine
+une **racine de premier rang** et non une propriété du roulage, et la suppression du mode hors-saison
+a été justifiée par « s'il existe deux unités de compte, l'hiver n'est plus un trou mais la période
+où l'axe machine domine ». La correction de cadence du même jour pointe au même endroit — les achats
+et l'entretien font vivre l'application toute l'année, le roulage est le motif le plus rare.
+
+**La moto devient une présence, pas une ligne de texte.** À partir d'une photo réelle, le produit en
+fabrique une représentation — pixel produit localement, et/ou modèle 3D généré par service externe.
+Le roulage s'y rattache, l'entretien s'y rattache, l'usure s'y lit. C'est le garage qu'on ouvre, pas
+un formulaire.
+
+**Deux inconnues à mesurer avant d'en planifier quoi que ce soit**, et qu'aucune source ne
+documente : ce que donne réellement une **moto** passée en 3D générative — rayons, durites,
+carénages sont parmi les sujets les plus durs — et lequel, du pixel ou du 3D, émeut vraiment son
+propriétaire. Une sonde d'une soirée tranche les deux. **Ne pas bâtir la spec sur la réponse
+espérée.**
 
 ## 7. Cadrage du projet
 

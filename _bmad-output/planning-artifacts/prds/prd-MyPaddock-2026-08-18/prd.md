@@ -989,6 +989,61 @@ genre de problème qu'on ne veut pas découvrir après l'avoir payée.
 
 ---
 
+## 5bis. Réorientation du 18 août 2026 — le garage au centre, et le produit devient un jeu
+
+**Deux décisions de Julian, prises le même soir, et la seconde lève une clause de sécurité.**
+Elles sont écrites ici en tête du §6 pour qu'on ne les découvre pas au détour d'une exigence.
+
+### Le garage devient le centre
+
+Le produit s'organise autour de la **machine** et non du roulage. La moto se photographie et
+devient une **présence** — représentation pixel produite localement, et/ou modèle 3D généré par
+service externe. Le roulage s'y rattache, l'entretien s'y rattache, l'usure s'y lit.
+
+Ce n'est pas un virage : c'est l'architecture qui devient visible. **AD-2** fait déjà de la machine
+une racine de premier rang ; la suppression du mode hors-saison (§9) était justifiée par « s'il
+existe deux unités de compte, l'hiver n'est plus un trou mais la période où l'axe machine domine » ;
+et la correction de cadence du même jour établit que les achats et l'entretien font vivre
+l'application toute l'année. **L'interface ne montrait simplement rien de tout ça.**
+
+> **Deux inconnues à mesurer, pas à supposer.** Aucune source ne documente ce que donne une **moto**
+> passée en 3D générative — rayons, durites et carénages sont parmi les sujets les plus durs — ni
+> lequel, du pixel ou du 3D, émeut réellement son propriétaire. La génération elle-même n'est pas
+> l'obstacle : Tripo produit en une dizaine de secondes pour 0,01 $ le crédit, 2 000 offerts.
+> **Une sonde d'une soirée tranche les deux, et rien ne se planifie avant.**
+
+### Le produit devient un jeu — machine ET pilotage
+
+**Ce que disait la clause levée, mot pour mot :** « Le catalogue d'achievements équilibre bravoure
+et discipline, et aucun n'est à série ni à durée limitée. Récompenser le coude au sol pousse à aller
+le chercher — c'est exactement l'enchaînement qui a causé la chute fondatrice. Les séries et les
+compteurs à échéance fabriquent la pression du "encore une session" ; ils sont exclus. »
+
+**Julian la lève en connaissance de cause.** Séries, objectifs et caps annoncés redeviennent
+possibles, sur la machine **comme sur le pilotage**. **FR-6bis tombe avec elle** — « un cap se
+constate, il ne se vise pas », que ce document qualifiait de clause de sécurité. La quatrième
+interdiction du §6 et la quatrième prohibition d'écran de l'épine UX tombent également.
+
+**Ce qui a été mis dans la balance, écrit pour être relu :** le projet est né d'une chute causée par
+la recherche d'un geste. La clause existait pour ça, et son retrait a été posé avec ses conséquences
+nommées avant la décision. Ce n'est pas un oubli, c'est un arbitrage daté.
+
+### La seule chose qui survit, et ce n'est pas une préférence de ton
+
+**FR-39bis reste : un cap de bravoure ne se partage jamais automatiquement au cercle.**
+
+C'est le **seul mécanisme établi** de tout le dossier académique — la présence de pairs augmente la
+prise de risque **en augmentant la sensibilité à la récompense du choix risqué** (trois essais
+randomisés, substrat neuro-imagé), et le signe **s'inverse** pour une audience passive. Le danger
+documenté n'est ni dans le catalogue seul, ni dans le cercle seul : **il est dans leur conjonction
+automatique.** Le partage reste une décision explicite, geste par geste. Coût : un tap.
+
+> **Distinction de conception qui garde son utilité dans le jeu.** Célébrer un geste **accompli**
+> et proposer un geste **à aller chercher** ne sont pas la même chose : le premier énonce, le second
+> dirige. Les deux sont désormais permis. Quand rien ne tranche entre eux, préférer le premier.
+
+---
+
 ## 6. Contraintes et garde-fous
 
 Huit interdictions fermes, tranchées en amont et non rediscutables ici. Ce tableau existe pour une
