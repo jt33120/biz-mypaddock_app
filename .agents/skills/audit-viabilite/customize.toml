@@ -1,0 +1,47 @@
+# Surface de personnalisation du skill audit-viabilite.
+#
+# Fichiers de surcharge (à ne pas éditer ici) :
+#   {project-root}/_bmad/custom/audit-viabilite.toml         (équipe)
+#   {project-root}/_bmad/custom/audit-viabilite.user.toml    (personnel)
+
+[workflow]
+
+# Emplacement des sorties. Le memlog et le verdict atterrissent dans
+# {output_dir}/{output_folder_name}/.
+output_dir = "{output_folder}/audit"
+output_folder_name = "audit-{projet_slug}-{date}"
+
+# Plafond par défaut du coût de l'audit lui-même, proposé en Phase 0.a si le
+# porteur n'a pas de chiffre en tête. Le coût de l'audit doit rester une
+# fraction de ce qu'il économise.
+budget_heures_tri = 10          # pour l'ensemble des projets, jusqu'au premier tri
+budget_heures_survivant = 20    # sur le survivant, jusqu'au premier euro demandé
+
+# Seuil de pénétration implicite au-delà duquel P2 échoue, en pourcentage de
+# l'audience joignable. Au-delà, aucun entretien ne changera l'arithmétique.
+seuil_penetration_max = 2.0
+
+# Heures hebdomadaires en dessous desquelles P0 bis élimine tout modèle
+# exigeant une présence quotidienne.
+seuil_heures_presence_quotidienne = 10
+
+# Nombre de clients payants consécutifs, même canal, hors réseau personnel,
+# requis pour considérer l'acquisition comme prouvée.
+clients_canal_repetable = 3
+
+# Faits que le skill garde en tête pour toute la session. Entrées littérales,
+# ou préfixées `file:` pour charger le contenu d'un fichier du projet.
+persistent_facts = [
+  "file:{project-root}/**/project-context.md",
+]
+
+# Étapes exécutées avant / après l'activation standard.
+activation_steps_prepend = []
+activation_steps_append = []
+
+# Exécuté une fois l'audit clôturé et les artefacts produits. Vide = rien.
+on_complete = ""
+
+# Routage externe des artefacts (Notion, Drive, Confluence…) via MCP.
+# Chaque entrée nomme l'outil, la destination et les champs nécessaires.
+external_handoffs = []

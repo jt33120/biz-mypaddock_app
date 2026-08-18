@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banc d'Essai</title>
+<style>
+:root{
+  /* sol de référence — l'incumbent */
+  --bg:#141219;
+  --panel:#1D1A24;
+  --panel-2:#252130;
+  --hair:#332D3E;
+  --ink:#EDE9F2;
+  --muted:#8A8595;
+  --faint:#5C5768;
+  --best:#B026FF;
+  --pb:#2ED573;
+  --slower:#FFC400;
+  --dead:#6E3140;
+
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --grot:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1140px;margin:0 auto;padding:0 clamp(1rem,4vw,2.5rem)}
+
+/* ---------- type ---------- */
+h1,h2,h3{font-family:var(--grot);font-weight:800;letter-spacing:-.025em;text-wrap:balance;margin:0}
+h1{font-size:clamp(2rem,6vw,3.4rem);line-height:1.02}
+h2{font-size:clamp(1.35rem,3.4vw,2.05rem);line-height:1.1}
+h3{font-size:1.02rem;letter-spacing:-.01em;line-height:1.3}
+p{margin:0}
+.lead{color:var(--muted);max-width:64ch;font-size:1.02rem}
+.body{color:var(--muted);max-width:66ch}
+.body strong{color:var(--ink);font-weight:600}
+.eyebrow{
+  font-family:var(--grot);font-size:.66rem;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--faint);
+}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+
+/* ---------- structure ---------- */
+header.top{padding:clamp(3rem,9vw,6rem) 0 clamp(2rem,5vw,3.5rem)}
+.markline{display:flex;align-items:center;gap:.85rem;margin-bottom:2.2rem}
+.markline .name{font-family:var(--grot);font-weight:800;font-size:.9rem;letter-spacing:-.01em}
+.markline .sub{font-family:var(--mono);font-size:.72rem;color:var(--faint);letter-spacing:.04em}
+
+section{padding:clamp(2.75rem,7vw,4.75rem) 0;border-top:1px solid var(--hair)}
+.sechd{display:flex;flex-direction:column;gap:.9rem;margin-bottom:2.25rem}
+.sectors{display:flex;gap:4px;width:76px}
+.sectors i{display:block;height:5px;flex:1;border-radius:1px;background:var(--faint)}
+.sectors i.on{background:var(--best)}
+.q{
+  font-family:var(--mono);font-size:.76rem;color:var(--slower);
+  letter-spacing:.02em;border-left:2px solid var(--slower);padding-left:.7rem;
+}
+
+/* ---------- sol ---------- */
+.grounds{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:1.1rem}
+.ground{border:1px solid var(--hair);border-radius:3px;overflow:hidden}
+.ground .field{background:var(--bg);color:var(--ink);padding:1.15rem 1.15rem 1.25rem}
+.ground .cap{padding:.95rem 1.15rem 1.1rem;border-top:1px solid var(--hair);background:var(--panel)}
+.ground .cap .role{font-family:var(--grot);font-weight:700;font-size:.95rem;display:flex;justify-content:space-between;align-items:baseline;gap:.5rem}
+.ground .cap .hex{font-family:var(--mono);font-size:.72rem;color:var(--muted);font-weight:400;letter-spacing:.02em}
+.ground .cap .verdict{color:var(--muted);font-size:.84rem;line-height:1.5;margin-top:.45rem}
+.ground[data-live="1"] .badge{
+  display:inline-block;font-family:var(--mono);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--best);
+  border:1px solid var(--best);border-radius:2px;padding:.1rem .35rem;margin-left:.4rem;vertical-align:.12em;
+}
+
+/* le module de test, identique sur chaque sol */
+.mod .hd{
+  font-family:var(--grot);font-size:.6rem;font-weight:700;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--muted);padding-bottom:.6rem;
+  border-bottom:1px solid var(--hair);margin-bottom:.7rem;
+}
+.mod .lap{display:flex;justify-content:space-between;align-items:baseline;gap:.6rem;padding:.32rem 0}
+.mod .lap .t{font-family:var(--mono);font-size:.68rem;color:var(--muted);letter-spacing:.04em}
+.mod .lap .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:1.02rem}
+.mod .lap.best .v{color:var(--best)}
+.mod .lap.pb .v{color:var(--pb)}
+.mod .lap.slow .v{color:var(--slower)}
+.mod .foot{margin-top:.75rem;padding-top:.65rem;border-top:1px solid var(--hair);display:flex;justify-content:space-between;align-items:baseline}
+.mod .foot .l{font-family:var(--grot);font-size:.58rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.mod .foot .n{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:.9rem}
+
+.ground[data-g="asphalte"]{--bg:#141219;--panel:#1D1A24;--hair:#332D3E;--ink:#EDE9F2;--muted:#8A8595;--faint:#5C5768;--best:#B026FF;--pb:#2ED573;--slower:#FFC400}
+.ground[data-g="bitume"]  {--bg:#0E1116;--panel:#161B22;--hair:#242C37;--ink:#E4E9F0;--muted:#798393;--faint:#4E5765;--best:#B026FF;--pb:#2ED573;--slower:#FFC400}
+.ground[data-g="gomme"]   {--bg:#17120E;--panel:#211A15;--hair:#382D24;--ink:#F1EAE1;--muted:#96887A;--faint:#665B4F;--best:#C247FF;--pb:#3FD97F;--slower:#FFB300}
+.ground[data-g="feuille"] {--bg:#EBE7DE;--panel:#F5F3EE;--hair:#CFC8BA;--ink:#191612;--muted:#6E675B;--faint:#8C8577;--best:#6E11B8;--pb:#0F7A3D;--slower:#8A5D00}
+
+/* ---------- comparaison violet / sans violet ---------- */
+.versus{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.4rem;align-items:start}
+.sys{border:1px solid var(--hair);border-radius:3px;background:var(--panel)}
+.sys > .hd{
+  padding:.85rem 1.15rem;border-bottom:1px solid var(--hair);
+  display:flex;justify-content:space-between;align-items:baseline;gap:.6rem;
+}
+.sys > .hd .t{font-family:var(--grot);font-weight:800;font-size:.98rem;letter-spacing:-.01em}
+.sys > .hd .m{font-family:var(--mono);font-size:.66rem;color:var(--faint);letter-spacing:.1em;text-transform:uppercase}
+.sys .body-pad{padding:1.15rem}
+.sys .note{padding:1rem 1.15rem 1.15rem;border-top:1px solid var(--hair);color:var(--muted);font-size:.87rem;line-height:1.55}
+.sys .note b{color:var(--ink);font-weight:600}
+
+/* feuille de temps */
+.sheet{background:var(--bg);border:1px solid var(--hair);border-radius:2px;overflow:hidden}
+.sheet .r{display:grid;grid-template-columns:2.4rem 1fr auto;gap:.75rem;align-items:baseline;padding:.55rem .8rem;border-bottom:1px solid var(--hair)}
+.sheet .r:last-child{border-bottom:0}
+.sheet .r .no{font-family:var(--mono);font-size:.72rem;color:var(--faint);font-variant-numeric:tabular-nums}
+.sheet .r .who{font-family:var(--grot);font-size:.82rem;font-weight:600;color:var(--muted)}
+.sheet .r .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:1rem}
+/* système A — la couleur porte le sens */
+.sysA .sheet .r.best .tm{color:var(--best)}
+.sysA .sheet .r.best .who{color:var(--best)}
+.sysA .sheet .r.pb .tm{color:var(--pb)}
+.sysA .sheet .r.slow .tm{color:var(--slower)}
+/* système B — le contraste porte le sens */
+.sysB .sheet .r.best{background:#F2EFE9}
+.sysB .sheet .r.best .no,.sysB .sheet .r.best .who,.sysB .sheet .r.best .tm{color:#131117}
+.sysB .sheet .r.pb .tm{color:var(--ink)}
+.sysB .sheet .r.pb .who{color:var(--ink)}
+.sysB .sheet .r.slow .tm{color:var(--faint)}
+.sysB .sheet .r.slow .who{color:var(--faint)}
+.sysB .sheet .r.flag{border-left:3px solid var(--slower)}
+.sysB .sheet .r.flag .who,.sysB .sheet .r.flag .tm{color:var(--slower)}
+.sysA .sheet .r.flag{border-left:3px solid var(--dead)}
+.sysA .sheet .r.flag .who,.sysA .sheet .r.flag .tm{color:var(--dead)}
+
+.thumbs{display:flex;gap:.7rem;align-items:flex-end;margin-top:1rem}
+.thumb{width:52px;border:1px solid var(--hair);border-radius:2px;padding:.4rem .35rem;background:var(--bg);text-align:center}
+.thumb .tn{font-family:var(--mono);font-size:.52rem;font-weight:700;line-height:1.2}
+.thumb .tl{font-family:var(--grot);font-size:.4rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:.2rem}
+.thumbcap{font-family:var(--mono);font-size:.68rem;color:var(--faint);letter-spacing:.02em;align-self:center;line-height:1.4}
+
+/* ---------- écrans ---------- */
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:1.25rem}
+.phone{border:1px solid var(--hair);border-radius:4px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column}
+.phone .ph-top{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:.6rem .9rem;border-bottom:1px solid var(--hair);
+}
+.phone .ph-top .dom{font-family:var(--grot);font-size:.58rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--faint)}
+.phone .ph-top .idx{font-family:var(--mono);font-size:.6rem;color:var(--faint)}
+.phone .ph-body{padding:1rem .95rem 1.1rem;display:flex;flex-direction:column;gap:.85rem;flex:1}
+.phone .ph-cap{padding:.75rem .95rem .9rem;border-top:1px solid var(--hair);color:var(--muted);font-size:.8rem;line-height:1.5}
+.phone .ph-cap b{color:var(--ink);font-weight:600}
+
+.scr-title{font-family:var(--grot);font-weight:800;font-size:1.15rem;letter-spacing:-.02em;line-height:1.15}
+.scr-sub{font-family:var(--mono);font-size:.68rem;color:var(--muted);letter-spacing:.03em;margin-top:.2rem}
+.hero{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;padding:.7rem 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+.hero .big{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:2.1rem;letter-spacing:-.03em;line-height:1;color:var(--best)}
+.hero .lbl{font-family:var(--grot);font-size:.54rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);text-align:right;line-height:1.4}
+.kv{display:flex;flex-direction:column;gap:.42rem}
+.kv .r{display:flex;justify-content:space-between;align-items:baseline;gap:.7rem}
+.kv .r .k{font-family:var(--grot);font-size:.78rem;font-weight:600;color:var(--muted)}
+.kv .r .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:.88rem;white-space:nowrap}
+.kv .r .v.hi{color:var(--best)}
+.kv .r .v.up{color:var(--pb)}
+.kv .r .v.mut{color:var(--faint)}
+
+.strip{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+.strip .s{border:1px solid var(--hair);border-radius:1px;padding:.35rem .1rem;text-align:center}
+.strip .s .l{font-family:var(--grot);font-size:.46rem;font-weight:700;letter-spacing:.1em;color:var(--faint)}
+.strip .s .t{font-family:var(--mono);font-size:.58rem;font-weight:600;margin-top:.15rem;font-variant-numeric:tabular-nums}
+.strip .s.best{border-color:var(--best)}
+.strip .s.best .t{color:var(--best)}
+.strip .s.rain .t{color:var(--slower)}
+
+.chart{width:100%;height:auto;display:block}
+.bar{height:6px;border-radius:1px;background:var(--panel-2);overflow:hidden}
+.bar > i{display:block;height:100%;background:var(--ink)}
+.bar > i.v{background:var(--best)}
+.bar > i.g{background:var(--pb)}
+.bar > i.y{background:var(--slower)}
+
+.badges{display:flex;flex-direction:column;gap:.4rem}
+.bg{display:flex;align-items:center;gap:.55rem;padding:.42rem .55rem;border:1px solid var(--hair);border-radius:2px}
+.bg .ic{width:20px;height:20px;flex:0 0 20px;border-radius:2px;border:1px solid var(--hair);display:grid;place-items:center;font-family:var(--mono);font-size:.6rem;font-weight:700;color:var(--faint)}
+.bg .tx{flex:1;min-width:0}
+.bg .tx .n{font-family:var(--grot);font-size:.72rem;font-weight:700;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bg .tx .s{font-family:var(--mono);font-size:.56rem;color:var(--faint);letter-spacing:.02em;margin-top:.1rem}
+.bg.on{border-color:var(--best)}
+.bg.on .ic{border-color:var(--best);color:var(--best)}
+.bg.off{opacity:.55}
+
+.check{display:flex;flex-direction:column;gap:.3rem}
+.check .c{display:flex;align-items:center;gap:.5rem;font-family:var(--grot);font-size:.76rem;font-weight:600}
+.check .c .m{font-family:var(--mono);font-size:.72rem;width:1rem;flex:0 0 1rem;text-align:center}
+.check .c.ok .m{color:var(--pb)}
+.check .c.warn .m{color:var(--slower)}
+.check .c.warn{color:var(--slower)}
+.check .c.no .m{color:var(--dead)}
+.check .c.no{color:var(--faint);text-decoration:line-through;text-decoration-color:var(--dead)}
+.check .c .req{margin-left:auto;font-family:var(--mono);font-size:.56rem;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;font-weight:400}
+
+.stage{font-family:var(--grot);font-size:.56rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);padding-bottom:.3rem;border-bottom:1px solid var(--hair)}
+.wear{display:flex;flex-direction:column;gap:.5rem}
+.wear .w .top{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;margin-bottom:.28rem}
+.wear .w .top .k{font-family:var(--grot);font-size:.74rem;font-weight:600}
+.wear .w .top .v{font-family:var(--mono);font-size:.7rem;font-variant-numeric:tabular-nums;color:var(--muted)}
+
+/* ---------- décisions ---------- */
+.calls{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:1.1rem;margin-top:1.75rem}
+.call{border:1px solid var(--hair);border-left:2px solid var(--best);border-radius:3px;padding:1.1rem 1.15rem;background:var(--panel)}
+.call .n{font-family:var(--mono);font-size:.64rem;color:var(--best);letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.call h3{margin:.5rem 0 .5rem}
+.call p{color:var(--muted);font-size:.87rem;line-height:1.55}
+.call .reco{margin-top:.7rem;padding-top:.7rem;border-top:1px solid var(--hair);font-family:var(--mono);font-size:.74rem;color:var(--ink);letter-spacing:.01em}
+.call .reco span{color:var(--faint)}
+
+footer{padding:2.5rem 0 4rem;border-top:1px solid var(--hair);color:var(--faint);font-family:var(--mono);font-size:.72rem;letter-spacing:.02em;line-height:1.8}
+
+.stack{display:flex;flex-direction:column;gap:1.5rem}
+.stack-sm{display:flex;flex-direction:column;gap:.85rem}
+.scroll{overflow-x:auto}
+@media (max-width:520px){
+  .hero .big{font-size:1.85rem}
+}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+
+<header class="top">
+  <div class="markline">
+    <svg width="30" height="30" viewBox="0 0 62 62" aria-hidden="true">
+      <rect x="6" y="14" width="50" height="8" rx="1" fill="#5C5768"/>
+      <rect x="6" y="27" width="50" height="8" rx="1" fill="#B026FF"/>
+      <rect x="6" y="40" width="50" height="8" rx="1" fill="#5C5768"/>
+    </svg>
+    <div>
+      <div class="name">Identité — itération 2</div>
+      <div class="sub">18.08.2026 · suite de « Chrono Violet »</div>
+    </div>
+  </div>
+
+  <h1>Banc d'essai</h1>
+  <p class="lead" style="margin-top:1.1rem">
+    Trois choses à trancher avant de figer le système : le sol sur lequel tout se pose,
+    la question de savoir si le violet doit rester, et si le système tient quand on lui
+    demande de faire six écrans au lieu d'un.
+  </p>
+  <p class="lead" style="margin-top:.9rem;color:var(--faint)">
+    Toutes les valeurs affichées sont des données d'exemple, mais les ordres de grandeur
+    viennent de la recherche : journée entre 99 et 360 €, train de pneus tenu 3 à 5 journées,
+    briefing à 8 h 30, groupes Blanc / Jaune / Rouge.
+  </p>
+</header>
+
+<!-- ================= SECTEUR 1 — LE SOL ================= -->
+<section>
+  <div class="sechd">
+    <div class="sectors" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+    <div class="eyebrow">Secteur 1 — le sol</div>
+    <h2>Le même module, posé sur quatre sols</h2>
+    <p class="body">
+      Le sol n'est pas un fond. C'est lui qui décide de la température de tout le reste,
+      et c'est la seule surface que l'œil voit à 90 %. Ci-dessous, exactement le même bloc
+      de chronos — meilleur tour, record personnel, tour plus lent, coût au tour — rendu
+      quatre fois. Rien d'autre ne change.
+    </p>
+    <p class="q">La question : est-ce que le sol doit rester violet-noir, ou basculer ?</p>
+  </div>
+
+  <div class="grounds">
+
+    <div class="ground" data-g="asphalte" data-live="1">
+      <div class="field">
+        <div class="mod">
+          <div class="hd">Lédenon · session 3</div>
+          <div class="lap best"><span class="t">T14</span><span class="v">1:36.4</span></div>
+          <div class="lap pb"><span class="t">T09</span><span class="v">1:37.1</span></div>
+          <div class="lap slow"><span class="t">T03</span><span class="v">1:38.0</span></div>
+          <div class="foot"><span class="l">Coût au tour</span><span class="n">5,42 €</span></div>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="role">Asphalte<span class="badge">en place</span><span class="hex">#141219</span></div>
+        <p class="verdict">
+          Noir à biais violet. Le sol et l'accent viennent de la même famille, donc le violet
+          ne colle jamais. Défaut : à faible luminosité le biais disparaît et ça redevient
+          du gris SaaS.
+        </p>
+      </div>
+    </div>
+
+    <div class="ground" data-g="bitume">
+      <div class="field">
+        <div class="mod">
+          <div class="hd">Lédenon · session 3</div>
+          <div class="lap best"><span class="t">T14</span><span class="v">1:36.4</span></div>
+          <div class="lap pb"><span class="t">T09</span><span class="v">1:37.1</span></div>
+          <div class="lap slow"><span class="t">T03</span><span class="v">1:38.0</span></div>
+          <div class="foot"><span class="l">Coût au tour</span><span class="n">5,42 €</span></div>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="role">Bitume<span class="hex">#0E1116</span></div>
+        <p class="verdict">
+          Graphite froid, biais bleu. Le violet ressort d'un cran de plus parce que le sol
+          s'y oppose. C'est le sol des vrais écrans de chronométrage. Défaut : froid comme
+          un terminal, aucune chaleur moto.
+        </p>
+      </div>
+    </div>
+
+    <div class="ground" data-g="gomme">
+      <div class="field">
+        <div class="mod">
+          <div class="hd">Lédenon · session 3</div>
+          <div class="lap best"><span class="t">T14</span><span class="v">1:36.4</span></div>
+          <div class="lap pb"><span class="t">T09</span><span class="v">1:37.1</span></div>
+          <div class="lap slow"><span class="t">T03</span><span class="v">1:38.0</span></div>
+          <div class="foot"><span class="l">Coût au tour</span><span class="n">5,42 €</span></div>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="role">Gomme<span class="hex">#17120E</span></div>
+        <p class="verdict">
+          Noir chaud, biais brun. Cuir, gomme tiède, paddock en fin de journée. C'est le seul
+          sol qui ne ressemble à aucune app. Défaut : il tire le violet vers le magenta,
+          il a fallu le corriger — donc l'accent n'est plus tout à fait le tien.
+        </p>
+      </div>
+    </div>
+
+    <div class="ground" data-g="feuille">
+      <div class="field">
+        <div class="mod">
+          <div class="hd">Lédenon · session 3</div>
+          <div class="lap best"><span class="t">T14</span><span class="v">1:36.4</span></div>
+          <div class="lap pb"><span class="t">T09</span><span class="v">1:37.1</span></div>
+          <div class="lap slow"><span class="t">T03</span><span class="v">1:38.0</span></div>
+          <div class="foot"><span class="l">Coût au tour</span><span class="n">5,42 €</span></div>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="role">Feuille<span class="hex">#EBE7DE</span></div>
+        <p class="verdict">
+          La feuille de temps imprimée qu'on te tend à 17 h 30. J'avais écrit qu'un écran de
+          chronométrage n'a pas de mode clair — voilà le contre-exemple, à toi de juger.
+          Défaut sérieux : les trois couleurs sémantiques doivent toutes être redessinées
+          pour rester lisibles, donc l'app et l'image Instagram ne partagent plus la même palette.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="body" style="margin-top:1.6rem">
+    Ce que la comparaison montre et qu'on ne voyait pas avant : <strong>le sol change l'accent.</strong>
+    Sur gomme le violet vire, sur feuille il doit descendre de #B026FF à #6E11B8 pour rester
+    lisible, et le vert et le jaune avec lui. Un sol clair ne coûte pas un fond, il coûte
+    une deuxième palette à maintenir.
+  </p>
+</section>
+
+<!-- ================= SECTEUR 2 — SANS VIOLET ================= -->
+<section>
+  <div class="sechd">
+    <div class="sectors" aria-hidden="true"><i></i><i class="on"></i><i></i></div>
+    <div class="eyebrow">Secteur 2 — la variante sans violet</div>
+    <h2>Si le sens n'était pas porté par la couleur mais par le contraste</h2>
+    <p class="body">
+      Retirer le violet, ce n'est pas le repeindre en gris. C'est changer de modèle :
+      au lieu de dire « meilleur tour » avec une teinte, on le dit avec une inversion —
+      la ligne du record devient un bloc clair sur fond sombre, comme la ligne surlignée
+      d'une feuille de temps imprimée. Et le jaune récupère alors son vrai sens de piste :
+      il ne veut plus dire « plus lent », il veut dire <strong>drapeau</strong>.
+    </p>
+    <p class="q">La question : est-ce qu'on garde le violet, ou est-ce qu'on part sans ?</p>
+  </div>
+
+  <div class="versus">
+
+    <div class="sys sysA">
+      <div class="hd"><span class="t">A — la couleur porte le sens</span><span class="m">en place</span></div>
+      <div class="body-pad">
+        <div class="sheet">
+          <div class="r best"><span class="no">1</span><span class="who">Toi</span><span class="tm">1:36.4</span></div>
+          <div class="r pb"><span class="no">2</span><span class="who">Kévin</span><span class="tm">1:37.8</span></div>
+          <div class="r slow"><span class="no">3</span><span class="who">Sam</span><span class="tm">1:39.1</span></div>
+          <div class="r slow"><span class="no">4</span><span class="who">Marion</span><span class="tm">1:40.6</span></div>
+          <div class="r flag"><span class="no">5</span><span class="who">Théo</span><span class="tm">drapeau</span></div>
+        </div>
+        <div class="thumbs">
+          <div class="thumb">
+            <div class="tn" style="color:#B026FF">1:36.4</div>
+            <div class="tl">Lédenon</div>
+          </div>
+          <p class="thumbcap">À la taille d'une vignette Instagram,<br>le violet survit.</p>
+        </div>
+      </div>
+      <p class="note">
+        <b>Ce que ça gagne :</b> trois ans de reconnaissance déjà acquise, une teinte qui veut
+        déjà dire « meilleur temps » chez ta cible, et une signature qui tient à 52 pixels.
+        <b>Ce que ça coûte :</b> le violet est aussi la couleur de tout le SaaS depuis 2022, il faut
+        la discipline de ne jamais s'en servir pour décorer. Et le jaune est déjà pris par « plus lent »,
+        donc la ligne 5 — session sous drapeau — doit se rabattre sur un rouge éteint.
+      </p>
+    </div>
+
+    <div class="sys sysB">
+      <div class="hd"><span class="t">B — le contraste porte le sens</span><span class="m">variante</span></div>
+      <div class="body-pad">
+        <div class="sheet">
+          <div class="r best"><span class="no">1</span><span class="who">Toi</span><span class="tm">1:36.4</span></div>
+          <div class="r pb"><span class="no">2</span><span class="who">Kévin</span><span class="tm">1:37.8</span></div>
+          <div class="r slow"><span class="no">3</span><span class="who">Sam</span><span class="tm">1:39.1</span></div>
+          <div class="r slow"><span class="no">4</span><span class="who">Marion</span><span class="tm">1:40.6</span></div>
+          <div class="r flag"><span class="no">5</span><span class="who">Théo</span><span class="tm">drapeau</span></div>
+        </div>
+        <div class="thumbs">
+          <div class="thumb">
+            <div class="tn" style="color:#EDE9F2">1:36.4</div>
+            <div class="tl">Lédenon</div>
+          </div>
+          <p class="thumbcap">À la même taille, plus rien<br>ne dit que c'est toi.</p>
+        </div>
+      </div>
+      <p class="note">
+        <b>Ce que ça gagne :</b> plus sévère, plus instrument, impossible à confondre avec une app
+        de fitness ; et le jaune redevient honnête — drapeau, pas « moins bien ».
+        <b>Ce que ça coûte :</b> zéro capital de marque récupéré, et surtout l'image de partage
+        perd sa signature. C'est joli en grand et invisible en petit — or ton seul canal
+        d'acquisition, c'est le petit.
+      </p>
+    </div>
+
+  </div>
+
+  <p class="body" style="margin-top:1.6rem">
+    Je ne suis pas neutre là-dessus et je le dis : <strong>B est le plus beau des deux systèmes,
+    et c'est le mauvais choix.</strong> Une story se juge à la vitesse du pouce. Le seul argument
+    qui pourrait renverser ça, c'est si tu comptes ne jamais poster et ne construire que pour toi —
+    et ce n'est pas ce que dit le brief.
+  </p>
+</section>
+
+<!-- ================= SECTEUR 3 — LES ÉCRANS ================= -->
+<section>
+  <div class="sechd">
+    <div class="sectors" aria-hidden="true"><i></i><i></i><i class="on"></i></div>
+    <div class="eyebrow">Secteur 3 — six écrans</div>
+    <h2>Un écran, une chose. Six fois.</h2>
+    <p class="body">
+      La contrainte que tu as posée était : dense mais pas lourde, un écran une feature,
+      et on navigue facilement. Voilà ce que ça donne quand on la prend au mot. Chaque écran
+      ne répond qu'à une question, et cette question est écrite en haut.
+    </p>
+    <p class="q">La question : est-ce que le système tient, ou est-ce qu'il s'effondre en six exemplaires ?</p>
+  </div>
+
+  <div class="screens">
+
+    <!-- 1 · LA JOURNÉE -->
+    <div class="phone">
+      <div class="ph-top"><span class="dom">La journée</span><span class="idx">01</span></div>
+      <div class="ph-body">
+        <div>
+          <div class="scr-title">Lédenon</div>
+          <div class="scr-sub">12 AVR · GOPILOTES · GROUPE ROUGE</div>
+        </div>
+        <div class="hero">
+          <span class="big">1:36.4</span>
+          <span class="lbl">Meilleur<br>tour</span>
+        </div>
+        <div class="strip">
+          <div class="s"><div class="l">S1</div><div class="t">39.2</div></div>
+          <div class="s"><div class="l">S2</div><div class="t">38.0</div></div>
+          <div class="s best"><div class="l">S3</div><div class="t">36.4</div></div>
+          <div class="s"><div class="l">S4</div><div class="t">37.1</div></div>
+          <div class="s rain"><div class="l">S5</div><div class="t">pluie</div></div>
+          <div class="s"><div class="l">S6</div><div class="t">36.9</div></div>
+        </div>
+        <div class="kv">
+          <div class="r"><span class="k">Tours</span><span class="v">78</span></div>
+          <div class="r"><span class="k">Temps roulé</span><span class="v">1 h 52</span></div>
+          <div class="r"><span class="k">Coût de la journée</span><span class="v">423 €</span></div>
+          <div class="r"><span class="k">Coût au tour</span><span class="v hi">5,42 €</span></div>
+        </div>
+      </div>
+      <p class="ph-cap">
+        <b>Une seule question : c'était comment ?</b> Trois champs à saisir le soir même —
+        meilleur tour, total dépensé, ce qu'on a remarqué sur la moto. Le reste se calcule.
+      </p>
+    </div>
+
+    <!-- 2 · PROGRESSION -->
+    <div class="phone">
+      <div class="ph-top"><span class="dom">Progression</span><span class="idx">02</span></div>
+      <div class="ph-body">
+        <div>
+          <div class="scr-title">Saison 2027</div>
+          <div class="scr-sub">MEILLEUR TOUR PAR JOURNÉE · LÉDENON</div>
+        </div>
+        <svg class="chart" viewBox="0 0 260 116" role="img" aria-label="Courbe des meilleurs tours par journée, de 1:42.6 à 1:36.4 sur six journées">
+          <line x1="0" y1="12" x2="260" y2="12" stroke="#332D3E" stroke-width="1"/>
+          <line x1="0" y1="47" x2="260" y2="47" stroke="#332D3E" stroke-width="1"/>
+          <line x1="0" y1="82" x2="260" y2="82" stroke="#332D3E" stroke-width="1"/>
+          <polyline points="16,18 65,38 114,55 163,62 212,80 250,92"
+                    fill="none" stroke="#8A8595" stroke-width="2"
+                    stroke-linejoin="round" stroke-linecap="round"/>
+          <circle cx="16" cy="18" r="3" fill="#8A8595"/>
+          <circle cx="65" cy="38" r="3" fill="#8A8595"/>
+          <circle cx="114" cy="55" r="3" fill="#8A8595"/>
+          <circle cx="163" cy="62" r="3" fill="#8A8595"/>
+          <circle cx="212" cy="80" r="3" fill="#8A8595"/>
+          <circle cx="250" cy="92" r="5" fill="#B026FF"/>
+          <text x="250" y="110" text-anchor="end" fill="#B026FF"
+                font-family="ui-monospace,Menlo,monospace" font-size="10" font-weight="700">1:36.4</text>
+          <text x="16" y="10" text-anchor="start" fill="#5C5768"
+                font-family="ui-monospace,Menlo,monospace" font-size="9">1:42.6</text>
+        </svg>
+        <div class="kv">
+          <div class="r"><span class="k">Gain sur la saison</span><span class="v up">−6,2 s</span></div>
+          <div class="r"><span class="k">Prochain palier</span><span class="v">1:35 · à 1,4 s</span></div>
+        </div>
+        <div class="stage">Le cercle · même circuit, même groupe</div>
+        <div class="kv">
+          <div class="r"><span class="k">Toi</span><span class="v hi">1:36.4</span></div>
+          <div class="r"><span class="k">Kévin</span><span class="v">1:37.8</span></div>
+          <div class="r"><span class="k">Sam</span><span class="v mut">1:39.1</span></div>
+        </div>
+      </div>
+      <p class="ph-cap">
+        <b>Onze roulages font onze points, et onze points font une courbe.</b> Pas de capteur,
+        pas de GPS : un chiffre par journée suffit à voir la pente.
+      </p>
+    </div>
+
+    <!-- 3 · ACHIEVEMENTS -->
+    <div class="phone">
+      <div class="ph-top"><span class="dom">Gestes</span><span class="idx">03</span></div>
+      <div class="ph-body">
+        <div>
+          <div class="scr-title">14 sur 63</div>
+          <div class="scr-sub">DÉBLOQUÉS · CATALOGUE EXTENSIBLE</div>
+        </div>
+        <div class="badges">
+          <div class="bg on"><span class="ic">◣</span><span class="tx"><span class="n">Coude au sol</span><span class="s">12 AVR · S3 · PAR LA PHOTO</span></span></div>
+          <div class="bg on"><span class="ic">↑</span><span class="tx"><span class="n">Wheeling à l'accélération</span><span class="s">12 AVR · S3 · PAR LA PHOTO</span></span></div>
+          <div class="bg on"><span class="ic">≈</span><span class="tx"><span class="n">Journée sous la pluie</span><span class="s">29 MAR · LE LUC</span></span></div>
+          <div class="bg on"><span class="ic">▲</span><span class="tx"><span class="n">Passage en Rouge</span><span class="s">29 MAR · VALIDÉ ORGANISATEUR</span></span></div>
+          <div class="bg off"><span class="ic">◤</span><span class="tx"><span class="n">Genou gauche et droit</span><span class="s">VERROUILLÉ</span></span></div>
+          <div class="bg off"><span class="ic">§</span><span class="tx"><span class="n">Sous 1:35 à Lédenon</span><span class="s">VERROUILLÉ · À 1,4 S</span></span></div>
+        </div>
+      </div>
+      <p class="ph-cap">
+        <b>Le geste, c'est ce qu'aucun concurrent ne sait fabriquer.</b> Le catalogue est
+        de la donnée, pas du code — on en ajoute sans redéployer.
+      </p>
+    </div>
+
+    <!-- 4 · BUDGET -->
+    <div class="phone">
+      <div class="ph-top"><span class="dom">Argent</span><span class="idx">04</span></div>
+      <div class="ph-body">
+        <div>
+          <div class="scr-title">1 640 €</div>
+          <div class="scr-sub">SUR 6 000 € DE BUDGET · 4 ROULAGES</div>
+        </div>
+        <div class="bar"><i style="width:27%"></i></div>
+        <div class="kv">
+          <div class="r"><span class="k">Engagements</span><span class="v">780 €</span></div>
+          <div class="r"><span class="k">Pneus</span><span class="v">340 €</span></div>
+          <div class="r"><span class="k">Essence et route</span><span class="v">392 €</span></div>
+          <div class="r"><span class="k">Divers</span><span class="v">128 €</span></div>
+        </div>
+        <div class="hero">
+          <span class="big">5,42 €</span>
+          <span class="lbl">Record du<br>coût au tour</span>
+        </div>
+        <div class="kv">
+          <div class="r"><span class="k">Moyenne de la saison</span><span class="v">6,10 €</span></div>
+          <div class="r"><span class="k">Écart</span><span class="v up">−0,68 €</span></div>
+        </div>
+      </div>
+      <p class="ph-cap">
+        <b>Le seul chiffre qu'on veut voir descendre.</b> Un coût au tour qui bat celui de la
+        saison passe en violet — la baisse devient un record, pas une perte.
+      </p>
+    </div>
+
+    <!-- 5 · ENTRETIEN -->
+    <div class="phone">
+      <div class="ph-top"><span class="dom">Entretien</span><span class="idx">05</span></div>
+      <div class="ph-body">
+        <div>
+          <div class="scr-title">Usure</div>
+          <div class="scr-sub">HORLOGE À TA VITESSE · ROUGE ×1,6</div>
+        </div>
+        <div class="stage">Au paddock</div>
+        <div class="wear">
+          <div class="w">
+            <div class="top"><span class="k">Pneu arrière</span><span class="v">3,2 / 5 journées</span></div>
+            <div class="bar"><i class="y" style="width:64%"></i></div>
+          </div>
+          <div class="w">
+            <div class="top"><span class="k">Plaquettes avant</span><span class="v">68 %</span></div>
+            <div class="bar"><i class="g" style="width:68%"></i></div>
+          </div>
+          <div class="w">
+            <div class="top"><span class="k">Tension de chaîne</span><span class="v">faite le 12/04</span></div>
+            <div class="bar"><i class="g" style="width:96%"></i></div>
+          </div>
+        </div>
+        <div class="stage">À l'atelier</div>
+        <div class="kv">
+          <div class="r"><span class="k">Vidange</span><span class="v">1 240 / 3 000 km</span></div>
+          <div class="r"><span class="k">Liquide de frein</span><span class="v mut">nov. 2027</span></div>
+        </div>
+      </div>
+      <p class="ph-cap">
+        <b>Le barème constructeur compte des kilomètres. Toi tu comptes des journées.</b>
+        Le coefficient de groupe fait la traduction.
+      </p>
+    </div>
+
+    <!-- 6 · CHARGEMENT -->
+    <div class="phone">
+      <div class="ph-top"><span class="dom">Chargement</span><span class="idx">06</span></div>
+      <div class="ph-body">
+        <div>
+          <div class="scr-title">Le Vigeant</div>
+          <div class="scr-sub">3 MAI · TRACKMATE · DANS 15 JOURS</div>
+        </div>
+        <div class="stage">Conformité organisateur</div>
+        <div class="check">
+          <div class="c ok"><span class="m">✓</span>Combinaison cuir 1 pièce<span class="req">exigé</span></div>
+          <div class="c ok"><span class="m">✓</span>Dorsale<span class="req">exigé</span></div>
+          <div class="c ok"><span class="m">✓</span>Casque ECE 22.06<span class="req">exigé</span></div>
+          <div class="c warn"><span class="m">!</span>Bracelet de bridage<span class="req">TrackMate</span></div>
+          <div class="c ok"><span class="m">✓</span>Bottes montantes<span class="req">exigé</span></div>
+        </div>
+        <div class="stage">Le camion</div>
+        <div class="check">
+          <div class="c ok"><span class="m">✓</span>Sangles ×4</div>
+          <div class="c ok"><span class="m">✓</span>Béquilles</div>
+          <div class="c no"><span class="m">×</span>Bidon 20 L</div>
+        </div>
+        <div class="kv">
+          <div class="r"><span class="k">Briefing</span><span class="v">8 h 30 · obligatoire</span></div>
+        </div>
+      </div>
+      <p class="ph-cap">
+        <b>Le seul écran qui sert avant de partir.</b> La liste change selon l'organisateur,
+        parce que leurs exigences ne sont pas les mêmes.
+      </p>
+    </div>
+
+  </div>
+
+  <p class="body" style="margin-top:1.6rem">
+    Ce que six écrans révèlent et qu'un seul cachait : <strong>le violet ne s'allume presque
+    jamais.</strong> Sur les six, il apparaît quatre fois — meilleur tour, point courant de la
+    courbe, geste débloqué, record de coût au tour. Le reste est de l'encre et du gris.
+    C'est exactement ce qu'on voulait : une couleur qui compte parce qu'elle est rare.
+  </p>
+</section>
+
+<!-- ================= LES DÉCISIONS ================= -->
+<section>
+  <div class="sechd">
+    <div class="eyebrow">Ce qu'il faut trancher</div>
+    <h2>Trois décisions, et on fige</h2>
+    <p class="body">
+      Chacune ferme une porte. Une fois choisies, elles deviennent des contraintes du PRD
+      et on ne les rouvre plus.
+    </p>
+  </div>
+
+  <div class="calls">
+    <div class="call">
+      <div class="n">Décision 1 — le sol</div>
+      <h3>Asphalte, bitume, gomme ou feuille</h3>
+      <p>
+        Feuille est le seul qui coûte une deuxième palette. Gomme est le seul qui ne ressemble
+        à aucune app existante, et c'est aussi le seul qui altère ton violet.
+      </p>
+      <p class="reco"><span>Ma recommandation —</span> gomme</p>
+    </div>
+
+    <div class="call">
+      <div class="n">Décision 2 — le violet</div>
+      <h3>On le garde, ou on part sans</h3>
+      <p>
+        Sans violet, le système est plus sévère et plus juste sémantiquement. Il est aussi
+        illisible en vignette, et la vignette est ton unique canal.
+      </p>
+      <p class="reco"><span>Ma recommandation —</span> on le garde</p>
+    </div>
+
+    <div class="call">
+      <div class="n">Décision 3 — la densité</div>
+      <h3>Un écran une chose, confirmé ou non</h3>
+      <p>
+        Six écrans tiennent sans se ressembler et sans devenir des tableaux de bord. Si tu les
+        trouves trop maigres, c'est maintenant qu'il faut le dire.
+      </p>
+      <p class="reco"><span>Ma recommandation —</span> confirmé</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Banc d'essai · itération 2 de l'identité MyPaddock · 18 août 2026<br>
+  Page unique, aucune ressource externe. Données d'exemple, ordres de grandeur issus de la recherche.
+</footer>
+
+</div>
+
+</body>
+</html>

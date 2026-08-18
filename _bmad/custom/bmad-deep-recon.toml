@@ -1,0 +1,11 @@
+# Contraintes permanentes du projet MyPaddock (application de roulage moto).
+# Source unique : _bmad/custom/mypaddock-contraintes.md — editer la, pas ici.
+# Ecrit par bmad-customize le 2026-08-18.
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/mypaddock-contraintes.md",
+  "PARE-FEU DE RECHERCHE : ces contraintes disent QUOI DEMANDER, jamais CE QUI EST VRAI. Aucune conclusion de recherche ne peut s'y appuyer ; toute affirmation vient d'une source recuperee ce run, avec editeur et date.",
+  "Hypotheses non resolues a instrumenter en priorite : A12 (une PWA hors-ligne suffit a tenir la promesse de continuite — confiance moyenne, impact fort), A13 (le bareme constructeur est recuperable et transcriptible), A14 (un coefficient d'usure par groupe de niveau est calibrable — aucune source a ce jour).",
+  "Deux recons ont deja tourne : market (2026-08-16) et user-voice (2026-08-17). La user-voice a renverse trois affirmations du brief. Ne pas refaire le paysage concurrentiel sans raison.",
+]

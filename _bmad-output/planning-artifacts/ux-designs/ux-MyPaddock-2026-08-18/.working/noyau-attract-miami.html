@@ -1,0 +1,213 @@
+<title>Attract Mode Miami</title>
+<style>
+:root{
+  --deep:#080418; --mid:#160A34; --bridge:#4A1B6D; --horizon:#8A2E7A;
+  --surface:#120A2E; --raised:#1C1142; --rule:#302566; --bright:#4C3D9E;
+  --ink:#EEF2FF; --dim:#93A0CE; --faint:#5E6A9B;
+  --miami:#3DE0FF; --warm:#FF7A3C;
+  --record:#B026FF; --recordL:#D98BFF; --best:#2BE88A; --slower:#FFD23F; --caution:#FF5C5C;
+  --hud:ui-monospace,"Courier New",monospace;
+  --txt:"Chakra Petch",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--deep);color:var(--ink);font-family:var(--txt);
+  padding:32px 16px 64px;-webkit-font-smoothing:antialiased}
+.hud{font-family:var(--hud);letter-spacing:.09em;text-transform:uppercase;font-weight:700}
+.tnum{font-variant-numeric:tabular-nums}
+
+header{max-width:1240px;margin:0 auto 40px;padding:0 8px}
+h1{font-family:var(--hud);font-size:clamp(20px,4vw,34px);letter-spacing:.14em;text-transform:uppercase;
+  line-height:1.25;background:linear-gradient(92deg,var(--miami),var(--record) 55%,var(--warm));
+  -webkit-background-clip:text;background-clip:text;color:transparent;text-wrap:balance}
+.sub{color:var(--dim);font-size:16px;max-width:62ch;margin-top:14px;line-height:1.6}
+.sub b{color:var(--ink);font-weight:600}
+.warn{margin-top:18px;border-left:3px solid var(--slower);padding:10px 14px;background:#1a1330;
+  color:var(--dim);font-size:14px;max-width:70ch}
+
+.grid{max-width:1240px;margin:0 auto;display:grid;gap:36px 28px;
+  grid-template-columns:repeat(auto-fit,minmax(288px,1fr))}
+.slot{display:flex;flex-direction:column;gap:12px;min-width:0}
+.cap{font-family:var(--hud);font-size:11px;letter-spacing:.13em;color:var(--miami);text-transform:uppercase}
+.cap span{color:var(--faint);display:block;margin-top:5px;letter-spacing:.05em;font-size:10px}
+
+/* --- phone --- */
+.ph{width:100%;max-width:330px;aspect-ratio:9/19;position:relative;overflow:hidden;
+  border:3px solid var(--rule);
+  background:
+    repeating-linear-gradient(0deg,rgba(0,0,0,.20) 0 1px,transparent 1px 4px),
+    linear-gradient(180deg,var(--deep) 0%,var(--mid) 34%,var(--bridge) 68%,var(--horizon) 100%);
+  box-shadow:inset 2px 2px 0 var(--bright),inset -2px -2px 0 #000;
+  display:flex;flex-direction:column}
+/* voile Miami */
+.ph::before{content:"";position:absolute;inset:0 0 auto;height:46%;
+  background:linear-gradient(180deg,rgba(61,224,255,.24),transparent);pointer-events:none}
+.ph::after{content:"";position:absolute;left:0;right:0;top:63%;height:2px;
+  background:linear-gradient(90deg,transparent,var(--miami),transparent);opacity:.85;pointer-events:none}
+
+.bar{padding:9px 12px;display:flex;justify-content:space-between;align-items:center;
+  font-family:var(--hud);font-size:9px;color:var(--dim);position:relative;z-index:2}
+.body{flex:1;padding:8px 12px 12px;display:flex;flex-direction:column;gap:11px;position:relative;z-index:2;min-height:0}
+.nav{display:flex;border-top:2px solid var(--rule);background:var(--surface);position:relative;z-index:2}
+.nav div{flex:1;text-align:center;padding:11px 2px;font-family:var(--hud);font-size:8px;color:var(--faint);letter-spacing:.08em}
+.nav div.on{color:var(--miami);box-shadow:inset 0 2px 0 var(--miami)}
+
+.card{background:var(--raised);border:2px solid var(--rule);padding:12px;
+  box-shadow:inset 1px 1px 0 var(--bright),inset -1px -1px 0 #000}
+.lbl{font-family:var(--hud);font-size:8px;letter-spacing:.13em;color:var(--dim)}
+.emo{font-size:29px;font-style:italic;font-weight:700;letter-spacing:-.02em;line-height:1;
+  background:linear-gradient(90deg,var(--ink),var(--miami));-webkit-background-clip:text;background-clip:text;color:transparent}
+.big{font-family:var(--hud);font-size:38px;line-height:1;letter-spacing:.01em}
+.huge{font-family:var(--hud);font-size:50px;line-height:1}
+.d{color:var(--dim);font-size:13px;line-height:1.45}
+.btn{margin-top:auto;background:var(--record);color:#0a0418;font-family:var(--hud);font-size:13px;
+  padding:20px 10px;text-align:center;letter-spacing:.09em;
+  box-shadow:inset 2px 2px 0 var(--recordL),inset -2px -2px 0 #4a0a70}
+.btn.cy{background:var(--miami);box-shadow:inset 2px 2px 0 #b4f2ff,inset -2px -2px 0 #0a6b80}
+
+/* molettes */
+.wheels{display:flex;gap:8px}
+.w{flex:1;background:var(--surface);border:2px solid var(--rule);padding:9px 2px;text-align:center}
+.w .o{font-family:var(--hud);font-size:15px;color:var(--faint)}
+.w .a{font-family:var(--hud);font-size:31px;color:var(--ink);margin:6px 0}
+
+/* credits */
+.seg{display:flex;gap:2px;margin-top:7px}
+.seg i{height:11px;flex:1;background:var(--rule)}
+.seg i.f{background:var(--miami)}
+
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.gauge{height:11px;background:var(--rule);margin-top:6px;position:relative}
+.gauge b{position:absolute;inset:0 auto 0 0;background:var(--best)}
+.gauge.warn b{background:var(--slower)}
+
+.note{font-size:12px;color:var(--faint);line-height:1.5;padding-left:11px;border-left:2px solid var(--rule)}
+.note b{color:var(--miami);font-weight:600}
+@media (prefers-reduced-motion:no-preference){}
+</style>
+
+<header>
+  <h1>Attract Mode · correction Miami</h1>
+  <p class="sub">Les quatre écrans du <b>noyau de décembre</b>, avec les quatre correctifs appliqués :
+  ciel décalé vers le <b>bleu Miami</b>, un cran plus épuré, deux familles typographiques, et le pixel
+  ramené au rang d'accent. Le violet <b>ne s'allume que sur un record</b>.</p>
+  <p class="warn"><b>Maquette de mise en page, pas de typographie.</b> Press Start 2P et la script racing
+  ne sont pas intégrées ici — le HUD est approximé en monospace et l'émotion en italique. Les proportions,
+  la densité et la couleur sont justes ; le caractère des lettres ne l'est pas.</p>
+</header>
+
+<div class="grid">
+
+  <!-- 1 -->
+  <div class="slot">
+    <div class="cap">1 · Accueil temporel<span>Zone temporelle au système, zone chiffres au pilote</span></div>
+    <div class="ph">
+      <div class="bar"><span>MYPADDOCK</span><span>09:42</span></div>
+      <div class="body">
+        <div class="card" style="border-color:var(--bright)">
+          <div class="lbl">Aujourd'hui</div>
+          <div class="emo" style="margin:7px 0 4px">Lédenon</div>
+          <div class="d">Groupe Rouge · 6 sessions prévues</div>
+          <div class="row" style="margin-top:11px">
+            <span class="lbl">Ton meilleur ici</span>
+            <span class="hud tnum" style="font-size:20px">1'49"1</span>
+          </div>
+        </div>
+        <div class="row"><span class="lbl">Tes chiffres</span></div>
+        <div class="row" style="gap:9px">
+          <div class="card" style="flex:1;padding:10px"><div class="lbl">Roulages</div><div class="big tnum" style="font-size:29px">7</div></div>
+          <div class="card" style="flex:1;padding:10px"><div class="lbl">€ / tour</div><div class="big tnum" style="font-size:29px;color:var(--miami)">3,04</div></div>
+        </div>
+        <div class="btn">Saisir la session</div>
+      </div>
+      <div class="nav"><div class="on">Accueil</div><div>Roulages</div></div>
+    </div>
+    <p class="note">Deux onglets seulement : <b>Machine</b>, <b>Saison</b> et <b>Cercle</b> arrivent
+    aux mouvements 2 et 3. On ne montre pas la place réservée.</p>
+  </div>
+
+  <!-- 2 -->
+  <div class="slot">
+    <div class="cap">2 · Le sélecteur<span>Trois molettes, aucun clavier, jamais</span></div>
+    <div class="ph">
+      <div class="bar"><span>SESSION 4</span><span>LEDENON</span></div>
+      <div class="body">
+        <div class="lbl">Ton meilleur tour</div>
+        <div class="wheels">
+          <div class="w"><div class="o">0</div><div class="a">1</div><div class="o">2</div></div>
+          <div class="w"><div class="o">46</div><div class="a">47</div><div class="o">48</div></div>
+          <div class="w"><div class="o">2</div><div class="a">3</div><div class="o">4</div></div>
+        </div>
+        <div class="row"><span class="lbl">min</span><span class="lbl">sec</span><span class="lbl">dixièmes</span></div>
+        <div class="card" style="margin-top:6px">
+          <div class="lbl">Ouvre sur</div>
+          <div class="d" style="margin-top:5px">ton meilleur tour ici, <span class="hud tnum">1'49"1</span> — pas sur zéro.</div>
+        </div>
+        <div class="btn cy">Enregistrer</div>
+      </div>
+      <div class="nav"><div>Accueil</div><div class="on">Roulages</div></div>
+    </div>
+    <p class="note">Cibles de <b>72 px</b> sur l'action, <b>56 px</b> minimum ailleurs.
+    Aucune littérature n'existe sur la saisie gantée : à régler avec de vrais gants.</p>
+  </div>
+
+  <!-- 3 -->
+  <div class="slot">
+    <div class="cap">3 · Le retour immédiat<span>Sans réseau · le violet s'allume</span></div>
+    <div class="ph">
+      <div class="bar"><span>SESSION 4 · 11H20</span><span>HORS LIGNE</span></div>
+      <div class="body">
+        <div class="card" style="border-color:var(--record);text-align:center;padding:16px 12px">
+          <div class="lbl" style="color:var(--recordL)">Meilleur tour du jour</div>
+          <div class="huge tnum" style="color:var(--record);margin:9px 0">1'47"3</div>
+          <div class="hud tnum" style="font-size:22px;color:var(--best)">−1"8</div>
+          <div class="d" style="margin-top:8px;font-size:12px">contre ta dernière fois à Lédenon</div>
+        </div>
+        <div class="card">
+          <div class="row"><span class="lbl">Sessions roulées</span><span class="hud tnum" style="font-size:17px">4</span></div>
+        </div>
+        <div class="card">
+          <div class="lbl">Geste déclaré</div>
+          <div class="emo" style="font-size:22px;margin-top:5px">Genou gauche posé</div>
+          <div class="d" style="font-size:12px;margin-top:5px">photo rattachée comme preuve</div>
+        </div>
+        <div class="btn">Composer le récap</div>
+      </div>
+      <div class="nav"><div>Accueil</div><div class="on">Roulages</div></div>
+    </div>
+    <p class="note">L'écart porte <b>toujours son signe</b> — sans le <b>−</b>, l'information est
+    perdue pour un pilote deutéranope. « Hors ligne » est ici pour la démo : dans le produit,
+    <b>rien ne signale l'absence de réseau</b>.</p>
+  </div>
+
+  <!-- 4 -->
+  <div class="slot">
+    <div class="cap">4 · Le coût de la journée<span>Le coût au tour n'est jamais seul</span></div>
+    <div class="ph">
+      <div class="bar"><span>LEDENON · 12 MAI</span><span>—</span></div>
+      <div class="body">
+        <div class="card">
+          <div class="lbl">Ce que ça a coûté</div>
+          <div class="big tnum" style="margin:7px 0 2px">612 €</div>
+          <div class="d" style="font-size:12px">engagement 210 · essence 74 · plaquettes 168 · reste 160</div>
+        </div>
+        <div class="card" style="border-color:var(--bright)">
+          <div class="row">
+            <div><div class="lbl">Le tour</div><div class="big tnum" style="color:var(--miami);font-size:33px">3,27 €</div></div>
+            <div style="text-align:right"><div class="lbl">Budget saison</div><div class="hud tnum" style="font-size:15px">2 840 / 5 500</div></div>
+          </div>
+          <div class="seg"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="card">
+          <div class="row"><span class="lbl">Liquide de frein</span><span class="d" style="font-size:11px">7 roulages saisis sur 9</span></div>
+          <div class="gauge warn"><b style="width:74%"></b></div>
+        </div>
+        <div class="btn cy">Ajouter une dépense</div>
+      </div>
+      <div class="nav"><div>Accueil</div><div class="on">Roulages</div></div>
+    </div>
+    <p class="note">Le budget est un <b>compteur de crédits</b> qui se consomme ; le coût au tour est
+    un <b>score qui descend</b>. Et la jauge d'usure <b>n'existe pas sans sa complétude</b> —
+    il n'y a pas de variante nue de ce composant.</p>
+  </div>
+
+</div>

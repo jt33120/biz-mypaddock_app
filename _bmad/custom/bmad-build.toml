@@ -1,0 +1,9 @@
+# Contraintes permanentes du projet MyPaddock (application de roulage moto).
+# Source unique : _bmad/custom/mypaddock-contraintes.md — editer la, pas ici.
+# Ecrit par bmad-customize le 2026-08-18.
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/mypaddock-contraintes.md",
+  "file:{project-root}/_bmad/custom/mypaddock-optique-produit.md",
+]

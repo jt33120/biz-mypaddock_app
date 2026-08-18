@@ -1,0 +1,13 @@
+# Contraintes permanentes du projet MyPaddock (application de roulage moto).
+# Source unique : _bmad/custom/mypaddock-contraintes.md — editer la, pas ici.
+# Ecrit par bmad-customize le 2026-08-18.
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/mypaddock-contraintes.md",
+  "file:{project-root}/_bmad/custom/mypaddock-optique-produit.md",
+]
+
+# bmad-spec n expose ni doc_standards ni finalize_reviewers.
+# on_complete est le seul point d accroche disponible.
+on_complete = "Lancer skill:bmad-review lenses=produit sur le SPEC.md qui vient d etre ecrit, et presenter les constats a Julian avant de clore."

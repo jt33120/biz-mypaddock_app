@@ -1,0 +1,28 @@
+# Contraintes permanentes du projet MyPaddock (application de roulage moto).
+# Source unique : _bmad/custom/mypaddock-contraintes.md — editer la, pas ici.
+# Ecrit par bmad-customize le 2026-08-18.
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/mypaddock-contraintes.md",
+  "file:{project-root}/_bmad/custom/mypaddock-optique-produit.md",
+]
+
+review_guidance = [
+  "Signaler tout emploi de 'trackday' au lieu de 'roulage', et toute derive de vocabulaire par rapport au glossaire du PRD.",
+  "Signaler tout chiffre adjacent a la securite affiche sans sa completude.",
+  "Signaler tout affichage du cout au tour qui n'est pas accompagne du budget de saison consomme.",
+  "Signaler tout achievement a serie ou a duree limitee, et tout desequilibre du catalogue vers la bravoure au detriment de la discipline.",
+  "Signaler toute exigence qui coupe le plaisir avant la corvee : sur ce projet la regle de coupe est inversee.",
+  "Signaler toute donnee qui ne survivrait qu'au stockage du navigateur.",
+  "Signaler toute formulation qui presente le carnet auto-declare comme un historique certifie, ou la checklist de conformite comme une garantie d'admission.",
+]
+
+# Lentille sur mesure. Les lentilles sont un tableau de tables clé par `code` :
+# `produit` s ajoute aux cinq lentilles livrees sans en ecraser aucune.
+[[workflow.lenses]]
+code = "produit"
+name = "Produit — adoption, recit, coherence cognitive"
+applies_to = "docs"
+when = "Documents qui definissent un produit ou une experience : brief, PRD, spec UX, architecture, epiques. Sauter pour les documents purement techniques sans surface utilisateur."
+instruction = "Charge {project-root}/_bmad/custom/lens-produit.md et suis-le."

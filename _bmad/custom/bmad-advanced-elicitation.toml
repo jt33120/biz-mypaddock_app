@@ -1,0 +1,11 @@
+# Contraintes permanentes du projet MyPaddock (application de roulage moto).
+# Source unique : _bmad/custom/mypaddock-contraintes.md — editer la, pas ici.
+# Ecrit par bmad-customize le 2026-08-18.
+# Ce skill n'expose PAS persistent_facts. Seul 'preferences' est disponible.
+
+[workflow]
+preferences = [
+  "Projet MyPaddock (application de roulage moto), bac a sable : le critere est l'utilite personnelle, pas le revenu. Le risque numero un est la lassitude de l'utilisateur unique, pas la qualite redactionnelle. Privilegier les methodes qui attaquent les paris comportementaux non verifies plutot que la formulation.",
+  "Cinq methodes ont deja tourne sur le brief le 2026-08-18 : audit d'hypotheses, pre-mortem, rotation des parties prenantes, panel sceptique (Shark Tank), pensee de second ordre. Ne pas les reproposer en premier choix sur un nouveau document sans signaler qu'elles ont deja servi.",
+  "Contraintes du projet dans _bmad/custom/mypaddock-contraintes.md — a lire si une methode a besoin du contexte produit.",
+]

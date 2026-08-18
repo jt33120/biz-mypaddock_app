@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Forge — application de roulage moto</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#12100e; --paper:#f4f1ea; --rule:#d8d1c3; --muted:#6b6357;
+  --hot:#c2410c; --steel:#1f2937; --seal:#8f1d14; --seal2:#b8331f;
+  --ok:#15803d;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ink:#ece7dd; --paper:#14120f; --rule:#332e26; --muted:#9a9083;
+  --hot:#fb923c; --steel:#cbd5e1; --seal:#b8331f; --seal2:#e05a3c; --ok:#4ade80;
+}}
+:root[data-theme="dark"]{
+  --ink:#ece7dd; --paper:#14120f; --rule:#332e26; --muted:#9a9083;
+  --hot:#fb923c; --steel:#cbd5e1; --seal:#b8331f; --seal2:#e05a3c; --ok:#4ade80;
+}
+body{background:var(--paper);color:var(--ink);
+  font:16px/1.65 ui-serif,Georgia,"Times New Roman",serif;
+  padding:3rem 1.25rem 6rem}
+.wrap{max-width:46rem;margin:0 auto}
+header{border-bottom:3px double var(--rule);padding-bottom:2rem;margin-bottom:2.5rem;
+  display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap}
+.hd{flex:1 1 18rem;min-width:0}
+.kicker{font:600 .7rem/1.4 ui-sans-serif,system-ui;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--hot)}
+h1{font-size:2.1rem;line-height:1.15;margin:.5rem 0 .6rem;font-weight:600}
+.sub{color:var(--muted);font-size:.95rem}
+.seal{flex:0 0 148px}
+h2{font:600 .74rem/1.4 ui-sans-serif,system-ui;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--hot);margin:3rem 0 1rem;
+  padding-bottom:.45rem;border-bottom:1px solid var(--rule)}
+h3{font-size:1.06rem;margin:1.6rem 0 .35rem;font-weight:600}
+p{margin:.7rem 0}
+.lock{border-left:3px solid var(--ok);padding:.15rem 0 .15rem 1.1rem;margin:1.5rem 0}
+.kill{border-left:3px solid var(--seal2);padding:.15rem 0 .15rem 1.1rem;margin:1.5rem 0}
+.crack{border-left:3px solid var(--hot);padding:.15rem 0 .15rem 1.1rem;margin:1.5rem 0}
+.lock h3,.kill h3,.crack h3{margin-top:0}
+.tbl{overflow-x:auto;margin:1.4rem 0}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:24rem}
+th,td{text-align:left;padding:.6rem .8rem;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:600 .68rem/1.4 ui-sans-serif,system-ui;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted)}
+.cast{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));margin:1.3rem 0}
+.p{border:1px solid var(--rule);border-radius:.5rem;padding:.85rem .95rem;background:transparent}
+.p .n{font:600 .95rem ui-sans-serif,system-ui}
+.p .r{color:var(--muted);font-size:.78rem;margin:.1rem 0 .45rem;
+  font-family:ui-sans-serif,system-ui}
+.p .q{font-style:italic;font-size:.88rem;line-height:1.5}
+.num{font-variant-numeric:tabular-nums;font-weight:600;color:var(--hot)}
+footer{margin-top:4rem;padding-top:1.4rem;border-top:1px solid var(--rule);
+  color:var(--muted);font-size:.8rem;font-family:ui-sans-serif,system-ui}
+</style></head><body><div class="wrap">
+
+<header>
+<div class="hd">
+<div class="kicker">Séance de forge · 18 août 2026</div>
+<h1>Application de roulage moto</h1>
+<p class="sub">L'idée est passée au gril pendant six manches. Trois de ses affirmations sont mortes, cinq décisions sont verrouillées, quatre fissures ont survécu à l'examen et sont conservées telles quelles.</p>
+</div>
+<div class="seal" aria-label="Sceau : idée durcie">
+<svg viewBox="0 0 148 148" width="148" height="148" role="img">
+<title>HARDENED</title>
+<circle cx="74" cy="74" r="66" fill="var(--seal)"/>
+<circle cx="74" cy="74" r="66" fill="none" stroke="var(--seal2)" stroke-width="2.5"/>
+<circle cx="74" cy="74" r="56" fill="none" stroke="#f4f1ea" stroke-width="1" opacity=".55"/>
+<circle cx="74" cy="74" r="52" fill="none" stroke="#f4f1ea" stroke-width="2.5" opacity=".85"/>
+<path d="M74 40 L84 62 L108 65 L90 82 L95 106 L74 94 L53 106 L58 82 L40 65 L64 62 Z"
+      fill="#f4f1ea" opacity=".92"/>
+<text x="74" y="128" text-anchor="middle" fill="#f4f1ea"
+      font-family="ui-sans-serif,system-ui" font-size="13" font-weight="700"
+      letter-spacing="3.5">DURCIE</text>
+</svg>
+</div>
+</header>
+
+<h2>Verdict</h2>
+<p><strong>Durcie.</strong> L'idée est sortie plus précise qu'elle n'est entrée, et sur un axe différent de celui qu'elle revendiquait. Elle n'est pas validée — quatre fissures nommées plus bas n'ont pas de réponse. Elle est utilisable.</p>
+<p>Le renversement central de la séance : <strong>ce n'est plus « quelle moitié est l'hameçon »</strong>. Le plaisir et l'argent recrutent tous les deux, sur des fréquences différentes. La question était mal posée.</p>
+
+<h2>Ce qui est verrouillé</h2>
+
+<div class="lock"><h3>L'artefact partagé porte de la performance, jamais un tableau</h3>
+<p>Photo, plus un geste — « coude au sol enchaîné à un wheeling » — ou un delta, « 3 secondes en moins ». Un compte esthétique ne supporte pas une ventilation de dépenses.</p></div>
+
+<div class="lock"><h3>Le geste est le différenciateur, pas le chrono</h3>
+<p>Tous les concurrents postent un nombre, parce qu'un GPS ne produit que ça. Aucun ne capture le moment réussi. C'est le seul élément de l'artefact de partage que la concurrence ne sait pas fabriquer.</p></div>
+
+<div class="lock"><h3>Deux rythmes, deux hameçons</h3>
+<div class="tbl"><table>
+<tr><th>Rythme</th><th>Artefact</th><th>Registre</th><th>Canal</th></tr>
+<tr><td>Par roulage</td><td>photo + geste, ou delta de chrono</td><td>esthétique, fréquent</td><td>Instagram</td></tr>
+<tr><td>Par saison</td><td>le récit de ce que l'année a coûté</td><td>narratif, rare, fort engagement</td><td>reel, Discord</td></tr>
+</table></div>
+<p>L'argent ne recrute pas chaque semaine. Il recrute une fois par an, et beaucoup plus fort. Conséquence : <strong>le récap de saison est un organe d'acquisition</strong>, pas une commodité de fin de roadmap.</p></div>
+
+<div class="lock"><h3>Surface de saisie : trois champs</h3>
+<p>Le coût total de la journée, ce qu'il y a à faire sur la moto, le meilleur tour. Rien d'autre. <em>« Pas besoin de faire du superfétatoire. »</em></p></div>
+
+<div class="lock"><h3>Symétrie des paliers</h3>
+<div class="tbl"><table>
+<tr><th></th><th>Palier 1 — v1</th><th>Palier 2</th><th>Palier 3</th></tr>
+<tr><td><strong>Chrono</strong></td><td>saisie manuelle</td><td>GPS + organisateurs</td><td>analyse vidéo</td></tr>
+<tr><td><strong>Argent</strong></td><td>total de la journée</td><td>connexion bancaire</td><td>attribution automatique</td></tr>
+</table></div>
+<p>Un roulage est un jour discret, loin de chez soi, à signature de dépense reconnaissable : l'attribution par date est presque gratuite. Enable Banking couvre 2 700 banques sur 30 pays, supporte les équipes non régulées sous sa propre licence, et offre un mode restreint sur ses propres comptes.</p></div>
+
+<h2>Ce qui est mort</h2>
+
+<div class="kill"><h3>« Les concurrents sont vieux, il faut les moderniser »</h3>
+<p>Trakio date d'<span class="num">avril 2024</span>, Driver Nation de <span class="num">janvier 2025</span>, Pitly de 2025. <strong>Ce sont déjà les refontes modernes</strong>, et ce sont elles qui n'ont aucune traction. La vieille — RaceChrono — détient les <span class="num">100 000</span> utilisateurs. Le récit prédisait que les jolies récentes gagnent ; c'est l'inverse qui s'est produit.</p></div>
+
+<div class="kill"><h3>L'analogie Cal AI</h3>
+<p>MyFitnessPal avait <span class="num">200 millions</span> d'inscrits : la catégorie était démontrée gigantesque, et il ne restait qu'à mieux l'emballer. Ici le plafond démontré est RaceChrono, <span class="num">100 000</span> utilisateurs dans le monde entier. Deux mille fois plus petit. Le mouvement ne se transpose pas.</p></div>
+
+<div class="kill"><h3>« La moto devient tendance »</h3>
+<p>Marché français en recul de <span class="num">14,5 %</span> en 2025 sur les 125 cm³ et plus, <span class="num">173 282</span> immatriculations, prix du neuf <span class="num">+40 %</span> en cinq ans. Ce qui tient en revanche : <strong>la piste se remplit quand même.</strong> Magny-Cours, Le Mans Bugatti et Paul Ricard sont fréquemment complets deux à trois mois à l'avance — et un sold-out est le signal de demande le plus fort qui existe.</p></div>
+
+<div class="kill"><h3>« L'argent est anti-esthétique »</h3>
+<p>Objection réduite, pas éliminée : c'est le <em>format tableau</em> qui est laid, pas le <em>sujet</em>. Le récit de saison sous budget — « devenir un pro au SMIC », « combien coûte une saison avec mon R1 » — est un genre éprouvé, en vidéo comme à l'écrit, sur deux surfaces indépendantes.</p></div>
+
+<h2>Fissures qui ont survécu</h2>
+
+<div class="crack"><h3>L'acquisition repose sur l'axe encombré</h3>
+<p>Chrono plus partage, c'est exactement ce sur quoi neuf produits ont échoué en deux ans. Seul le geste narré nous en distingue, et ce n'est pas prouvé.</p></div>
+
+<div class="crack"><h3>Aucune preuve qu'un pistard paie</h3>
+<p>MotoVault vend 4,99 $/mois, mais sur la route. MotoBook a recruté 6 000 motards, mais gratuitement. Ni l'un ni l'autre ne démontre une disposition à payer en piste.</p></div>
+
+<div class="crack"><h3>Le canal est potentiel, pas actuel</h3>
+<p>6 000 abonnés sur un compte sans ligne éditoriale, et le plan de contenu reste à construire.</p></div>
+
+<div class="crack"><h3>« Construire les deux, puis renforcer ce qui marche » ne se vérifiera pas</h3>
+<p>À un ou deux utilisateurs, aucun signal ne permet de départager deux positionnements. Ce n'est pas un défaut de rigueur, c'est arithmétique.</p></div>
+
+<h2>Décidé pour la suite</h2>
+<p><strong>Test papier au roulage de septembre 2026.</strong> Les trois champs à la main, pour concevoir les écrans contre des données réelles plutôt que contre un souvenir. Une journée de crayon, aucun coût.</p>
+
+<h2>Qui a mis la pression</h2>
+<div class="cast">
+<div class="p"><div class="n">📋 John</div><div class="r">Product Manager · BMad</div>
+<div class="q">« Le plaisir est l'hameçon, la corvée est la charge utile. Tout repose là-dessus. »</div></div>
+
+<div class="p"><div class="n">🏍️ Ludo</div><div class="r">a sorti une app de chrono en 2023 · 400 téléchargements · arrêtée en 2024</div>
+<div class="q">« J'ai construit exactement la moitié amusante. Personne n'est venu. »</div></div>
+
+<div class="p"><div class="n">📊 Mary</div><div class="r">Business Analyst · BMad</div>
+<div class="q">« J'ai été chercher les dates. Ça ne dit pas ce que vous croyez. »</div></div>
+
+<div class="p"><div class="n">🌍 Inès</div><div class="r">investisseuse seed · quarante pitchs « le Strava de X »</div>
+<div class="q">« MyFitnessPal avait deux cents millions d'inscrits. Le mouvement ne se transpose pas. »</div></div>
+
+<div class="p"><div class="n">🎨 Sally</div><div class="r">UX Designer · BMad</div>
+<div class="q">« Deux jeux de fonctions, oui. Deux premiers écrans, non. »</div></div>
+
+<div class="p"><div class="n">📱 Thomas</div><div class="r">29 ans · deux roulages · hésite à s'équiper</div>
+<div class="q">« Ce sont deux apps différentes et je n'en télécharge qu'une. »</div></div>
+
+<div class="p"><div class="n">📖 Sophia</div><div class="r">Master Storyteller · BMad</div>
+<div class="q">« Un compte a un registre, et le registre est une promesse. »</div></div>
+
+<div class="p"><div class="n">📸 Chloé</div><div class="r">trois comptes moto à 50 k+ · vit du placement</div>
+<div class="q">« Je retire une moitié : c'est le format qui est laid, pas le sujet. »</div></div>
+
+<div class="p"><div class="n">🎨 Maya</div><div class="r">Design Thinking Maestro · BMad</div>
+<div class="q">« Ce n'est pas un chiffre, c'est un récit. Personne ne mesure ça parce que personne ne peut le mesurer. »</div></div>
+</div>
+
+<footer>
+Séance conduite le 18 août 2026 · mémoire complète dans <code>.memlog.md</code> · distillat dans <code>forged-idea.md</code><br>
+Sources factuelles : recherche user-voice du 17 août 2026, Emoto et Passion Moto Formation pour le marché, TrackMate pour les circuits, Enable Banking et OpenBankingTracker pour l'open banking.
+</footer>
+
+</div></body></html>

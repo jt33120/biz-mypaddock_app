@@ -1,0 +1,18 @@
+# Contraintes permanentes du projet MyPaddock (application de roulage moto).
+# Source unique : _bmad/custom/mypaddock-contraintes.md — editer la, pas ici.
+# Ecrit par bmad-customize le 2026-08-18.
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/mypaddock-contraintes.md",
+  "file:{project-root}/_bmad/custom/mypaddock-optique-produit.md",
+  "file:{project-root}/_bmad-output/design/DIRECTION.md",
+  "Quatre maquettes existent dans _bmad-output/design/. 04-attract-mode.html est la direction retenue ; 01-chrono-violet, 02-banc-essai et 03-six-ecrans sont du materiau, pas des options a rouvrir. Les quatre portent la meme semantique et les memes six fonctions : seule la peau change.",
+  "Quatre correctifs restent a appliquer a Attract Mode : palette decalee vers un bleu ciel Miami, plus epure, deux polices (Press Start 2P pour le HUD et les chiffres + une script racing pour les titres et les moments d'emotion), et moins d'effets.",
+]
+
+# Revue produit au Reviewer Gate — AVANT le polissage, pour que les constats
+# de fond arrivent quand il est encore temps de les traiter.
+finalize_reviewers = [
+  "skill:bmad-review lenses=produit",
+]

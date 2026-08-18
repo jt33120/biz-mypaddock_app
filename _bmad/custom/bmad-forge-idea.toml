@@ -1,0 +1,10 @@
+# Contraintes permanentes du projet MyPaddock (application de roulage moto).
+# Source unique : _bmad/custom/mypaddock-contraintes.md — editer la, pas ici.
+# Ecrit par bmad-customize le 2026-08-18.
+# Skill de divergence : les contraintes entrent comme CONTEXTE, pas comme cloture.
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/mypaddock-contraintes.md",
+  "CADRE D'USAGE POUR CE SKILL : ces contraintes sont le corpus des decisions deja prises sur MyPaddock. Elles sont la pour que tu saches ce qui a ete tranche et pourquoi — PAS pour borner ce que tu peux proposer. Ce skill a pour role de diverger : tu peux attaquer n'importe laquelle. Si une idee en contredit une, dis-le explicitement plutot que de l'ecarter en silence. Deux renversements utiles du brief sont deja venus de la.",
+]

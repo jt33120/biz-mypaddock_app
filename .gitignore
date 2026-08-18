@@ -1,0 +1,14 @@
+.env
+.env.local
+.env.*.local
+node_modules/
+dist/
+.DS_Store
+*.local
+.vercel
+.railway
+
+# Trois codebases MyPaddock anterieures, clonees comme depots git imbriques.
+# Reference uniquement. Condition 5 de l'audit de viabilite : secrets historiques
+# renouveles, aucun ancien extracteur reactive. Ne rien recycler sans decision.
+context/
