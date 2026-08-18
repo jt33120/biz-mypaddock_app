@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PRODUCT_NAME } from './product'
 import { nouvelId } from './db/ids'
-import { NOM_BASE, VFS_DEMANDE, opfsDisponible, ouvrirBase } from './db/powersync'
+import { NOM_BASE, VFS_DEMANDE, opfsDisponible, ouvrirBase, vfsReel } from './db/powersync'
 
 type Etat = { cle: string; val: string; ton?: 'oui' | 'non' | 'attente' }
 
@@ -31,7 +31,11 @@ export default function App() {
     const autonome =
       window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as unknown as { standalone?: boolean }).standalone === true
-    l.push({ cle: 'Installée (standalone)', val: autonome ? 'oui' : 'non', ton: autonome ? 'oui' : 'non' })
+    l.push({
+      cle: '① INSTALLÉE (standalone)',
+      val: autonome ? 'OUI — bon environnement' : 'NON — onglet Safari, résultat NON VALIDE',
+      ton: autonome ? 'oui' : 'non',
+    })
 
     if (navigator.storage?.persisted) {
       const p = await navigator.storage.persisted()
@@ -47,9 +51,18 @@ export default function App() {
     l.push({ cle: 'OPFS', val: await opfsDisponible(), ton: 'attente' })
     l.push({ cle: 'WASM', val: typeof WebAssembly !== 'undefined' ? 'oui' : 'non',
              ton: typeof WebAssembly !== 'undefined' ? 'oui' : 'non' })
-    l.push({ cle: 'VFS demandé', val: VFS_DEMANDE, ton: 'attente' })
-    l.push({ cle: 'Hors ligne', val: navigator.onLine ? 'en ligne' : 'HORS LIGNE',
-             ton: navigator.onLine ? 'attente' : 'oui' })
+    const reel = await vfsReel()
+    l.push({
+      cle: '② VFS RÉELLEMENT UTILISÉ',
+      val: reel,
+      ton: reel.startsWith('OPFS confirmé') ? 'oui' : reel.startsWith('REPLI') ? 'non' : 'attente',
+    })
+    l.push({ cle: '   (demandé)', val: VFS_DEMANDE, ton: 'attente' })
+    l.push({
+      cle: '③ RÉSEAU',
+      val: navigator.onLine ? 'en ligne — étape 4 pas encore faite' : 'MODE AVION — c est le vrai test',
+      ton: navigator.onLine ? 'attente' : 'oui',
+    })
     l.push({ cle: 'Build', val: __BUILD__, ton: 'attente' })
     setEtats(l)
   }, [])

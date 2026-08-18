@@ -37,22 +37,43 @@ export const ouvrirBase = () =>
   })
 
 /**
- * OPFS peut se replier silencieusement sur IndexedDB. Un « ça marche » obtenu
- * sur le VFS qu'on voulait éviter serait un faux positif, et c'est exactement
- * le genre de résultat qui coûte trois semaines. On mesure donc ce qui tourne
- * réellement plutôt que ce qu'on a demandé.
+ * QUEL VFS TOURNE RÉELLEMENT — et non lequel on a demandé.
+ *
+ * OPFS peut se replier silencieusement sur IndexedDB, c'est-à-dire sur
+ * `wa-sqlite-async.wasm`, le binaire asyncify accusé de faire tuer le process
+ * WebContent. Un « ça marche » obtenu sur ce repli serait un faux positif, et
+ * c'est le genre de faux positif qui coûte trois semaines.
+ *
+ * La mesure est empirique et sans ambiguïté : si le VFS OPFS est réellement en
+ * service, le fichier de base vit dans l'OPFS. On regarde donc s'il y est.
  */
+export const vfsReel = async (): Promise<string> => {
+  if (!('storage' in navigator) || !('getDirectory' in navigator.storage)) {
+    return 'IndexedDB (OPFS absent)'
+  }
+  try {
+    const racine = await navigator.storage.getDirectory()
+    const noms: string[] = []
+    for await (const [nom] of racine.entries()) noms.push(nom)
+    const trouve = noms.filter((n) => n.includes(NOM_BASE.replace('.db', '')))
+    return trouve.length
+      ? `OPFS confirmé (${trouve.length} fichier${trouve.length > 1 ? 's' : ''})`
+      : noms.length
+        ? `REPLI IndexedDB — OPFS contient ${noms.length} entrée(s), pas la base`
+        : 'REPLI IndexedDB — OPFS vide'
+  } catch (e) {
+    return 'indéterminé : ' + (e as Error).message.slice(0, 34)
+  }
+}
+
+/** Accès synchrone OPFS : normal qu'il soit absent du fil principal — WebKit
+ *  ne l'expose que dans un worker. Ce n'est donc PAS un signal d'échec. */
 export const opfsDisponible = async (): Promise<string> => {
   if (!('storage' in navigator) || !('getDirectory' in navigator.storage)) return 'absent'
   try {
-    const racine = await navigator.storage.getDirectory()
-    const f = await racine.getFileHandle('sonde-opfs', { create: true })
-    // createSyncAccessHandle est ce dont OPFSCoopSyncVFS a besoin, et il
-    // n'existe QUE dans un worker sur certaines versions de WebKit.
-    const dansWorker = typeof (f as unknown as { createSyncAccessHandle?: unknown }).createSyncAccessHandle === 'function'
-    await racine.removeEntry('sonde-opfs').catch(() => {})
-    return dansWorker ? 'disponible' : 'present, sans accès synchrone'
+    await navigator.storage.getDirectory()
+    return 'présent (accès synchrone réservé au worker, normal)'
   } catch (e) {
-    return 'erreur: ' + (e as Error).message.slice(0, 40)
+    return 'erreur: ' + (e as Error).message.slice(0, 34)
   }
 }
