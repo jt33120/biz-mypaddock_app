@@ -1,167 +1,253 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { PRODUCT_NAME } from './product'
-import { nouvelId } from './db/ids'
-import { NOM_BASE, VFS_DEMANDE, opfsDisponible, ouvrirBase, vfsReel } from './db/powersync'
+import { ouvrirBase } from './db/powersync'
+import {
+  ajouterSession, bilanRoulage, creerRoulage, formaterChrono, formaterEcart, listerRoulages,
+} from './db/depot'
+import { Molettes } from './ecrans/Molettes'
+import { Sonde } from './ecrans/Sonde'
 
-type Etat = { cle: string; val: string; ton?: 'oui' | 'non' | 'attente' }
+type Db = ReturnType<typeof ouvrirBase>
+type Ecran = 'accueil' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'sonde'
+type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
+type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
-/**
- * PHASE A du récit 0.1 — le moteur, HORS NUAGE.
- *
- * Le vrai verrou du projet n'est pas la synchronisation, c'est de savoir si
- * SQLite en WebAssembly survit dans une PWA installée sous iOS. Ça se teste
- * sans compte PowerSync, sans instance déployée et sans une ligne de SQL
- * serveur : `new PowerSyncDatabase(...)` ouvre une base locale et accepte des
- * écritures sans jamais appeler `connect()`.
- *
- * Si ça meurt ici, PowerSync est mort et rien n'a été gaspillé en configuration
- * nuage. C'est la seule structure où un échec ne coûte pas la soirée entière.
- */
+const aujourdhui = () => new Date().toISOString().slice(0, 10)
+
+/** Le groupe se saisit sur l'échelle de SON organisateur. Pau-Arnos annonce
+ *  2 à 4 groupes nommés Initiation/Intermédiaire/Confirmé/Expert, pas
+ *  Blanc/Jaune/Rouge. Seul le RANG est comparable d'une sortie à l'autre. */
+const GROUPES = ['Initiation', 'Intermédiaire', 'Confirmé', 'Expert']
+
 export default function App() {
-  const [etats, setEtats] = useState<Etat[]>([])
-  const [journal, setJournal] = useState<string[]>([])
-  const [occupe, setOccupe] = useState(false)
-  const base = useRef<ReturnType<typeof ouvrirBase> | null>(null)
+  const [db, setDb] = useState<Db | null>(null)
+  const [ecran, setEcran] = useState<Ecran>('accueil')
+  const [liste, setListe] = useState<Liste>([])
+  const [courant, setCourant] = useState<string | null>(null)
+  const [bilan, setBilan] = useState<Bilan>(null)
 
-  const dire = (m: string) =>
-    setJournal((j) => [`${new Date().toLocaleTimeString('fr-FR')}  ${m}`, ...j].slice(0, 14))
-
-  const mesurer = useCallback(async () => {
-    const l: Etat[] = []
-    const autonome =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (navigator as unknown as { standalone?: boolean }).standalone === true
-    l.push({
-      cle: '① INSTALLÉE (standalone)',
-      val: autonome ? 'OUI — bon environnement' : 'NON — onglet Safari, résultat NON VALIDE',
-      ton: autonome ? 'oui' : 'non',
-    })
-
-    if (navigator.storage?.persisted) {
-      const p = await navigator.storage.persisted()
-      l.push({ cle: 'Stockage persistant', val: p ? 'accordé' : 'non accordé', ton: p ? 'oui' : 'non' })
-    }
-    if (navigator.storage?.estimate) {
-      const e = await navigator.storage.estimate()
-      const mo = (n?: number) => (n ? (n / 1048576).toFixed(1) + ' Mo' : '—')
-      // Les chiffres d'estimate() ne sont jamais présentés comme des mesures.
-      l.push({ cle: 'Quota (estimation)', val: mo(e.quota), ton: 'attente' })
-      l.push({ cle: 'Utilisé (estimation)', val: mo(e.usage), ton: 'attente' })
-    }
-    l.push({ cle: 'OPFS', val: await opfsDisponible(), ton: 'attente' })
-    l.push({ cle: 'WASM', val: typeof WebAssembly !== 'undefined' ? 'oui' : 'non',
-             ton: typeof WebAssembly !== 'undefined' ? 'oui' : 'non' })
-    const reel = await vfsReel()
-    l.push({
-      cle: '② VFS RÉELLEMENT UTILISÉ',
-      val: reel,
-      ton: reel.startsWith('OPFS confirmé') ? 'oui' : reel.startsWith('REPLI') ? 'non' : 'attente',
-    })
-    l.push({ cle: '   (demandé)', val: VFS_DEMANDE, ton: 'attente' })
-    l.push({
-      cle: '③ RÉSEAU',
-      val: navigator.onLine ? 'en ligne — étape 4 pas encore faite' : 'MODE AVION — c est le vrai test',
-      ton: navigator.onLine ? 'attente' : 'oui',
-    })
-    l.push({ cle: 'Build', val: __BUILD__, ton: 'attente' })
-    setEtats(l)
+  useEffect(() => {
+    const d = ouvrirBase()
+    d.init().then(() => setDb(d))
   }, [])
 
-  useEffect(() => { void mesurer() }, [mesurer])
+  const rafraichir = useCallback(async (base: Db) => setListe(await listerRoulages(base)), [])
+  useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
 
-  const ouvrir = async () => {
-    if (base.current) return base.current
-    dire(`ouverture de ${NOM_BASE} en ${VFS_DEMANDE}…`)
-    const t = performance.now()
-    const db = ouvrirBase()
-    await db.init()
-    base.current = db
-    dire(`base ouverte en ${Math.round(performance.now() - t)} ms`)
-    return db
-  }
+  if (!db) return <div className="ecran"><div className="libelle">chargement…</div></div>
 
-  /** Étape 2 du protocole : 40 tours d'affilée. C'est l'écriture soutenue qui
-   *  fait tuer le process WebContent quand le VFS asyncify est en cause. */
-  const ecrire40Tours = async () => {
-    setOccupe(true)
-    try {
-      const db = await ouvrir()
-      const t = performance.now()
-      const roulageId = nouvelId()
-      const sessionId = nouvelId()
-      await db.execute(
-        `INSERT INTO roulage (id, pilote_id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, niveau)
-         VALUES (?, ?, NULL, ?, ?, ?, ?, ?)`,
-        [roulageId, 'sonde', new Date().toISOString().slice(0, 10), 'Confirmé', 3, 4, 'confirme'],
-      )
-      await db.execute(`INSERT INTO session (id, roulage_id, ordre, duree_ms) VALUES (?, ?, ?, ?)`,
-        [sessionId, roulageId, 1, 1200000])
-      for (let i = 0; i < 40; i++) {
-        await db.execute(
-          `INSERT INTO tour (id, session_id, temps_ms, provenance) VALUES (?, ?, ?, ?)`,
-          [nouvelId(), sessionId, 96000 + Math.round(Math.sin(i) * 3000), 'saisie_manuelle'],
-        )
-      }
-      const ms = Math.round(performance.now() - t)
-      dire(`40 tours écrits en ${ms} ms (${(ms / 40).toFixed(1)} ms/tour)`)
-      await compter()
-    } catch (e) {
-      dire('ÉCHEC : ' + (e as Error).message.slice(0, 90))
-    } finally {
-      setOccupe(false)
-    }
-  }
-
-  /** Étape 4 : ce compteur doit survivre à une fermeture, à un verrouillage et
-   *  au mode avion. C'est lui qui dit si la journée du pilote tient. */
-  const compter = async () => {
-    try {
-      const db = await ouvrir()
-      const r = await db.getAll<{ n: number; t: string }>(
-        `SELECT (SELECT count(*) FROM tour) AS n, (SELECT count(*) FROM roulage) AS t`)
-      const l = r[0] as unknown as { n: number; t: number }
-      dire(`persisté : ${l.n} tours sur ${l.t} roulages`)
-    } catch (e) {
-      dire('lecture impossible : ' + (e as Error).message.slice(0, 80))
-    }
-  }
-
-  const demanderPersistance = async () => {
-    if (!navigator.storage?.persist) return dire('persist() absent')
-    dire('persist() → ' + ((await navigator.storage.persist()) ? 'accordé' : 'refusé'))
-    void mesurer()
+  const ouvrirBilan = async (id: string) => {
+    setCourant(id); setBilan(await bilanRoulage(db, id)); setEcran('bilan')
   }
 
   return (
     <>
-      <h1>{PRODUCT_NAME} — sonde 0.1</h1>
+      <div className="sol" aria-hidden />
+      <div className="ecran">
+        {ecran === 'accueil' && <Accueil liste={liste} onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan} />}
+        {ecran === 'roulages' && <Roulages liste={liste} onOuvrir={ouvrirBilan} onNouveau={() => setEcran('nouveau')} />}
+        {ecran === 'nouveau' && (
+          <Nouveau onValider={async (r) => {
+            const id = await creerRoulage(db, r)
+            setCourant(id); await rafraichir(db); setEcran('session')
+          }} onAnnuler={() => setEcran('accueil')} />
+        )}
+        {ecran === 'session' && courant && (
+          <Session onValider={async (ms) => {
+            await ajouterSession(db, courant, ms)
+            setBilan(await bilanRoulage(db, courant)); await rafraichir(db); setEcran('bilan')
+          }} onAnnuler={() => void ouvrirBilan(courant)} />
+        )}
+        {ecran === 'bilan' && bilan && (
+          <BilanEcran b={bilan} onSession={() => setEcran('session')} onAccueil={() => setEcran('accueil')} />
+        )}
+        {ecran === 'sonde' && <Sonde />}
+      </div>
 
-      <div className="bloc">
-        {etats.map((e) => (
-          <div className="ligne" key={e.cle}>
-            <span className="cle">{e.cle}</span>
-            <span className={'val ' + (e.ton ?? '')}>{e.val}</span>
+      <nav className="barre">
+        {/* Deux onglets au noyau. Machine, Saison et Cercle sont vides :
+            un onglet vide ne sous-délivre pas, il signale l'abandon. */}
+        <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
+        <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => setEcran('roulages')}>ROULAGES</button>
+        <button className="onglet" data-actif={ecran === 'sonde' ? '1' : '0'} onClick={() => setEcran('sonde')}>SONDE</button>
+      </nav>
+    </>
+  )
+}
+
+/* ─── ACCUEIL — ce qui est le plus proche dans le temps ────────────────────
+   UJ-2 : on n'ouvre jamais sur du vide, et jamais sur des cadres en attente.
+   Une seule action quand il n'y a rien. */
+function Accueil({ liste, onNouveau, onOuvrir }: { liste: Liste; onNouveau: () => void; onOuvrir: (id: string) => void }) {
+  const dernier = liste[0]
+  return (
+    <>
+      <h1 className="emotion" style={{ fontSize: 30, color: 'var(--miami)' }}>{PRODUCT_NAME}</h1>
+
+      {!dernier ? (
+        <>
+          <div className="bloc pile">
+            <div className="libelle">Rien de saisi</div>
+            <div style={{ fontSize: 18 }}>
+              Le premier roulage suffit à faire fonctionner l'application.
+              Le coût se saisit plus tard, pas maintenant.
+            </div>
+          </div>
+          <button className="bouton" onClick={onNouveau}>Saisir mon premier roulage</button>
+        </>
+      ) : (
+        <>
+          <div className="bloc pile" onClick={() => onOuvrir(dernier.id)}>
+            <div className="libelle">Dernier roulage</div>
+            <div className="emotion" style={{ fontSize: 26 }}>{dernier.circuit_nom}</div>
+            <div className="rang">
+              <span className="libelle">{dernier.date_jour}</span>
+              <span className="hud hud-16 faible">{dernier.sessions} SESSION{dernier.sessions > 1 ? 'S' : ''}</span>
+            </div>
+            {dernier.meilleur != null && (
+              <div className="rang">
+                <span className="libelle">Meilleur tour</span>
+                <span className="chiffre hud-40 miami">{formaterChrono(dernier.meilleur)}</span>
+              </div>
+            )}
+          </div>
+          <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
+        </>
+      )}
+    </>
+  )
+}
+
+function Roulages({ liste, onOuvrir, onNouveau }: { liste: Liste; onOuvrir: (id: string) => void; onNouveau: () => void }) {
+  return (
+    <>
+      <div className="libelle">Roulages · {liste.length}</div>
+      <div className="pile">
+        {liste.map((r) => (
+          <div key={r.id} className="bloc pile" onClick={() => onOuvrir(r.id)}>
+            <div className="rang">
+              <span className="emotion" style={{ fontSize: 22 }}>{r.circuit_nom}</span>
+              <span className="libelle">{r.date_jour}</span>
+            </div>
+            <div className="rang">
+              <span className="hud hud-12 faible">
+                {r.groupe_nom ?? '—'}{r.groupe_rang ? ` · ${r.groupe_rang}/${r.groupe_total}` : ''}
+              </span>
+              <span className="chiffre hud-24 miami">
+                {r.meilleur != null ? formaterChrono(r.meilleur) : '—'}
+              </span>
+            </div>
           </div>
         ))}
       </div>
+      <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
+    </>
+  )
+}
 
-      <button onClick={ecrire40Tours} disabled={occupe}>
-        {occupe ? 'écriture…' : 'Écrire 40 tours'}
-      </button>
-      <button onClick={compter} disabled={occupe}>Compter ce qui a survécu</button>
-      <button onClick={demanderPersistance}>Demander la persistance</button>
+/* ─── NOUVEAU ROULAGE — sélecteurs plutôt que clavier partout où c'est possible */
+function Nouveau({ onValider, onAnnuler }: {
+  onValider: (r: { circuit: string; date: string; groupeNom: string | null; rang: number | null; total: number | null; machineId: string | null }) => void
+  onAnnuler: () => void
+}) {
+  const [circuit, setCircuit] = useState('')
+  const [date, setDate] = useState(aujourdhui())
+  const [rang, setRang] = useState<number | null>(null)
 
-      {journal.length > 0 && (
-        <div className="bloc">
-          {journal.map((m, i) => (
-            <div className="ligne" key={i}>
-              <span className="cle" style={{ fontSize: 12 }}>{m}</span>
-            </div>
+  return (
+    <>
+      <div className="libelle">Nouveau roulage</div>
+
+      <div className="pile">
+        <div className="libelle">Circuit</div>
+        <input className="champ" value={circuit} onChange={(e) => setCircuit(e.target.value)}
+               placeholder="Pau-Arnos" autoComplete="off" />
+      </div>
+
+      <div className="pile">
+        <div className="libelle">Date</div>
+        <input className="champ" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </div>
+
+      <div className="pile">
+        <div className="libelle">Groupe · échelle de l'organisateur</div>
+        <div className="puces">
+          {GROUPES.map((g, i) => (
+            <button key={g} className="puce" data-actif={rang === i + 1 ? '1' : '0'}
+                    onClick={() => setRang(rang === i + 1 ? null : i + 1)}>
+              {g.toUpperCase()}
+            </button>
           ))}
         </div>
-      )}
+      </div>
 
-      <footer>Nom de code — QO-1 ouverte.<br />Rien de public sous ce nom.</footer>
+      <button className="bouton" disabled={!circuit.trim()}
+              onClick={() => onValider({
+                circuit: circuit.trim(), date,
+                groupeNom: rang ? GROUPES[rang - 1] : null,
+                rang, total: rang ? GROUPES.length : null, machineId: null,
+              })}>
+        Continuer
+      </button>
+      <button className="bouton secondaire" onClick={onAnnuler}>Annuler</button>
+    </>
+  )
+}
+
+function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; onAnnuler: () => void }) {
+  const [ms, setMs] = useState(107300)
+  return (
+    <>
+      <div className="libelle">Meilleur tour de la session</div>
+      <div className="plat"><Molettes sur={setMs} /></div>
+      <div style={{ textAlign: 'center' }}>
+        <span className="chiffre hud-64 miami">{formaterChrono(ms)}</span>
+      </div>
+      <button className="bouton" onClick={() => onValider(ms)}>Enregistrer la session</button>
+      <button className="bouton secondaire" onClick={onAnnuler}>Retour</button>
+    </>
+  )
+}
+
+/* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
+   Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
+function BilanEcran({ b, onSession, onAccueil }: { b: NonNullable<Bilan>; onSession: () => void; onAccueil: () => void }) {
+  const record = b.ecart != null && b.ecart < 0
+  return (
+    <>
+      <h1 className="emotion" style={{ fontSize: 30, color: record ? 'var(--record)' : 'var(--miami)' }}>
+        {b.circuit}
+      </h1>
+
+      <div className="bloc pile">
+        <div className="libelle">Meilleur tour du jour</div>
+        <div style={{ textAlign: 'center' }}>
+          <span className={'chiffre hud-64 ' + (record ? 'record' : 'miami')}>
+            {b.meilleur != null ? formaterChrono(b.meilleur) : '—'}
+          </span>
+        </div>
+
+        {/* L'écart porte TOUJOURS son signe, jamais seulement sa couleur. */}
+        {b.ecart != null && (
+          <div className="rang">
+            <span className="libelle">À circuit constant</span>
+            <span className={'chiffre hud-24 ' + (b.ecart < 0 ? 'mieux' : 'plus-lent')}>
+              {formaterEcart(b.ecart)}
+            </span>
+          </div>
+        )}
+        {b.ecart == null && b.meilleur != null && (
+          <div className="libelle">Premier chrono sur ce circuit</div>
+        )}
+
+        <div className="rang">
+          <span className="libelle">Sessions</span>
+          <span className="chiffre hud-24">{b.sessions}</span>
+        </div>
+      </div>
+
+      <button className="bouton" onClick={onSession}>Saisir une session</button>
+      <button className="bouton secondaire" onClick={onAccueil}>Accueil</button>
     </>
   )
 }
