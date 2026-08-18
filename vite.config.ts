@@ -10,6 +10,13 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
+      // Le <title> vient de la MEME source que le manifeste, avec repli.
+      // Pas de %VITE_APP_NAME% dans l'HTML : une variable absente en CI
+      // laisserait le marqueur brut dans la page.
+      {
+        name: 'titre-depuis-la-constante',
+        transformIndexHtml: (html) => html.replace(/<title>.*?<\/title>/, `<title>${name}</title>`),
+      },
       VitePWA({
         registerType: 'autoUpdate',
         // Rien ne se charge depuis un CDN au paddock : tout est précaché.
