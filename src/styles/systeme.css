@@ -1,222 +1,216 @@
 @import './fontes.css';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ATTRACT MODE — le système visuel de DESIGN.md, appliqué sans interprétation.
-   Une borne d'arcade des années 80 posée dans un paddock. Hang-On, Out Run.
-   Un carnet d'entretien qui ressemble à un carnet d'entretien ne s'ouvre pas
-   onze fois par an.
+   NÉON, PAS PIXEL — refonte du 18 août 2026.
+   
+   Correctif de Julian, et il était déjà écrit dans DESIGN.md sans être
+   appliqué : « descendre d'un cran par rapport aux maquettes, en retirant du
+   décor, jamais de la donnée » et « le pixel doit rester un accent, pas une
+   texture générale ». La première passe faisait l'inverse — fonte pixel
+   partout, biseaux 4 px partout, tramage et scanlines sur tout. Résultat :
+   une borne d'arcade, pas une application inspirée par l'arcade.
+
+   Références retenues : Screamer et Fast & Furious Arcade Edition. Ce sont
+   des néons — dégradés magenta↔cyan, filets fins lumineux, typographie grasse
+   et NETTE, rendu lisse. Pas du 8-bit.
+
+   ÉCART ASSUMÉ AVEC L'ÉPINE, à signaler plutôt qu'à cacher : DESIGN.md pose
+   « aucun flou nulle part ». Les références de Julian sont toutes construites
+   sur la lueur. On garde donc une lueur STRICTEMENT RÉSERVÉE aux accents —
+   record, meilleur tour, bouton primaire — et jamais derrière du texte
+   courant. C'est une décision de Julian, pas une dérive.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Le sol — quatre arrêts. `ground.bridge` est STRUCTUREL : un orange vif posé
-     directement sur un bleu profond donne un gris sale au point de rencontre.
-     Le supprimer casse le dégradé, pas seulement son élégance. */
-  --sol-profond: #080418;
-  --sol-milieu: #160A34;
-  --sol-pont: #4A1B6D;
-  --sol-horizon: #8A2E7A;
+  --nuit: #070B1A;
+  --nuit-2: #0C1228;
+  --violet-nuit: #1A1140;
+  --horizon: #3A1550;
 
-  --surface: #120A2E;
-  --surface-haute: #1C1142;
-  --filet: #302566;
-  --filet-vif: #4C3D9E;
+  --surface: rgba(18, 24, 52, .72);
+  --surface-haute: rgba(28, 36, 74, .80);
+  --filet: rgba(120, 150, 255, .18);
+  --filet-vif: rgba(61, 224, 255, .55);
 
-  --encre: #EEF2FF;
-  --encre-faible: #93A0CE;
-  --encre-tenue: #5E6A9B;   /* DÉCOR UNIQUEMENT — jamais de texte porteur de sens */
+  --encre: #EDF3FF;
+  --encre-faible: #8FA3CE;
+  --encre-tenue: #55648F;
 
   --miami: #3DE0FF;
+  --magenta: #FF2E9A;
   --chaud: #FF7A3C;
-  --record: #B026FF;        /* record UNIQUEMENT. Nulle part ailleurs. */
-  --record-clair: #D98BFF;  /* #B026FF échoue AA en petit texte (4,1:1) */
+  --record: #B026FF;
+  --record-clair: #D98BFF;
   --mieux: #2BE88A;
   --plus-lent: #FFD23F;
   --alerte: #FF5C5C;
 
-  --hud: 'Press Start 2P', monospace;
-  --emotion: 'Bungee Shade', cursive;
-  --texte: 'Chakra Petch', system-ui, sans-serif;
-
-  --cible-min: 56px;
-  --cible-primaire: 72px;
+  /* Une seule famille à l'interface. Chakra Petch est déjà techno et carrée :
+     le caractère vient du poids et de la taille, pas d'une fonte de jeu. */
+  --face: 'Chakra Petch', system-ui, -apple-system, sans-serif;
+  --cible-min: 52px;
+  --cible-primaire: 64px;
   color-scheme: dark;
 }
 
-/* Grille de 4 px. Aucun coin arrondi, sans exception. */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; border-radius: 0; }
-
-html, body, #root { height: 100%; }
+html, body, #root { height: 100% }
 
 body {
-  background: var(--sol-profond);
+  background: var(--nuit);
   color: var(--encre);
-  font-family: var(--texte);
-  font-size: 16px;   /* jamais moins de 16 px pour du texte courant sur mobile */
-  line-height: 1.45;
+  font-family: var(--face);
+  font-size: 16px; line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
   -webkit-user-select: none; user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ─── LE SOL ────────────────────────────────────────────────────────────────
-   Dégradé quatre arrêts + tramage 4 px + scanlines. Jamais noir plat.
-   Le voile Miami en partie haute est la correction demandée : sortir du
-   purement crépusculaire et gagner du jour. */
-.sol {
-  position: fixed; inset: 0; z-index: -1;
+/* ─── LE SOL — profond et lumineux, sans texture par-dessus ─────────────────
+   Le pont magenta reste structurel : sans lui la rencontre bleu/chaud vire au
+   gris sale. Le tramage tombe à presque rien, les scanlines disparaissent. */
+.sol { position: fixed; inset: 0; z-index: -1; overflow: hidden;
   background:
-    radial-gradient(120% 42% at 50% 0%, rgba(61,224,255,.16) 0%, transparent 62%),
-    linear-gradient(180deg,
-      var(--sol-profond) 0%, var(--sol-milieu) 35%,
-      var(--sol-pont) 70%, var(--sol-horizon) 100%);
+    radial-gradient(90% 55% at 50% 108%, rgba(255,46,154,.30) 0%, transparent 70%),
+    radial-gradient(70% 45% at 12% 4%, rgba(61,224,255,.16) 0%, transparent 66%),
+    linear-gradient(180deg, var(--nuit) 0%, var(--nuit-2) 38%, var(--violet-nuit) 74%, var(--horizon) 100%);
 }
-.sol::before {   /* tramage 4 px */
-  content: ''; position: absolute; inset: 0; opacity: .22;
-  background-image:
-    repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(90deg, rgba(0,0,0,.14) 0 1px, transparent 1px 4px);
-}
-.sol::after {    /* scanlines + liseré cyan à l'horizon */
-  content: ''; position: absolute; inset: 0; opacity: .28;
-  background:
-    repeating-linear-gradient(180deg, rgba(0,0,0,.30) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, transparent 88%, rgba(61,224,255,.30) 96%, transparent 100%);
+/* Une seule ligne d'horizon lumineuse — le motif des références, en une trace. */
+.sol::after {
+  content: ''; position: absolute; left: -10%; right: -10%; bottom: 16%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--miami) 22%, #FFF 50%, var(--magenta) 78%, transparent);
+  opacity: .55; filter: blur(.4px);
 }
 
-/* ─── LA PROFONDEUR — biseaux, jamais d'ombres ──────────────────────────────
-   Bord haut et gauche éclairé, bord bas et droit assombri, comme sur une borne.
-   Aucun flou nulle part : pas de box-shadow diffuse, pas de blur. */
+/* ─── SURFACES — filet fin lumineux, plus aucun biseau de 4 px ────────────── */
 .bloc {
-  background: var(--surface-haute);
-  border-top: 4px solid var(--filet-vif);
-  border-left: 4px solid var(--filet-vif);
-  border-right: 4px solid var(--sol-profond);
-  border-bottom: 4px solid var(--sol-profond);
-  outline: 2px solid var(--filet); outline-offset: -6px;
-  padding: 12px;
+  position: relative; background: var(--surface-haute);
+  border: 1px solid var(--filet); padding: 16px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
 }
-.plat {   /* Surface simple : filet 2 px, aucun biseau. Fond des zones de travail. */
-  background: var(--surface);
-  border: 2px solid var(--filet);
-  padding: 12px;
+/* Le liseré néon en haut, comme le cadre des références — 1 px, pas 4. */
+.bloc::before {
+  content: ''; position: absolute; top: -1px; left: -1px; right: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--miami), var(--magenta), transparent);
+  opacity: .85;
+}
+.plat { background: var(--surface); border: 1px solid var(--filet); padding: 16px; }
+
+/* ─── TYPOGRAPHIE — le poids fait le travail ───────────────────────────────
+   Chiffres en tabular partout : un chrono qui saute d'une ligne à l'autre est
+   une faute, et ça n'a pas changé. */
+.chiffre { font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -.01em; }
+.hud-64 { font-size: 52px; line-height: 1 }
+.hud-40 { font-size: 34px; line-height: 1.05 }
+.hud-24 { font-size: 22px }
+.hud-16 { font-size: 15px }
+.hud-12 { font-size: 13px }
+.hud-10 { font-size: 11px }
+.titre { font-weight: 600; font-size: 26px; letter-spacing: .01em; }
+
+.libelle {
+  color: var(--encre-faible); font-size: 12px; font-weight: 500;
+  letter-spacing: .14em; text-transform: uppercase;
 }
 
-/* ─── TYPOGRAPHIE — trois familles, trois domaines, aucune sortie de route ── */
-.hud { font-family: var(--hud); letter-spacing: .04em; font-variant-numeric: tabular-nums; }
-.emotion { font-family: var(--emotion); letter-spacing: .02em; }
-.chiffre { font-family: var(--hud); font-variant-numeric: tabular-nums; }
+/* Le dégradé néon des références, en remplissage de texte. Réservé aux titres
+   et au chrono du jour — une occurrence par écran, comme le 64 px de l'épine. */
+.neon {
+  background: linear-gradient(96deg, var(--miami) 0%, #A88BFF 46%, var(--magenta) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* Lueur d'accent — JAMAIS derrière du texte courant. */
+.lueur { text-shadow: 0 0 18px rgba(61,224,255,.45); }
+.lueur-record { text-shadow: 0 0 22px rgba(176,38,255,.55); }
 
-/* 64 px : réservé au chrono du jour et au coût au tour. Une occurrence par écran. */
-.hud-64 { font-size: 40px } /* ramené sur mobile portrait, la grille reste en 4 */
-.hud-40 { font-size: 26px }
-.hud-24 { font-size: 18px }
-.hud-16 { font-size: 13px }
-.hud-12 { font-size: 11px }
-.hud-10 { font-size: 10px }
-
-.libelle { color: var(--encre-faible); font-size: 14px; letter-spacing: .06em; text-transform: uppercase; }
-
-/* ─── LE BOUTON PRIMAIRE — pleine largeur, 72 px, biseau ────────────────────
-   La taille de cible est un [ASSUMPTION] généreux : aucune littérature ne
-   couvre la saisie gantée sur écran capacitif. À régler par essai avec de
-   vrais gants, et à traiter comme une inconnue. */
+/* ─── BOUTON PRIMAIRE — dégradé néon, net, sans biseau ─────────────────────
+   La cible reste généreuse. Rappel de l'épine, qui vaut toujours : aucune
+   littérature ne couvre la saisie gantée sur écran capacitif. [ASSUMPTION] */
 .bouton {
   display: flex; align-items: center; justify-content: center;
   width: 100%; min-height: var(--cible-primaire);
-  font-family: var(--hud); font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--sol-profond); background: var(--miami);
-  border-top: 4px solid #9AF0FF; border-left: 4px solid #9AF0FF;
-  border-right: 4px solid #0E7C96; border-bottom: 4px solid #0E7C96;
-  cursor: pointer; text-align: center; padding: 8px 12px;
+  font-family: var(--face); font-size: 15px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: #05080F; border: none; cursor: pointer; padding: 10px 16px;
+  background: linear-gradient(96deg, var(--miami) 0%, #7CC8FF 40%, var(--magenta) 100%);
+  box-shadow: 0 0 24px rgba(61,224,255,.22);
 }
-.bouton:active {   /* biseau INVERSÉ — l'élément s'enfonce, comme un bouton d'arcade */
-  border-top-color: #0E7C96; border-left-color: #0E7C96;
-  border-right-color: #9AF0FF; border-bottom-color: #9AF0FF;
-}
-.bouton[disabled] { opacity: .4; }
+.bouton:active { transform: translateY(1px); box-shadow: 0 0 10px rgba(61,224,255,.18); }
+.bouton[disabled] { opacity: .35; box-shadow: none; }
 .bouton.secondaire {
-  color: var(--encre); background: var(--surface-haute);
-  border-top-color: var(--filet-vif); border-left-color: var(--filet-vif);
-  border-right-color: var(--sol-profond); border-bottom-color: var(--sol-profond);
-  min-height: var(--cible-min);
+  background: transparent; color: var(--encre);
+  border: 1px solid var(--filet-vif); box-shadow: none;
+  min-height: var(--cible-min); font-weight: 500; letter-spacing: .06em;
 }
 
-/* ─── LA MOLETTE — sélecteur de chrono, aucun clavier ───────────────────────
-   Trois molettes, chiffres HUD, 88 px de haut. Le pilote a des gants : on
-   choisit, on ne tape pas. */
-.molettes { display: flex; gap: 8px; align-items: stretch; }
+/* ─── LES MOLETTES — le geste ne change pas, seule la peau s'allège ───────── */
+.molettes { display: flex; gap: 10px; align-items: stretch; }
 .molette { flex: 1; display: flex; flex-direction: column; }
 .molette-cadre {
-  height: 176px; overflow-y: auto; scroll-snap-type: y mandatory;
-  background: var(--surface);
-  border: 2px solid var(--filet);
+  position: relative; overflow-y: auto; scroll-snap-type: y mandatory;
+  background: rgba(8,12,28,.6); border: 1px solid var(--filet);
   -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(180deg, transparent, #000 26%, #000 74%, transparent);
 }
-.molette-cadre::-webkit-scrollbar { display: none; }
+.molette-cadre::-webkit-scrollbar { display: none }
 .molette-item {
-  height: 88px; scroll-snap-align: center;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--hud); font-size: 26px; color: var(--encre-tenue);
+  scroll-snap-align: center; display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 600; color: var(--encre-tenue);
   font-variant-numeric: tabular-nums;
 }
-.molette-item[data-actif='1'] { color: var(--miami); background: var(--surface-haute); }
-.molette-sep { display: flex; align-items: center; font-family: var(--hud); font-size: 26px; color: var(--encre-faible); }
+.molette-item[data-actif='1'] { color: var(--miami); text-shadow: 0 0 16px rgba(61,224,255,.5); }
+.molette-sep { display: flex; align-items: center; font-size: 26px; color: var(--encre-tenue); padding-top: 18px }
 
-/* ─── SAISIE TEXTE — quand il n'y a pas d'alternative (marque, modèle) ────── */
+/* ─── SAISIE ───────────────────────────────────────────────────────────────── */
 .champ {
   width: 100%; min-height: var(--cible-min);
-  background: var(--surface); color: var(--encre);
-  font-family: var(--texte); font-size: 18px;
-  border: 2px solid var(--filet); padding: 8px 12px;
+  background: rgba(8,12,28,.6); color: var(--encre);
+  font-family: var(--face); font-size: 18px;
+  border: 1px solid var(--filet); padding: 10px 14px;
 }
-.champ:focus { outline: none; border-color: var(--filet-vif); }
-.champ::placeholder { color: var(--encre-tenue); }
+.champ:focus { outline: none; border-color: var(--filet-vif); box-shadow: 0 0 16px rgba(61,224,255,.15) }
+.champ::placeholder { color: var(--encre-tenue) }
 
-/* ─── PUCES DE CHOIX — sélectionner plutôt que taper ─────────────────────── */
-.puces { display: flex; flex-wrap: wrap; gap: 8px; }
+.puces { display: flex; flex-wrap: wrap; gap: 8px }
 .puce {
-  min-height: var(--cible-min); padding: 8px 16px;
-  font-family: var(--hud); font-size: 11px; letter-spacing: .06em;
-  background: var(--surface); color: var(--encre-faible);
-  border: 2px solid var(--filet); cursor: pointer;
-  display: flex; align-items: center;
+  min-height: var(--cible-min); padding: 10px 16px;
+  font-size: 13px; font-weight: 500; letter-spacing: .06em;
+  background: rgba(8,12,28,.5); color: var(--encre-faible);
+  border: 1px solid var(--filet); cursor: pointer; display: flex; align-items: center;
 }
-.puce[data-actif='1'] { background: var(--surface-haute); color: var(--miami); border-color: var(--filet-vif); }
+.puce[data-actif='1'] {
+  color: #05080F; border-color: transparent; font-weight: 600;
+  background: linear-gradient(96deg, var(--miami), #9FD8FF);
+}
 
-/* ─── ÉTATS SÉMANTIQUES ────────────────────────────────────────────────────
-   Un écart porte TOUJOURS son signe et jamais seulement sa couleur :
-   `mieux` et `plus-lent` ne se distinguent pas en deutéranopie. */
-.mieux { color: var(--mieux); }
-.plus-lent { color: var(--plus-lent); }
-.record { color: var(--record); }        /* gros chiffres et tracés seulement */
-.record-texte { color: var(--record-clair); }  /* petit texte */
-.miami { color: var(--miami); }
-.faible { color: var(--encre-faible); }
+/* ─── SÉMANTIQUE — le signe porte le sens, jamais la couleur seule ────────── */
+.mieux { color: var(--mieux) } .plus-lent { color: var(--plus-lent) }
+.record { color: var(--record) } .record-texte { color: var(--record-clair) }
+.miami { color: var(--miami) } .faible { color: var(--encre-faible) }
+.alerte { color: var(--alerte) }
 
-/* ─── MISE EN PAGE ─────────────────────────────────────────────────────────
-   Marges 16 px aux bords, 24 px entre blocs, 12 px dedans. Flex/grid + gap. */
+/* ─── MISE EN PAGE ─────────────────────────────────────────────────────────── */
 .ecran {
   max-width: 480px; margin: 0 auto; min-height: 100%;
-  display: flex; flex-direction: column; gap: 24px;
-  padding: calc(env(safe-area-inset-top) + 20px) calc(env(safe-area-inset-right) + 16px)
-           calc(env(safe-area-inset-bottom) + 96px) calc(env(safe-area-inset-left) + 16px);
+  display: flex; flex-direction: column; gap: 20px;
+  padding: calc(env(safe-area-inset-top) + 22px) calc(env(safe-area-inset-right) + 18px)
+           calc(env(safe-area-inset-bottom) + 92px) calc(env(safe-area-inset-left) + 18px);
 }
-.pile { display: flex; flex-direction: column; gap: 12px; }
-.rang { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.pile { display: flex; flex-direction: column; gap: 10px }
+.rang { display: flex; justify-content: space-between; align-items: baseline; gap: 12px }
 
-/* ─── BARRE BASSE — deux onglets au noyau. Un onglet vide ne s'affiche pas :
-   il ne sous-délivre pas, il signale l'abandon. ───────────────────────────── */
+/* ─── BARRE BASSE ──────────────────────────────────────────────────────────── */
 .barre {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-  display: flex; background: var(--surface);
-  border-top: 2px solid var(--filet);
-  padding-bottom: env(safe-area-inset-bottom);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex;
+  background: rgba(7,11,26,.82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--filet); padding-bottom: env(safe-area-inset-bottom);
 }
 .onglet {
   flex: 1; min-height: var(--cible-min);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  font-family: var(--hud); font-size: 10px; letter-spacing: .06em;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--face); font-size: 12px; font-weight: 600; letter-spacing: .12em;
   color: var(--encre-tenue); background: none; border: none; cursor: pointer;
+  border-top: 2px solid transparent;
 }
-.onglet[data-actif='1'] { color: var(--miami); background: var(--surface-haute); }
+.onglet[data-actif='1'] { color: var(--miami); border-top-color: var(--miami) }

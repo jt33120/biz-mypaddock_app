@@ -86,7 +86,7 @@ export function Sonde() {
         {etats.map((e) => (
           <div className="rang" key={e.cle} style={{ padding: '4px 0' }}>
             <span className="libelle" style={{ fontSize: 12 }}>{e.cle}</span>
-            <span className={'hud hud-12 ' + (e.ton === 'oui' ? 'mieux' : e.ton === 'non' ? 'plus-lent' : 'faible')}
+            <span className={'hud-12 ' + (e.ton === 'oui' ? 'mieux' : e.ton === 'non' ? 'plus-lent' : 'faible')}
                   style={{ textAlign: 'right' }}>{e.val}</span>
           </div>
         ))}

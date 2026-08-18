@@ -327,7 +327,7 @@ ajouté quatre et supprimé un :
 
 | Mouvement | Domaine | Pourquoi |
 |---|---|---|
-| **+** | L'accueil temporel (§4.3) | Un produit ouvert onze fois par an ne se retient pas ; il doit fabriquer ses propres occasions d'ouverture. |
+| **+** | L'accueil temporel (§4.3) | Le roulage seul ne se retient pas — onze fois par an ; l'accueil fabrique ses propres occasions d'ouverture. |
 | **+** | La machine comme axe de premier rang (§4.1) | Bricoler est l'activité déclarée entre deux roulages, et c'est une activité de machine. |
 | **+** | La réparation non vitale (§4.11) | Une troisième catégorie d'intervention, définie par le fait qu'elle peut attendre. |
 | **+** | Saison dérivée et projection (§4.13) | Il faut savoir ce qu'une saison contient pour la totaliser — sans jamais regarder le calendrier. |
@@ -862,7 +862,7 @@ accordée, la promesse de continuité n'est pas tenue : le pilote doit pouvoir l
 **NFR-2. Aucune donnée saisie n'existe uniquement sous forme de requête en attente.** La base locale
 est la source de vérité ; la synchronisation est une réconciliation. Si une file de requêtes est
 malgré tout utilisée, sa rétention est **fixée explicitement** : le défaut de sept jours des
-bibliothèques courantes est très en deçà du cycle d'un produit ouvert onze fois par an.
+bibliothèques courantes est très en deçà du cycle de ce produit.
 
 **NFR-3. Rien ne repose sur une exécution en arrière-plan.** WebKit a refusé Background Sync et n'a
 jamais implémenté Background Fetch — l'alternative qu'il recommande pourtant. Sur iOS, **rien ne
@@ -1117,7 +1117,7 @@ son incertitude, jamais un état de la machine.
 **Portée : c'est une contrainte de modèle, pas un lexique d'interface.** Les quatre mots ne
 remontent pas à l'écran. Le pilote voit au plus une distinction — « à confirmer » contre confirmé —
 et ne lit jamais « preuve » ni « recommandation » comme étiquette. Quelqu'un qui ouvre
-l'application onze fois par an n'apprend pas le vocabulaire de son schéma.
+l'application par intermittence n'apprend pas le vocabulaire de son schéma.
 
 > Cette exigence vient de la condition 4 de l'audit de viabilité, qui la voulait dans le schéma
 > **avant tout développement**. Vérifié le 18 août 2026 : elle est **absente des vingt AD** de la
@@ -1212,6 +1212,31 @@ c'est le prix d'obtenir des utilisateurs qui ne doivent rien à Julian, donc des
 dire quelque chose. Mais ça mérite un plafond décidé à l'avance plutôt qu'une découverte au relevé
 bancaire. Voir QO-11.
 
+### Correction de cadence — 18 août 2026
+
+**L'hypothèse la plus répandue de ce document était fausse, et Julian l'a relevée.** Le PRD, le
+brief et le fichier de contraintes posaient « une cadence d'environ onze usages par an » et en
+tiraient des conséquences économiques, techniques et d'interface. **Onze est le nombre de roulages
+d'une saison, pas le nombre d'ouvertures de l'application.**
+
+Ce qui déclenche réellement une ouverture : un achat lié à la moto — et il en tombe toute l'année,
+pneus, pièces, équipement —, une intervention consignée au moment du geste, un chrono qu'on relit,
+un pote qui roule, et onze fois par an un roulage. **Le roulage est le motif le plus rare, pas le
+seul.**
+
+**Le document s'était déjà corrigé sans le dire.** Le mode hors-saison a été supprimé au motif
+qu'il était « absorbé, pas reporté : s'il existe deux unités de compte, l'hiver n'est plus un trou
+mais la période où l'axe machine domine » (§9). AD-2 sert exactement ça. Le chiffre, lui, a survécu.
+
+**Aucun nombre ne le remplace, et c'est volontaire.** L'erreur n'était pas que onze soit faux, mais
+qu'un chiffre sans source devienne portant — il était chargé par seize skills. On nomme les motifs
+d'ouverture, on cesse d'en déduire un rythme non mesuré, et on le mesurera quand il y aura des
+utilisateurs.
+
+**Ce qui reste intact :** le moment de saisie au paddock est bien rare — onze fois l'an, gants aux
+mains, plein soleil, sans réseau — et reste le geste le plus hostile du produit. Toutes les
+contraintes d'interface qui en découlent tiennent. Ne tombe que ce qu'on déduisait du rythme global.
+
 ### Économie du produit — ce qui est renversé, ce qui reste en test
 
 Trois artefacts du 16 août 2026 portaient des conclusions commerciales que ce PRD n'avait pas
@@ -1251,14 +1276,18 @@ sont des cellules d'essai, et aucune conversion ni aucun paiement n'a été obse
 | Partage revente | 9–19 € ponctuels | Plage arbitraire ; seul repère observé, MotoStack à 9,99 $. |
 | Loueur / école | À découvrir | Substituts publiés de 9 à 199 €/mois. Aucune volonté de payer observée. |
 
-**Et un raisonnement que le brief avait commencé sans le finir.** La cadence d'environ onze usages
-par an rend l'abonnement **mal ajusté** — facturer au mois un produit ouvert onze fois l'an est une
-machine à résiliation, et c'est le constat économique le plus solide du dossier. Il ne tue pas le
+**Et un raisonnement que le brief avait commencé sans le finir — puis que Julian a corrigé.**
+Ce document affirmait que la cadence d'environ onze usages par an rendait l'abonnement mal ajusté,
+et appelait ça « le constat économique le plus solide du dossier ». **Il reposait sur une confusion,
+corrigée le 18 août 2026 : onze est le nombre de roulages d'une saison, pas le nombre d'ouvertures
+de l'application.** Les achats liés à la moto tombent toute l'année, on regarde ses temps quand on
+veut, et le cercle est une conversation. Une application vécue au quotidien **peut** porter un
+abonnement : il n'est plus disqualifié d'office, et le « constat le plus solide » n'en était pas un. Il ne tue pas le
 prix, il change sa forme. L'unité de compte du produit est **déjà la saison** — un état dérivé
 (FR-53), et un entier dans le schéma. Un **pass saison**, payé à l'ouverture d'une saison et
 conservé ensuite, est donc *natif* au modèle de données là où l'abonnement lui est étranger. La
 ligne gratuit / payant qui en découle : **le noyau reste gratuit**, parce que mettre un péage sur la
-chose qui doit être ouverte onze fois pour valoir quelque chose est à l'envers ; le payant porterait
+chose qui porte la valeur d'usage est à l'envers ; le payant porterait
 sur les **paliers coûteux** — import de chrono, axe machine et carnet, cercle partagé. C'est le
 « accès premium sur les paliers coûteux » du brief, avec une forme.
 
@@ -1274,7 +1303,7 @@ point** — invisible dans l'interface, elle échappe aux prohibitions écrites 
 chrono, ou l'axe machine, une fois et pour de bon. Il n'y a rien à renouveler, donc le problème de
 cadence disparaît aussi bien qu'avec le pass ; il n'y a **aucun coût échoué par saison**, donc
 rouler plus ne récupère rien et n'est pas encouragé ; et on paie une capacité plutôt que du temps,
-ce qui est l'unité honnête pour un produit ouvert onze fois l'an. Son défaut est commercial et non
+ce qui reste l'unité honnête d'un produit dont la saison est déjà l'unité de compte. Son défaut est commercial et non
 cognitif — le revenu est ponctuel par utilisateur. **Sur un projet dont le critère écrit est
 l'utilité et non le revenu, c'est le défaut qu'on peut se permettre**, et c'est l'inverse pour
 l'autre.
@@ -1403,7 +1432,7 @@ serait un échec, pas un succès**.
 |---|---|---|---|
 | **C1** | Notifications de relance envoyées | **0** | Si ce chiffre monte, le mécanisme a échoué et a été remplacé par celui qui est interdit. C'est le signal d'échec le plus important du dispositif. |
 | **C2** | Ouvertures servant un accueil vide | proche de 0 | Un écran vide ne sous-délivre pas, il signale l'abandon (FR-14) |
-| **C3** | Temps passé par ouverture | **à ne pas maximiser** | Un produit ouvert onze fois par an dont le temps de session s'allonge est probablement utilisé pour une mauvaise raison |
+| **C3** | Temps passé par ouverture | **à ne pas maximiser** | Un produit dont le temps de session s'allonge est probablement utilisé pour une mauvaise raison |
 
 ### 11.3 Le biais du constructeur
 
@@ -1453,7 +1482,7 @@ et **QO-1 a été rouverte le 18 août après réconciliation** — elle avait �
 | # | Décision | Ce qu'elle entraîne |
 |---|---|---|
 | **QO-2** | **Le compte a une sauvegarde serveur**, et c'est la réponse de fond à « ma saison a disparu ». | Le stockage local cesse d'être la source de vérité de la saison : c'est un cache et le tampon du hors-ligne. La fenêtre à protéger se rétrécit à **la journée elle-même**, de la saisie au paddock au retour du réseau (§5.1, NFR-4). Le test de désinstallation reste utile mais n'est plus bloquant. |
-| **QO-4** | **Le moteur de synchronisation se tranche à `bmad-architecture`**, sur critères écrits. **Point rouvert le 18 août 2026 au montage :** le palier gratuit de PowerSync (2 Go synchronisés/mois, 500 Mo hébergés, 50 connexions) **désactive un projet après une semaine d'inactivité**. Sur un produit ouvert **onze fois par an**, c'est une collision structurelle et non un détail de facturation — le palier suivant est à **49 $/mois**. Sans effet sur les sondes ni sur le développement, où l'usage est quotidien ; à trancher avant la mise en service. | Quatre candidats vivants, Legend-State écarté pour l'échéance de décembre. **Et le périmètre technique s'élargit** : voir QO-6, qui introduit un service serveur là où il n'y en avait pas. |
+| **QO-4** | **Le moteur de synchronisation se tranche à `bmad-architecture`**, sur critères écrits. **Point rouvert le 18 août 2026 au montage :** le palier gratuit de PowerSync (2 Go synchronisés/mois, 500 Mo hébergés, 50 connexions) **désactive un projet après une semaine d'inactivité**. **Réévalué le 18 août 2026 après la correction de cadence**, et le verdict s'inverse en grande partie : l'instance est unique et partagée, donc une seule connexion tous les sept jours la maintient. Une application vécue au quotidien — achats, chronos relus, cercle — la garde vivante sans effort, là où un simple journal de roulages l'aurait laissée mourir onze mois sur douze. Le risque se réduit au cas du **pilote unique en hiver profond**, et la parade est connue : une visite suffit. Le palier suivant reste à **49 $/mois** si la charge l'exige. | Quatre candidats vivants, Legend-State écarté pour l'échéance de décembre. **Et le périmètre technique s'élargit** : voir QO-6, qui introduit un service serveur là où il n'y en avait pas. |
 | **QO-6** | **Le barème constructeur ne se saisit pas, il se récolte.** Recherche web et extraction assistée par IA, sur un service serveur (Railway) exécuté **hors du temps de l'utilisateur**. | C'est la décision la plus lourde du lot, et elle porte un risque qu'il faut nommer : **une extraction par IA n'est pas une transcription, c'est une reconstruction** — voir §12.3. |
 | **QO-7** | **Une source existe déjà, et personne n'a besoin d'être convaincu.** [`calendrier-piste.fr`](https://www.calendrier-piste.fr/circuit/21-Pau-Arnos) agrège les roulages par circuit et par organisateur, avec date, prix et nombre de groupes — et **les organisateurs y renseignent eux-mêmes leurs sorties**, exactement le modèle que Julian décrivait. | Aucune API, aucun iCal, aucun RSS : du HTML. Donc le même service serveur que QO-6, et le même mode de récolte. Voir aussi §12.3. |
 | **QO-8** | **Recherche menée le 18 août 2026** — ~40 sources, 8 affirmations portantes tracées. **La réserve n'est pas levée : elle est déplacée.** | Trois clauses renforcées, deux privées de leur caution affichée sans perdre leur bien-fondé, et **une révélée moins protectrice que le document ne le croyait** — la conjonction du catalogue de caps et du cercle (FR-39bis). Rapport : [`research.md`](../../research/academic-lit-coherence-cognitive-du-produit-2026-08-18/research.md). |

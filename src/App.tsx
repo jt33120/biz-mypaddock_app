@@ -82,7 +82,7 @@ function Accueil({ liste, onNouveau, onOuvrir }: { liste: Liste; onNouveau: () =
   const dernier = liste[0]
   return (
     <>
-      <h1 className="emotion" style={{ fontSize: 30, color: 'var(--miami)' }}>{PRODUCT_NAME}</h1>
+      <h1 className="titre neon">{PRODUCT_NAME}</h1>
 
       {!dernier ? (
         <>
@@ -99,10 +99,10 @@ function Accueil({ liste, onNouveau, onOuvrir }: { liste: Liste; onNouveau: () =
         <>
           <div className="bloc pile" onClick={() => onOuvrir(dernier.id)}>
             <div className="libelle">Dernier roulage</div>
-            <div className="emotion" style={{ fontSize: 26 }}>{dernier.circuit_nom}</div>
+            <div className="titre">{dernier.circuit_nom}</div>
             <div className="rang">
               <span className="libelle">{dernier.date_jour}</span>
-              <span className="hud hud-16 faible">{dernier.sessions} SESSION{dernier.sessions > 1 ? 'S' : ''}</span>
+              <span className="hud-16 faible">{dernier.sessions} SESSION{dernier.sessions > 1 ? 'S' : ''}</span>
             </div>
             {dernier.meilleur != null && (
               <div className="rang">
@@ -126,11 +126,11 @@ function Roulages({ liste, onOuvrir, onNouveau }: { liste: Liste; onOuvrir: (id:
         {liste.map((r) => (
           <div key={r.id} className="bloc pile" onClick={() => onOuvrir(r.id)}>
             <div className="rang">
-              <span className="emotion" style={{ fontSize: 22 }}>{r.circuit_nom}</span>
+              <span className="titre" style={{ fontSize: 20 }}>{r.circuit_nom}</span>
               <span className="libelle">{r.date_jour}</span>
             </div>
             <div className="rang">
-              <span className="hud hud-12 faible">
+              <span className="hud-12 faible">
                 {r.groupe_nom ?? '—'}{r.groupe_rang ? ` · ${r.groupe_rang}/${r.groupe_total}` : ''}
               </span>
               <span className="chiffre hud-24 miami">
@@ -215,7 +215,7 @@ function BilanEcran({ b, onSession, onAccueil }: { b: NonNullable<Bilan>; onSess
   const record = b.ecart != null && b.ecart < 0
   return (
     <>
-      <h1 className="emotion" style={{ fontSize: 30, color: record ? 'var(--record)' : 'var(--miami)' }}>
+      <h1 className={'titre ' + (record ? 'record lueur-record' : 'neon')}>
         {b.circuit}
       </h1>
 

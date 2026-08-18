@@ -65,7 +65,7 @@ comportementale. **Les deux gagnent sur toute maquette.**
 MyPaddock ressemble à une **borne d'arcade des années 80 posée dans un paddock** — Hang-On
 (Sega, 1985) et Out Run (Sega, 1986), pas une application de fitness. Ce n'est pas un thème
 optionnel : c'est le produit. Un carnet d'entretien qui ressemble à un carnet d'entretien ne
-s'ouvre pas onze fois par an.
+ne s'ouvre pas quand rien n'y oblige. *(Cadence corrigée le 18 août 2026 : la phrase disait « onze fois par an » — c'était le nombre de roulages, pas celui des ouvertures.)*
 
 **Trois tensions gouvernent chaque décision visuelle.**
 

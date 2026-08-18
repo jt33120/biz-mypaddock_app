@@ -114,3 +114,53 @@ export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => 
     reference: ancien,
   }
 }
+
+/* ─── LES DÉPENSES ─────────────────────────────────────────────────────────
+   AD-7 : trois cibles de premier rang, exclusives et obligatoires — roulage,
+   machine, saison. Indexer le coût sur le seul roulage ferait échapper la
+   moitié du budget réel, et rendrait inapplicable la clause « le coût au tour
+   ne s'affiche jamais seul ».
+   L'argent est en CENTIMES ENTIERS. Jamais de flottant sur de la monnaie. */
+
+export type Cible = 'roulage' | 'machine' | 'saison'
+
+/** AD-18 : `saison_annee` est un entier fixé À LA SAISIE et jamais recalculé.
+ *  AD-8 : aucune branche ne teste un mois de l'année. On prend l'année de la
+ *  date de la dépense, point — ce qui reste vrai pour qui roule en janvier. */
+export const anneeSaison = (dateIso: string) => Number(dateIso.slice(0, 4))
+
+export const creerDepense = async (
+  db: PowerSyncDatabase,
+  d: { cible: Cible; roulageId: string | null; machineId: string | null; centimes: number; libelle: string; date: string },
+) => {
+  const id = nouvelId()
+  await db.execute(
+    `INSERT INTO depense (id, pilote_id, cible, roulage_id, machine_id, saison_annee, montant_centimes, libelle)
+     VALUES (?, 'local', ?, ?, ?, ?, ?, ?)`,
+    [id, d.cible, d.roulageId, d.machineId, anneeSaison(d.date), d.centimes, d.libelle || null],
+  )
+  return id
+}
+
+export const formaterEuros = (centimes: number) =>
+  (centimes / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' €'
+
+/** Le budget de saison consommé — toutes cibles confondues, c'est le budget
+ *  DU PILOTE. AD-17 : le coût d'une machine serait une autre requête, celle
+ *  des seules dépenses qui la désignent. Ne pas confondre les deux. */
+export const budgetSaison = async (db: PowerSyncDatabase, annee: number) => {
+  const r = await db.getAll<{ total: number | null }>(
+    `SELECT sum(montant_centimes) AS total FROM depense WHERE saison_annee = ?`, [annee])
+  return r[0]?.total ?? 0
+}
+
+export const coutRoulage = async (db: PowerSyncDatabase, roulageId: string) => {
+  const r = await db.getAll<{ total: number | null }>(
+    `SELECT sum(montant_centimes) AS total FROM depense WHERE cible = 'roulage' AND roulage_id = ?`, [roulageId])
+  return r[0]?.total ?? 0
+}
+
+export const listerDepenses = (db: PowerSyncDatabase, annee: number) =>
+  db.getAll<{ id: string; cible: Cible; libelle: string | null; montant_centimes: number; roulage_id: string | null }>(
+    `SELECT id, cible, libelle, montant_centimes, roulage_id
+       FROM depense WHERE saison_annee = ? ORDER BY id DESC`, [annee])

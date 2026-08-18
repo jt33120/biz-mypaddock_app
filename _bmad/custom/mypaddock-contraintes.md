@@ -66,10 +66,31 @@ explicitement à Julian plutôt que de la contourner en silence.
 - **Le moment de saisie est le paddock, entre deux sessions** — pas le soir. Conséquences directes :
   gants aux mains, plein soleil, aucun réseau, cibles tactiles généreuses, un minimum de taps, des
   sélecteurs plutôt qu'un clavier.
-- **La cadence est d'environ onze usages par an.** Un produit ouvert onze fois par an ne se retient
-  pas ; il doit fabriquer lui-même ses occasions d'ouverture. Cette contrainte explique d'un coup la
-  purge du stockage navigateur, l'inadéquation d'un abonnement, et le fait que le mode hors-saison
-  soit un organe et non une queue de feuille de route.
+- **CORRIGÉ LE 18 AOÛT 2026 — la cadence de l'application n'est PAS celle des roulages.**
+  Une version antérieure de ce fichier posait « environ onze usages par an » et en tirait trois
+  conséquences. C'était une **confusion entre deux choses différentes** : onze est le nombre de
+  **roulages** dans une saison, pas le nombre d'**ouvertures** de l'application.
+
+  Ce que Julian corrige, et il est le seul à le savoir : **l'application se vit au quotidien.**
+  Les achats liés à la moto tombent toute l'année — pneus, pièces, équipement, entretien. On
+  regarde ses temps quand on veut. Le cercle est une conversation, pas un rapport annuel. Le
+  roulage n'est qu'un des motifs d'ouverture, et c'est le plus rare.
+
+  **Le projet s'était déjà corrigé sans le dire.** Le mode hors-saison a été supprimé le 18 août
+  au motif qu'il était « absorbé, pas reporté : s'il existe deux unités de compte, l'hiver n'est
+  plus un trou mais la période où l'axe machine domine ». AD-2 a été adoptée exactement pour ça.
+  Le chiffre, lui, est resté.
+
+  **Aucun nombre ne remplace celui-là, et c'est délibéré.** L'erreur n'était pas que onze soit
+  faux, c'est qu'un chiffre sans source soit devenu portant dans seize skills. On nomme donc ce
+  qui déclenche une ouverture — un achat, une intervention, un chrono qu'on relit, un pote qui
+  roule, et onze fois par an un roulage — et on cesse d'en déduire un rythme qu'on n'a pas mesuré.
+  L'instrument M-ouvertures le mesurera quand il y aura des utilisateurs.
+
+- **CE QUI RESTE VRAI, et qu'il ne faut surtout pas jeter avec le chiffre.** Le **moment de saisie
+  au paddock** demeure rare — onze fois par an, gants aux mains, plein soleil, sans réseau — et
+  reste le geste le plus hostile du produit. Toutes les contraintes d'interface qui en découlent
+  sont intactes. Ce qui tombe, c'est uniquement ce qu'on déduisait du **rythme global**.
 - **Le catalogue d'achievements est de la donnée, pas du code** : on doit pouvoir en ajouter sans
   redéploiement.
 - **Le téléphone n'est jamais le capteur du chrono.** Le pilote n'a pas son téléphone sur lui en
@@ -191,8 +212,12 @@ plateforme du prestataire.
 conservée mot pour mot. Aucun modèle n'est arrêté et aucune conversion n'a été observée. Quatre
 cellules d'essai existent (noyau gratuit une machine ; pass saison 29–39 € ; partage revente
 9–19 € ; loueur-école à découvrir) et un candidat de forme est écrit au §9 du PRD : la cadence
-d'environ onze usages par an rend l'abonnement mal ajusté, alors que le **pass saison** est natif à
-un produit dont l'unité de compte est déjà la saison. **Candidat, pas décision** — et il ne coûte
+d'environ onze usages par an rendrait l'abonnement mal ajusté — **argument tombé le 18 août 2026
+avec la correction de cadence ci-dessus.** Une application vécue au quotidien peut porter un
+abonnement ; celle-ci n'est plus disqualifiée d'office. Les trois formes restent ouvertes et
+aucune n'est tranchée : abonnement, **pass saison** (natif au modèle, dont l'unité de compte est
+déjà la saison) et **achat définitif du palier** (le seul qui ne crée aucun coût échoué, donc
+aucune incitation à rouler pour amortir). **Candidat, pas décision** — et il ne coûte
 aucune soirée au noyau, ce qui est la raison pour laquelle il peut rester ouvert. Aucun skill de
 construction n'implémente de paiement, de péage ou de palier payant sans décision explicite de
 Julian.

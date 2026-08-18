@@ -551,7 +551,8 @@ saisie, **et un roulage qui n'y ressemble pas se saisit sans friction** (FR-9).
 ### Récit 2.5 : La peau Attract Mode — *3 soirées*
 
 En tant que **pilote**, je veux **une application qui ne ressemble pas à un tableur**, afin de
-**l'ouvrir onze fois par an**.
+**l'ouvrir par intermittence**, après des semaines sans y toucher.  
+> *(Cadence corrigée le 18 août 2026 : onze est le nombre de roulages d'une saison, pas le nombre d'ouvertures de l'application. Le besoin de réapprentissage reste réel pour les écrans saisonniers ; il ne vaut plus pour tout le produit.)*
 
 **Critères d'acceptation**
 
