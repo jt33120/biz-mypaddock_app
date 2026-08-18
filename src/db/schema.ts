@@ -3,6 +3,14 @@ import { column, Schema, Table } from '@powersync/web'
 /**
  * Miroir local du schéma Postgres — récit 1.1.
  *
+ * ⚠ AUCUNE colonne `cree_le` / `modifie_le` sur les tables que le pilote écrit.
+ * Une opération PUT de PowerSync transmet les colonnes DÉCLARÉES ; celles que
+ * l'application ne renseigne jamais partiraient à null, et Postgres les porte
+ * en `not null default now()` — tout envoi échouerait. Le serveur les remplit
+ * lui-même, et l'ordre chronologique est de toute façon dans l'UUID v7 (AD-14),
+ * jamais dans un horodatage. Le référentiel les garde : il est en lecture seule
+ * (AD-12) et ne remonte rien.
+ *
  * SQLite ne connaît que text, integer et real. D'où les conventions, qui sont
  * les mêmes des deux côtés et ne se négocient pas :
  *   · argent  → integer de CENTIMES
@@ -21,8 +29,6 @@ const machine = new Table({
   marque: column.text,
   modele: column.text,
   annee: column.integer,
-  cree_le: column.text,
-  modifie_le: column.text,
 })
 
 // ─── RACINE 2 : le roulage ────────────────────────────────────────────────
@@ -41,8 +47,6 @@ const roulage = new Table({
   groupe_rang: column.integer,
   groupe_total: column.integer,
   niveau: column.text,
-  cree_le: column.text,
-  modifie_le: column.text,
 })
 
 // ─── Session et tours ─────────────────────────────────────────────────────
@@ -51,7 +55,6 @@ const session = new Table({
   roulage_id: column.text,
   ordre: column.integer,
   duree_ms: column.integer,
-  cree_le: column.text,
 })
 
 // AD-3 : chaque tour porte sa provenance, et il n'existe AUCUNE valeur GPS.
@@ -60,7 +63,6 @@ const tour = new Table({
   session_id: column.text,
   temps_ms: column.integer,
   provenance: column.text,
-  cree_le: column.text,
 })
 
 // ─── Dépense ──────────────────────────────────────────────────────────────
@@ -74,8 +76,6 @@ const depense = new Table({
   saison_annee: column.integer,
   montant_centimes: column.integer,
   libelle: column.text,
-  cree_le: column.text,
-  modifie_le: column.text,
 })
 
 const intervention = new Table({
@@ -84,8 +84,6 @@ const intervention = new Table({
   libelle: column.text,
   date_jour: column.text,
   cout_centimes: column.integer,
-  cree_le: column.text,
-  modifie_le: column.text,
 })
 
 // ─── Référentiel — lu, jamais écrit par la PWA (AD-12) ────────────────────

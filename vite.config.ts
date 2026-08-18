@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => {
   const name = env.VITE_APP_NAME || 'MyPaddock'
 
   return {
+    // Horodatage de build affiché à l'écran : sans lui, une PWA iOS installée
+    // qui sert encore l'ancienne version se débogue comme un fantôme.
+    define: { __BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')) },
+    // Le SDK PowerSync embarque ses propres workers et son WASM : les
+    // pré-empaqueter casserait leur résolution.
+    optimizeDeps: { exclude: ['@powersync/web', '@journeyapps/wa-sqlite'] },
+    worker: { format: 'es' },
     plugins: [
       react(),
       // Le <title> vient de la MEME source que le manifeste, avec repli.
@@ -20,7 +27,15 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         // Rien ne se charge depuis un CDN au paddock : tout est précaché.
-        workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'] },
+        // `wasm` est OBLIGATOIRE ici — sans lui, la première ouverture hors
+        // réseau après installation échoue au chargement du moteur SQLite, et
+        // on conclurait à tort que PowerSync ne tient pas hors ligne.
+        // La limite Workbox par défaut est de 2 Mio ; wa-sqlite-async.wasm
+        // pèse 2,18 Mo et serait silencieusement écarté.
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,svg,png,woff2,wasm}'],
+          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        },
         manifest: {
           name,
           short_name: name,

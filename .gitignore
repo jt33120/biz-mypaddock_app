@@ -1,14 +1,26 @@
+# ── Secrets ───────────────────────────────────────────────────────────────
+# `.env.*` attrape .env.production, .env.development et tout ce qu'on n'a pas
+# prévu ; l'exception explicite garde le modèle à valeurs vides.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.pem
+.npmrc
+
+# La CLI Supabase écrit ici `pooler-url`, qui embarque la chaîne de connexion
+# Postgres AVEC le mot de passe. Ce répertoire a été suivi par erreur au commit
+# 949985b — créé par un simple `supabase projects list` — et un `git add -A`
+# réflexe après un `supabase link` aurait publié le mot de passe de la base.
+supabase/.temp/
+
+# ── Construits ────────────────────────────────────────────────────────────
 node_modules/
 dist/
 .DS_Store
-*.local
 .vercel
 .railway
 
-# Trois codebases MyPaddock anterieures, clonees comme depots git imbriques.
-# Reference uniquement. Condition 5 de l'audit de viabilite : secrets historiques
-# renouveles, aucun ancien extracteur reactive. Ne rien recycler sans decision.
+# ── Trois codebases MyPaddock anterieures, clonees comme depots imbriques ──
+# Reference uniquement. Condition 5 de l'audit de viabilite : secrets
+# historiques renouveles, aucun ancien extracteur reactive.
 context/
