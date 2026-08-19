@@ -116,7 +116,11 @@
   document.getElementById('marque').textContent = p.get('marque') || ''
   document.getElementById('modele').textContent = p.get('modele') || ''
   document.getElementById('o1').textContent = p.get('o1') || ''
-  document.getElementById('o2').textContent = p.get('o2') || ''
+  const o2 = document.getElementById('o2')
+  o2.textContent = p.get('o2') || ''
+  if (!o2.textContent) o2.remove()
+  const compte = document.querySelector('.barre span:last-child')
+  if (!p.get('o2')) compte.innerHTML = '<b>1</b> machine'
   document.getElementById('km').innerHTML = p.get('km') || ''
   document.getElementById('roul').innerHTML = p.get('roul') || ''
   document.getElementById('tour').innerHTML = p.get('tour') || ''

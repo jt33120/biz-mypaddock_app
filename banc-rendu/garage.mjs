@@ -12,22 +12,23 @@ const motif = process.argv[2] ?? ''
 // Deux machines réelles, deux fiches. Les chiffres sont plausibles et servent à juger la
 // place que prend la moto à l'écran, pas à être exacts.
 const FICHES = {
-  IMG_9144: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'Tracer 9',
+  IMG_9144: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'',
               km:'11 240', roul:'7', tour:'1:38<small>.42</small>',
               etat:'<b>Prête</b> · pneus neufs, chaîne graissée' },
-  IMG_9245: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'Tracer 9',
+  IMG_9245: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'',
               km:'11 240', roul:'7', tour:'1:38<small>.42</small>',
               etat:'<b>Prête</b> · pneus neufs, chaîne graissée' },
-  IMG_9239: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'Tracer 9',
+  IMG_9239: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'',
               km:'11 240', roul:'7', tour:'1:38<small>.42</small>',
               etat:'<b>Prête</b> · pneus neufs, chaîne graissée' },
-  IMG_9243: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'Tracer 9',
+  IMG_9243: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'',
               km:'11 240', roul:'7', tour:'1:38<small>.42</small>',
               etat:'<b>Prête</b> · pneus neufs, chaîne graissée' },
-  IMG_8974: { marque:'Yamaha', modele:'Tracer 9 GT', o1:'Tracer 9', o2:'CBR 83',
-              km:'28 610', roul:'—', tour:'—',
-              etat:'<b>Révision à 30 000</b> · dans 1 390 km' },
-  IMG_9139: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'Tracer 9',
+  // La Tracer 9 est écartée du périmètre par Julian le 19/08 : le garage n'expose qu'une machine.
+  cbr83:     { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'',
+              km:'11 240', roul:'7', tour:'1:38<small>.42</small>',
+              etat:'<b>Prête</b> · pneus neufs, chaîne graissée' },
+  IMG_9139: { marque:'Honda', modele:'CBR 1000 RR · 83', o1:'CBR 83', o2:'',
               km:'11 240', roul:'7', tour:'1:38<small>.42</small>',
               etat:'<b>Prête</b> · pneus neufs, chaîne graissée' },
 }

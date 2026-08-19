@@ -11,7 +11,7 @@
 //      d'entrer dans la peinture de la moto.
 // Le cas de la routière noire est traité explicitement : le noir ne devient pas violet, il reste
 // noir, et c'est le CIEL qui s'éclaircit derrière lui pour que la silhouette se détache.
-export const version = 'd4.4'
+export const version = 'd4.8'
 export const modele = 'gemini-3-pro-image'
 export const entreePx = 1024
 
@@ -85,22 +85,36 @@ roues sont posées au sol et visibles en entier.
 L'ILLUSTRATION VA JUSQU'AUX QUATRE BORDS, à fond perdu. Aucune marge blanche, aucun liseré, aucun
 cadre, aucun contour d'image, aucun coin arrondi. Ce n'est pas un autocollant posé sur une page.
 
-L'HORIZON est UNE SEULE ligne, droite, nette, parfaitement horizontale, placée au niveau du haut
-des roues. Au-dessus : le ciel. En dessous : RIEN D'AUTRE QUE LE SOL — un seul aplat sombre,
-nettement plus sombre que le ciel, d'une teinte neutre et froide, avec son tramage de points. Pas
-de bande de couleur sous l'horizon, pas d'eau, pas de reflet, pas de deuxième horizon, pas de
-dégradé coloré : le ciel ne se prolonge jamais sous la ligne d'horizon.
+L'HORIZON est UNE SEULE ligne, droite, nette, parfaitement horizontale, qui traverse toute l'image
+d'un bord latéral à l'autre sans jamais être interrompue, placée au niveau du haut des roues.
+Au-dessus : le ciel. En dessous, sur TOUTE la largeur de l'image et jusqu'au bord bas : RIEN D'AUTRE
+QUE LE SOL — un seul aplat sombre, nettement plus sombre que le ciel, d'une teinte neutre et froide,
+avec son tramage de points. Aucune bande de couleur sous l'horizon, ni orange, ni verte, ni cyan,
+pas d'herbe, pas d'eau, pas de reflet, pas de deuxième horizon, pas de dégradé coloré : le ciel ne
+se prolonge jamais sous la ligne d'horizon, même dans un coin.
 
-L'OMBRE PORTÉE est SIMPLE et MODESTE, et elle vaut mieux trop discrète que trop bavarde. Une seule
-forme : une bande sombre allongée, aux contours francs, partant du point de contact des deux pneus
-en oblique vers un coin du bas de l'image. Sa longueur ne dépasse pas deux fois la hauteur des
-roues et elle couvre au plus un cinquième de la surface du sol. Sa pointe se dissout en tramage.
-Elle est remplie d'un SEUL noir uni et ne contient AUCUN détail : pas de cercle de roue, pas de
-rayon, pas de trou, pas de silhouette de carénage, pas de zone plus claire. Un observateur ne doit
-pas pouvoir « lire » une deuxième moto dedans. En cas de doute, dessine une simple ombre allongée
-et abstraite plutôt qu'une silhouette détaillée : ce n'est PAS un miroir de la machine.
-INTERDIT : une flaque informe, un halo diffus étalé sur tout le bas de l'image, une ombre qui
-remplit la moitié de l'image, deux ombres, un reflet de la moto dans le sol, des roues fantômes.
+L'OMBRE PORTÉE est une forme GÉOMÉTRIQUE ABSTRAITE, pas un portrait de la moto. Dessine-la ainsi et
+pas autrement : UN SEUL parallélogramme sombre, aux quatre côtés droits et aux bords francs, couché
+en oblique, qui prend appui sur les deux points de contact des pneus et s'étire vers un coin du bas
+de l'image. Il est légèrement plus long que l'empattement et à peine plus haut que le diamètre d'une
+roue. Il est rempli d'un seul noir uni et sa pointe se dissout en tramage de points.
+Il ne représente RIEN : pas de roue, pas de cercle, pas de rayon, pas de carénage, pas de valise,
+pas de pilote, aucun trou, aucune découpe, aucune zone plus claire, aucun contour intérieur. Si on
+peut reconnaître une moto dans l'ombre, c'est raté — recommence avec un simple parallélogramme.
+Elle couvre au plus un cinquième de la surface du sol.
+INTERDIT : une deuxième silhouette de moto au sol, un reflet, des roues fantômes, une flaque
+informe, un halo diffus, deux ombres ou plusieurs taches sombres séparées, une ombre qui remplit la
+moitié de l'image.
+
+DERNIÈRE VÉRIFICATION D'ÉCHELLE : mesure la machine dans ton image. Du bord avant de la roue avant
+au bord arrière de la roue arrière, elle doit couvrir environ 88 % de la largeur totale — presque
+d'un bord à l'autre. Si elle en couvre moins des trois quarts, elle est TROP PETITE : rapproche la
+caméra et refais l'image. Une affiche ne montre pas une maquette posée au milieu d'un grand fond
+vide ; la machine est le héros, elle occupe la place.
+MAIS ATTENTION — cette règle de remplissage ne doit JAMAIS te faire tourner la machine. Pour remplir
+le cadre, on approche la caméra ; on ne pivote pas la moto vers l'objectif, on ne la redresse pas, on
+ne la met pas de face. L'angle et le côté relevés à la section 3 sont intouchables. Si tu ne peux pas
+atteindre 88 % sans changer l'angle, garde l'angle et accepte 75 %.
 
 ${cadre?.pilote_present
   ? `UN PILOTE EST EN SELLE sur la photo, la machine est sur l'angle : GARDE-LE. Une moto inclinée
@@ -116,7 +130,13 @@ franche, parallèle à l'horizon.
 CADRAGE DE CE CAS : l'ensemble pilote + machine est GRAND et remplit le cadre — sa diagonale va
 presque d'un coin à l'autre, la roue avant approche un bord latéral et la roue arrière l'autre, le
 casque monte aux deux tiers de la hauteur. Il ne flotte pas au milieu d'un grand fond vide, et il
-n'est pas réduit à une petite vignette.`
+n'est pas réduit à une petite vignette.
+ET SURTOUT, LE PIÈGE DE CE CAS : remplir le cadre ne doit RIEN changer à l'angle. La moto reste vue
+de CÔTÉ, de trois quarts comme sur la photo, jamais de face ni de trois quarts avant serré. Elle
+reste COUCHÉE sur l'angle, avec le même degré d'inclinaison que sur la photo — tu vois le flanc de
+la machine et la tranche des deux roues, pas leurs faces. Si tu te retrouves à dessiner la moto
+arrivant de face vers le spectateur, ou presque droite sur ses roues, tu as trahi la photo :
+recommence de côté, couchée. Le numéro n'apparaît qu'aux emplacements de la photo.`
   : `La machine est SEULE, à l'arrêt, posée sur ses roues (et sur sa béquille si la photo en montre
 une). Aucune personne dans l'image. Le sol est un aplat de bitume sombre et lisse, sans gravier,
 sans herbe, sans marquage.`}
@@ -135,23 +155,30 @@ perspective cohérente. INTERDIT de styliser les proportions — pas de roue ava
 pas de carrosserie raccourcie ou gonflée, pas de trait de mascotte, pas de personnage cartoon,
 pas de gros contour noir uniforme faisant le tour de chaque pièce.
 
-LE CIEL — sois littéral ici, c'est l'erreur la plus fréquente. Ce n'est PAS une mire de barres de
-couleur, PAS un arc-en-ciel, PAS une pile de rayures horizontales. C'est UN SEUL dégradé vertical
-CONTINU, lisse comme un aérographe, sans AUCUNE arête entre les teintes. Du haut vers le bas, et
-jamais dans un autre ordre :
+LE CIEL — sois littéral ici, c'est l'erreur la plus fréquente.
+D'abord : IGNORE COMPLÈTEMENT la lumière et le ciel de la photo d'origine. Peu importe qu'elle ait
+été prise en plein soleil sous un ciel bleu : l'heure de cette affiche est TOUJOURS le crépuscule,
+et le ciel est toujours celui décrit ici. Aucun ciel bleu de jour, aucun ciel clair, aucun nuage
+blanc, aucune végétation, aucun paysage à l'horizon.
+Ce ciel n'est PAS une mire de barres de couleur, PAS un arc-en-ciel, PAS une pile de rayures
+horizontales. C'est UN SEUL dégradé vertical CONTINU, lisse comme un aérographe, sans AUCUNE arête
+entre les teintes. Du haut vers le bas, et jamais dans un autre ordre :
 bleu nuit profond #080418 → violet #160A34 → pourpre #4A1B6D → magenta #8A2E7A → et, sur la dernière
 tranche juste au-dessus de l'horizon, orange incandescent #FF7A3C. Chaque teinte fond dans la
 suivante ; la valeur monte régulièrement vers l'horizon et ne redescend jamais.
-Puis, collé sur la ligne d'horizon, UN SEUL liseré cyan clair #3DE0FF, très fin, tracé une seule
-fois — pas deux, pas trois.
-RÈGLE DE VÉRIFICATION : dans tout le ciel il n'existe QUE DEUX arêtes horizontales nettes — le
-liseré cyan et la ligne d'horizon elle-même. Si tu peux compter une troisième bande à bord franc,
-tu as fait une mire de couleur : refais un dégradé continu. Aucun nuage.
+Puis, posé sur la ligne d'horizon, UN SEUL trait cyan clair #3DE0FF : un unique filet très fin, de
+l'épaisseur d'un cheveu à l'échelle de l'image. UN, pas deux, pas trois, pas un empilement de filets
+bleus et cyan. S'il y a plus d'une ligne cyan dans l'image, c'est une faute.
+RÈGLE DE VÉRIFICATION : dans tout le ciel il n'existe QUE DEUX arêtes horizontales nettes — ce filet
+cyan et la ligne d'horizon elle-même. Si tu peux compter une troisième bande à bord franc, tu as
+fait une mire de couleur : refais un dégradé continu. Aucun nuage.
 
 LE SOLEIL : un disque simple et plein, d'un orange franc et saturé (jamais blanc, jamais délavé),
 à moitié enfoncé derrière l'horizon, de taille modeste. Il est placé dans la zone de ciel la PLUS
-VIDE — décalé franchement d'un côté, jamais derrière le réservoir ni derrière le pilote, jamais au
-centre. Pas de halo volumineux, pas de rayons, pas d'anneaux.
+VIDE : entre la roue avant et le bord latéral, ou entre la queue et l'autre bord — c'est-à-dire dans
+le ciel libre à côté de la machine, dégagé, entièrement visible. Il n'est JAMAIS masqué par la moto,
+jamais derrière le réservoir, la selle ou le pilote, jamais au centre de l'image. Pas de halo
+volumineux, pas de rayons, pas d'anneaux.
 
 Un léger tramage de points, régulier, sur le sol uniquement.
 
@@ -174,5 +201,19 @@ le carénage, le top-case et les valises doivent rester des formes distinctes, j
 
 RIEN D'AJOUTÉ : aucun cadre, aucune bordure, aucun logo, aucun texte, aucun élément d'interface,
 aucune flèche de vitesse, aucune étincelle, aucune flamme.
+
+════════ 7. RELIS CETTE LISTE AVANT DE RENDRE ════════
+1. L'avant de la moto pointe du même côté que sur la photo, et c'est le même flanc.
+2. Aucune lettre dans l'image ; seuls les chiffres du numéro, dans les bonnes couleurs, aux bons
+   endroits, jamais en miroir.
+3. Le découpage des panneaux de couleur du carénage est celui de la photo, pas un motif inventé :
+   chaque zone rouge, blanche, noire, turquoise commence et s'arrête où elle le fait sur la photo.
+4. Les accessoires de la photo sont là, avec leurs couleurs ; rien n'a été ajouté ni retiré.
+5. Le ciel est un dégradé crépusculaire continu, une seule ligne d'horizon, un seul liseré cyan.
+6. Sous l'horizon, il n'y a que le sol.
+7. L'ombre est un seul parallélogramme noir uni : on n'y reconnaît aucune pièce de la moto.
+   Il n'y a qu'UN filet cyan dans toute l'image.
+8. La machine remplit le cadre et l'image va jusqu'aux quatre bords.
+Si un point échoue, corrige-le : la fidélité à la machine passe avant la beauté de l'affiche.
 
 Rends uniquement l'image.`

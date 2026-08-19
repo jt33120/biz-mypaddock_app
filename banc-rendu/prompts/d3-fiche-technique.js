@@ -13,7 +13,7 @@
 //    menthe : la machine cessait d'être la sienne. L'aplat est remonté.
 // 2. Le trait porte une information : blanc = carrosserie, cyan = organe qu'on entretient
 //    (moteur, transmission, freins, suspension, échappement). Le plan dit ce qu'on démonte.
-export const version = 'd3.4'
+export const version = 'd3.10'
 export const modele = 'gemini-3-pro-image'
 export const entreePx = 1024
 
@@ -36,14 +36,37 @@ et sa couronne sont d'un côté, le silencieux et le sélecteur de l'autre. Ne m
 du flanc tourné vers l'objectif ; celles du flanc caché n'apparaissent pas.
 Ni une description, ni l'habitude, ni l'élégance ne prime : seule la photo dit le sens et le flanc.
 
-═══ 1. RÈGLE QUI PRIME SUR TOUT LE RESTE ═══
+═══ 1. AUCUNE LETTRE. JAMAIS. C'EST LA PREMIÈRE RÈGLE. ═══
+Une fausse marque sur la moto d'un pilote ruine l'image entière, autant qu'une erreur de modèle.
+Sur ce point précis, et sur ce point seulement, l'omission bat la fidélité : un mot vraiment présent
+sur la vraie moto est quand même omis, parce que tu ne sais pas le réécrire sans le déformer.
+- Les SEULS caractères autorisés dans toute l'image sont les CHIFFRES du numéro de course, s'il y
+  en a un de lisible sur la photo. Rien d'autre, nulle part.
+- Ces chiffres apparaissent uniquement là où la photo les montre — sur le flanc de carénage ou la
+  plaque de numéro — jamais sur la bulle, jamais sur le réservoir, jamais deux fois par panneau.
+- Tout autre texte — sponsors, marque de pneu, de suspension, d'échappement, plaque
+  d'immatriculation, nom du constructeur, nom du modèle, emblème de marque, inscription de bulle ou
+  de jante — n'est pas redessiné. Tu le REMPLACES, à la même place et sur la même longueur, par une
+  ou deux BARRES HORIZONTALES PLEINES, comme un texte caviardé au marqueur : la trace du sticker
+  reste, le mot disparaît. Aucune lettre, aucun sigle, aucun emblème, aucun caractère déformé.
+- Tu n'écris aucun mot, aucune abréviation, aucune suite de lettres, même floue, même minuscule,
+  même « en écriture technique ». Pas de titre, pas de légende, pas de cote, pas de cartouche, pas
+  de flèche annotée, pas de signature, pas de filigrane.
+- Cas piégeux, ils se sont déjà produits : le NOM DU MODÈLE sérigraphié sur le flanc ou le
+  réservoir, le sigle du constructeur sur le réservoir ou la bulle, la marque du pneu sur le flanc
+  du pneu, le nom du silencieux. Aucun des quatre n'est redessiné. Cette surface reste nue. Mieux
+  vaut un flanc muet qu'un nom mal orthographié : le pilote connaît sa moto, il n'a pas besoin
+  qu'on lui écrive son nom dessus.
+- Entre écrire quelque chose et ne rien écrire : tu ne mets rien.
+
+═══ 2. LA MACHINE — CE QUI COMPTE PLUS QUE LE STYLE ═══
 C'est CETTE machine, pas une machine. Le pilote doit reconnaître la sienne au premier coup d'œil :
 le modèle exact, sa silhouette, la découpe de son carénage, l'implantation de son échappement, ses
 jantes, ses suspensions, ses accessoires, son numéro. Compte les éléments sur la photo et redessine
 CEUX-LÀ. N'idéalise pas, ne modernise pas, ne remplace aucune pièce, n'ajoute aucun équipement
 absent de la photo. Un détail illisible se simplifie ; il ne se complète jamais par imagination.
 
-═══ 2. PROJECTION — ÉLÉVATION, PAS PHOTO ═══
+═══ 3. PROJECTION — ÉLÉVATION, PAS PHOTO ═══
 Élévation orthographique de profil : caméra à hauteur de moyeu, ligne de visée perpendiculaire à
 l'axe de la machine, aucune perspective, aucun raccourci, aucun point de fuite.
 Quatre critères qui se vérifient à l'œil, et qui valent même si la photo est prise de trois quarts :
@@ -54,8 +77,8 @@ tu REPROJETTES la machine en profil pur, tu ne recopies pas l'angle de l'apparei
 - On ne voit AUCUNE surface horizontale : ni le dessus du réservoir, ni l'assise de la selle, ni le
   dessus du garde-boue, ni le dessus du top-case. Si tu vois le dessus d'une pièce, tu n'es pas en
   élévation : recommence plus bas.
-- Le guidon est vu de bout : les deux demi-guidons se superposent, la roue avant n'est pas braquée,
-  aucune pièce ne part vers l'avant ou vers l'arrière en fuyant.
+- Le guidon est vu de bout : les deux demi-guidons et les deux rétroviseurs se superposent, on n'en
+  voit qu'un de chaque, de profil ; la roue avant n'est pas braquée, aucune pièce ne part vers l'avant ou vers l'arrière en fuyant.
 - Les deux pneus TOUCHENT la ligne de sol. La machine ne flotte pas.
 - Rien de la machine n'est coupé par le bord : roue avant, roue arrière, haut de bulle, bas de
   sabot, bagages, tout est entièrement dans l'image.
@@ -67,26 +90,6 @@ ${cadre?.pilote_present
   détail inventé.`
   : `- La moto est déjà seule sur la photo, à l'arrêt.`}
 
-═══ 3. AUCUNE LETTRE. JAMAIS. ═══
-Une fausse marque sur la moto d'un pilote ruine l'image entière, autant qu'une erreur de modèle.
-- Les SEULS caractères autorisés dans toute l'image sont les CHIFFRES du numéro de course, s'il y
-  en a un de lisible sur la photo. Rien d'autre, nulle part.
-- Ces chiffres apparaissent uniquement là où la photo les montre — sur le flanc de carénage ou la
-  plaque de numéro — jamais sur la bulle, jamais sur le réservoir, jamais deux fois par panneau.
-- Tout autre texte — sponsors, marque de pneu, de suspension, d'échappement, plaque
-  d'immatriculation, nom du constructeur, nom du modèle, emblème de marque, inscription de bulle ou
-  de jante — n'est pas redessiné : la surface reste VIDE. Au maximum un petit rectangle au trait,
-  strictement vide à l'intérieur. Rien qui ressemble de loin à un mot, à un sigle ou à un emblème.
-- Tu n'écris aucun mot, aucune abréviation, aucune suite de lettres, même floue, même minuscule,
-  même « en écriture technique ». Pas de titre, pas de légende, pas de cote, pas de cartouche, pas
-  de flèche annotée, pas de signature, pas de filigrane.
-- Cas piégeux, ils se sont déjà produits : le NOM DU MODÈLE sérigraphié sur le flanc ou le
-  réservoir, le sigle du constructeur sur le réservoir ou la bulle, la marque du pneu sur le flanc
-  du pneu, le nom du silencieux. Aucun des quatre n'est redessiné. Cette surface reste nue. Mieux
-  vaut un flanc muet qu'un nom mal orthographié : le pilote connaît sa moto, il n'a pas besoin
-  qu'on lui écrive son nom dessus.
-- Entre écrire quelque chose et ne rien écrire : tu ne mets rien.
-
 ═══ 4. LE STYLE — DU TRAIT LUMINEUX SUR FOND SOMBRE ═══
 Dessin au trait vectoriel, propre et régulier, comme un plan d'atelier rétro-éclairé ou un écran de
 diagnostic. Aucune matière, aucun reflet, aucun chrome, aucun rendu 3D, aucune ombre portée, aucune
@@ -96,7 +99,9 @@ constante, à bord franc. Aucune lueur, aucun halo, aucun flou autour des traits
 aucune enseigne lumineuse. Ce n'est pas un néon de bar, c'est un tracé sur un écran.
 
 Fond : bleu-nuit presque noir, #080418 en haut vers #100A28 en bas. Par-dessus, une grille technique
-très discrète (carreaux réguliers, #16103A, un trait un peu plus clair tous les cinq carreaux) et
+très discrète (carreaux réguliers, #16103A, un trait un peu plus clair tous les cinq carreaux) qui
+couvre TOUTE l'image d'un bord à l'autre, jusque dans les quatre coins, sans marge blanche, sans
+liseré, sans rectangle d'encadrement dessiné autour du plan — la grille est le papier, pas un objet posé dessus — et
 une seule ligne de sol horizontale fine sous les pneus, #302566. Rien d'autre : pas de mur, pas de
 garage, pas de décor, pas d'horizon, pas de halo, pas de vignettage.
 
@@ -112,9 +117,10 @@ Le trait dit à quoi sert la pièce — c'est la clef de lecture du plan :
 - Les JANTES gardent la couleur réelle de la photo — or, noir, blanc, gris — jamais cyan : une
   jante dorée se lit dorée, c'est un signe de reconnaissance fort pour son propriétaire. Seuls les
   disques, les étriers et le moyeu sont au trait cyan.
-- Les pneus sont des anneaux SOMBRES, presque du fond, simplement cerclés d'un trait fin #8FA2D8
-  à l'intérieur et à l'extérieur, avec quelques rainures fines — jamais de motif inventé, jamais
-  cyan, et jamais remplis d'un aplat clair : un pneu clair et épais écrase tout le dessin.
+- Les pneus sont des anneaux SOMBRES, presque du fond, cerclés d'un trait fin GRIS-BLEU #8FA2D8
+  à l'intérieur et à l'extérieur, avec quelques rainures fines — jamais de motif inventé, et jamais
+  remplis d'un aplat clair : un pneu clair et épais écrase tout le dessin. Un pneu n'est JAMAIS
+  cyan, ni en entier, ni sur un bord, ni sur une portion : le cyan est réservé aux organes.
 - Le cyan reste minoritaire dans l'image : c'est un trait fin d'organe, pas la couleur du dessin.
 
 La livrée n'est pas peinte, elle est TRACÉE, mais elle doit rester JUSTE : dessine les frontières
@@ -130,9 +136,16 @@ Interdits de facture, ils ont déjà gâché des essais : pas de liseré blanc �
 de la silhouette, pas d'effet autocollant découpé, pas de fond blanc, pas de contour cerné comme un
 sticker. Le contour de la machine est un trait d'égale épaisseur, comme tous les autres.
 
-Deux pièces à ne pas oublier, elles ont manqué dans des essais : le SILENCIEUX, avec sa forme et
-sa position exactes s'il est visible sur ce flanc, et la CHAÎNE avec sa couronne. Ce sont deux
-pièces qu'un pilote regarde en premier.
+Deux pièces à ne pas oublier, elles ont manqué dans des essais : le SILENCIEUX — cherche-le sur la
+photo, sous la coque arrière ou le long du flanc, et remets-le à sa place réelle, avec sa forme et
+son volume — et la CHAÎNE avec sa couronne. Ce sont deux pièces qu'un pilote regarde en premier.
+
+LES PROPORTIONS, enfin, parce qu'elles trahissent la machine autant qu'une couleur fausse. Mesure
+sur la photo le rapport entre l'empattement (d'un moyeu à l'autre) et le diamètre d'une roue, et
+tiens-le : une sportive fait un peu plus de deux diamètres de roue d'empattement, pas trois. La
+coque arrière d'une sportive est COURTE et relevée, elle ne s'étire pas en pointe ; le carénage
+avant est haut et compact, pas écrasé. Ne rallonge rien pour remplir la largeur du cadre : si la
+machine est plus courte que le cadre, laisse de la marge.
 
 ═══ 5. CE QUI DISPARAÎT ═══
 Tout le décor : sol, gravier, herbe, arbres, fleurs, piste, bâtiments, ciel, camion, remorque,
@@ -141,8 +154,11 @@ Les bagages fixés à la moto — top-case, valises latérales, supports — fon
 tu les gardes et tu les dessines au trait comme le reste.
 
 ═══ 6. CADRAGE ═══
-Format carré. La moto de profil, centrée, environ 88 % de la largeur, un peu au-dessus du centre
-vertical. Aucun cadre, aucune bordure, aucun coin arrondi.
+Format carré. La moto de profil occupe environ 88 % de la largeur et reste centrée dans le carré :
+le bas des pneus repose sur une ligne de sol située aux quatre cinquièmes de la hauteur de l'image :
+la bande vide sous les pneus fait un cinquième de l'image, pas un tiers, et la machine est posée
+franchement dans le carré plutôt que suspendue dans le haut. Aucun cadre, aucune
+bordure, aucun coin arrondi.
 
 ═══ 7. VÉRIFICATION AVANT DE RENDRE ═══
 1. La roue avant est-elle du même côté que sur la photo ? Si non, tu as retourné l'image : refais.
@@ -156,5 +172,12 @@ DERNIER CONTRÔLE, LE PLUS IMPORTANT DE TOUS. Reviens à la photo fournie et tro
 celle qui porte la fourche, le garde-boue avant et la bulle. Est-elle à gauche ou à droite du
 cadre ? Ton plan doit la placer exactement du même côté. Si ton dessin la met de l'autre côté, tu
 as retourné la machine et l'image est fausse, aussi belle soit-elle : redessine dans le bon sens.
+Puis balaie ton dessin une dernière fois à la recherche d'une lettre — sur le flanc, le réservoir,
+la bulle, le silencieux, le pneu, la jante, le top-case. S'il en reste une seule, remplace-la par
+une barre pleine. Le piège classique, celui qui a raté le plus souvent : le nom du modèle
+sérigraphié en gros sur le flanc avant d'une routière, juste derrière la fourche. Cette inscription
+ne s'écrit pas, jamais, sous aucune forme, même si tu crois savoir la lire : deux barres
+horizontales pleines à sa place, et c'est tout. Vérifie enfin deux détails qui ont déjà dérapé : aucun pneu n'est cyan, et le bas de
+l'image n'est pas une grande bande vide.
 
 Rends uniquement l'image.`

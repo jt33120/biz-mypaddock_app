@@ -27,7 +27,28 @@
 //   viré lavande et le noir au violet, le fond teinte la machine. Enfin la grille n'est toujours
 //   pas tenue : donner un nombre de pixels logiques ne suffit pas, il faut un BUDGET DE DÉTAIL
 //   élément par élément (diamètre de roue en carrés, hauteur du numéro en carrés).
-export const version = 'd2c'
+// d2c (budget de détail + anti-violet + fond à trois aplats) : le budget de détail marche — le
+//   pixel devient franc et visible sans que la moto se défasse, c'est le vrai levier. Plus aucun
+//   faux texte sur les trois. Restait à corriger : (1) sur 9245 la machine s'est teintée de
+//   violet (moteur, jantes, blanc lilas) — une palette unique « prélevée sur la photo » laisse le
+//   fond baver sur le sujet, il faut DEUX sous-palettes étanches ; (2) le fond repart en bandes
+//   larges dès qu'on lui donne une lueur : la bande cyan a repris un tiers de l'image sur 8974 —
+//   il faut plafonner le décor en POURCENTAGE de hauteur ; (3) le modèle rend spontanément un
+//   PROFIL STRICT même quand la photo est en trois-quarts (8974). C'est plus fidèle qu'une
+//   rotation inventée, plus lisible en sprite, et cohérent d'une moto à l'autre dans le garage :
+//   on l'assume comme parti pris, en verrouillant côté et sens.
+// d2d (deux sous-palettes + fond plafonné + profil strict) : les trois machines sont fidèles et
+//   reconnaissables, le pixel est franc, plus aucun texte inventé, orientation tenue sur les
+//   trois. Défauts résiduels mesurés, tous locaux : (1) le violet du fond s'est réfugié DANS les
+//   jantes, entre les rayons — la règle « pas de violet sur la machine » ne couvrait pas les
+//   creux ; (2) cadrage flottant : machine décalée à droite sur 9144, vide en haut sur 8974 ;
+//   (3) sur 8974 le ciel s'est éclairci jusqu'à concurrencer une machine noire ; (4) une pièce
+//   beige-brune inventée sous le moteur de la Tracer.
+// d2e : les jantes redeviennent dorées jusque dans les rayons, cadrage centré, les trois machines
+//   sont justes. Ne restaient que des défauts de DÉCOR : la lueur magenta s'étale en large bande
+//   dégradée (donc lissée, hors grille) et un quart de l'image reste du sol vide. d2f ne touche
+//   plus qu'au fond et au cadrage — les règles de la machine ne bougent plus.
+export const version = 'd2f'
 export const modele = 'gemini-3-pro-image'
 export const entreePx = 1024
 
@@ -54,12 +75,14 @@ ORIENTATION — impérative, aucune liberté. Vérifie-la avant de dessiner.
 2. LE SENS. L'avant de la moto (roue avant, carénage de tête, fourche) pointe du MÊME CÔTÉ de
    l'image que sur la photo — si la roue avant est à droite sur la photo, elle est à droite sur
    le sprite.
-3. L'ANGLE. Tu ne fais PIVOTER la machine sous aucun prétexte, et surtout pas vers un
-   trois-quarts plus flatteur. Si la photo montre un profil ou presque un profil, le sprite est
-   un PROFIL STRICT, sans aucune perspective, sans qu'on voie le guidon des deux côtés ni le
-   dessus du réservoir. Si et seulement si la photo est franchement un trois-quarts, le sprite
-   garde ce trois-quarts, du même côté et avec le même sens.
-4. LA HAUTEUR D'OEIL reste celle de la photo : ni vue de dessus, ni contre-plongée.
+3. L'ANGLE est un PROFIL STRICT, à hauteur d'oeil, comme un sprite de moto de borne d'arcade :
+   aucune perspective, on ne voit ni le dessus du réservoir, ni la selle par-dessus, ni les deux
+   extrémités du guidon. Si la photo est en trois-quarts, tu ramènes la machine au profil de son
+   flanc visible — sans JAMAIS la faire tourner de l'autre côté ni inverser son sens. Tu ne
+   « corriges » pas l'angle vers un trois-quarts plus flatteur : ce serait montrer une autre
+   moto que la sienne.
+4. Tout ce qui n'est visible que de trois-quarts sur la photo (top-case, valises, saute-vent,
+   guidon, phares) reste présent, vu de côté, à sa place et à sa taille.
 
 ZÉRO LETTRE — la contrainte la plus stricte de cette commande.
 AUCUNE lettre de l'alphabet n'apparaît nulle part dans l'image. Zéro. Le SEUL texte autorisé,
@@ -102,8 +125,18 @@ BUDGET DE DÉTAIL — la contrainte qui rend la grille réelle. Compte les carr�
 Tout détail qui ne tient pas dans son budget est SUPPRIMÉ, jamais rétréci. Un sprite lisible se
 reconnaît à sa silhouette et à ses grandes taches de couleur, pas à ses petites pièces.
 
-LA PALETTE.
-${COULEURS} couleurs au maximum dans toute l'image, prélevées sur la photo. Chaque zone est un
+LA PALETTE — DEUX SOUS-PALETTES ÉTANCHES, c'est impératif.
+- Palette MACHINE : 18 couleurs au maximum, prélevées uniquement sur la moto de la photo.
+- Palette FOND : 6 couleurs au maximum, uniquement celles listées plus bas.
+Aucune couleur de la palette FOND n'apparaît sur la machine, et réciproquement. En particulier
+AUCUN violet, AUCUN mauve, AUCUN magenta, AUCUN lavande ne touche la moto — ni son moteur, ni
+son cadre, ni ses jantes, ni ses pneus, ni ses parties blanches, ni ses ombres. Les ombres de la
+machine sont des versions plus sombres de SA propre couleur, jamais des violets. Cela vaut aussi
+pour les CREUX et les VIDES de la machine : l'espace entre les rayons d'une jante, l'intérieur
+d'une roue, le dessous du carénage, l'ombre sous la selle sont NOIRS ou gris très sombres — jamais
+violets, jamais transparents sur le fond. Une jante dorée est dorée sur toute sa couronne ET sur
+tous ses rayons.
+${COULEURS} couleurs au total au maximum. Chaque zone est un
 APLAT. Le volume se rend en 3 valeurs par teinte (ombre / base / lumière), jamais plus, et les
 transitions entre deux valeurs se font au TRAMAGE en damier régulier de pixels logiques
 (dithering), visible et assumé. Les blancs spéculaires sont un ou deux pixels francs, pas un
@@ -112,9 +145,10 @@ ANTI-CONTAMINATION, à vérifier pixel par pixel : le FOND est violet, la MACHIN
 Aucun pixel de la moto ne vire au violet, au mauve ni au lavande. Un blanc de décoration est un
 blanc franc et froid (#F0F4FF), pas un gris-lilas. Un rouge de carénage reste ce rouge vif. Des
 jantes dorées restent dorées (jaune-bronze), pas grises. Un sabot turquoise reste turquoise. Une
-moto noire reste NOIRE et FROIDE — trois gris très sombres neutres distincts (#12161C, #1D2430,
-#2C3543) plus un liseré blanc-bleu sur les arêtes hautes ; jamais violette, jamais éclaircie en
-gris moyen. Les couleurs de la machine sont plus saturées et plus contrastées que celles du fond,
+moto noire reste NOIRE et FROIDE. Toutes les pièces sombres de N'IMPORTE QUELLE machine — moteur,
+cadre, bras oscillant, fourreaux, pneus, carénage noir — se rendent avec trois gris neutres très
+sombres distincts (#12161C, #1D2430, #2C3543) plus un liseré blanc-bleu sur les arêtes hautes ;
+jamais en violet, jamais éclaircies en gris moyen. Les couleurs de la machine sont plus saturées et plus contrastées que celles du fond,
 pour qu'elle se détache d'un coup d'œil.
 
 CONTOUR.
@@ -125,8 +159,14 @@ part.
 
 LA MACHINE.
 Vue entière, roues comprises, debout sur ses deux roues, jamais inclinée sur l'angle. Centrée
-horizontalement, occupant environ 90 % de la largeur, le bas des pneus posé aux trois quarts de
-la hauteur de l'image — le vide restant sous la machine est faible.
+horizontalement, occupant environ 88 % de la largeur, avec au moins 4 carrés de marge libre de
+chaque côté — aucune roue ne touche ni ne dépasse le bord. Le bas des pneus est posé à 80 % de la
+hauteur de l'image : il ne reste qu'une mince bande de sol sous les pneus, jamais un quart
+d'image vide. Le CENTRAGE est strict : autant de
+vide à gauche qu'à droite, à 2 carrés près, et le vide au-dessus du sommet de la machine reste
+inférieur au quart de la hauteur. Aucune pièce n'est coupée par un bord.
+N'ajoute AUCUNE pièce absente de la photo : pas de sabot, pas de pare-carter, pas de coque
+beige ou brune sous le moteur, pas de béquille, pas d'antenne, pas d'aileron.
 ${cadre?.pilote_present
   ? `Un pilote est en selle sur la photo : RETIRE-LE entièrement, ainsi que ses gants, ses
     bottes et son casque. Seule la machine reste, redressée à la verticale.`
@@ -136,15 +176,28 @@ végétation, fleurs, arbres, bâtiments, portail, montagnes, ciel photographiqu
 véhicules, personnes.
 
 LE FOND — sobre, il est le décor, pas le sujet. Même grille, mêmes pixels carrés.
+Le fond est SOMBRE sur au moins 80 % de sa surface. Il n'a le droit qu'à ces six couleurs :
+#160A34, #2A1150, #3A1856, #8A2E7A, #3DE0FF, #120A2E — et à AUCUNE version plus claire de
+celles-ci. Il reste TOUJOURS plus sombre que la machine, y compris quand la machine est noire :
+dans ce cas tiens-toi aux deux violets les plus sombres, le contraste doit venir du liseré de
+lumière et du contour, pas d'un ciel éclairci.
+Le fond compte exactement TROIS aplats de ciel et DEUX bandes de tramage. Compte-les avant de
+rendre : trois aplats, deux bandes, une lueur, une ligne. Rien de plus.
 - Ciel, du haut vers l'horizon, en TROIS aplats seulement : #160A34 en haut de l'image (le haut
-  n'est jamais noir), #2A1150 au milieu, #52205C juste au-dessus de l'horizon. Entre deux
-  aplats, UNE bande de tramage en damier de 4 rangées de carrés — c'est tout le dégradé. Pas
-  d'empilement de rayures, pas de bandes larges multicolores.
-- À l'horizon, une lueur magenta (#8A2E7A) haute de 3 carrés, puis une SEULE ligne d'horizon
-  horizontale d'UN carré, cyan #3DE0FF. C'est le seul cyan du fond, et il passe derrière la
-  machine au niveau de l'axe des roues.
+  n'est jamais noir et ne porte aucun bandeau uni plus sombre), #2A1150 au milieu, #3A1856 juste
+  au-dessus de l'horizon. Entre deux aplats, UNE bande de tramage en damier de 4 rangées de
+  carrés — c'est tout le dégradé. Pas d'empilement de rayures, pas de bandes larges
+  multicolores.
+- La ligne d'horizon est placée aux DEUX TIERS de la hauteur de l'image, derrière la machine.
+  Elle est faite de deux choses seulement, et rien de plus : un aplat magenta #8A2E7A de 6 carrés
+  de haut au maximum, posé juste au-dessus, puis UNE ligne cyan #3DE0FF d'exactement UN carré de
+  haut. Au-dessus de ces 6 carrés, le ciel est déjà dans le violet sombre.
+  INTERDIT : une large bande magenta, une plage cyan, une lueur diffuse, un halo dégradé, un
+  éclaircissement progressif autour de l'horizon. La lueur est un APLAT bordé d'UNE bande de
+  tramage, pas une lumière.
 - Sol : sous l'horizon, aplat sombre #120A2E uni, avec deux rangées de tramage juste sous la
-  ligne d'horizon. Aucun reflet, aucune ombre floue — seulement une ombre de contact en aplat
+  ligne d'horizon. Il n'occupe que le tiers bas de l'image, et la machine le recouvre en grande
+  partie : on ne voit jamais une grande étendue de sol vide. Aucun reflet, aucune ombre floue — seulement une ombre de contact en aplat
   très sombre, large de 6 et haute de 2 carrés, sous chaque pneu.
 - Le fond couvre l'image entière, bord à bord : aucune bande noire ni bandeau uni en haut ou en
   bas de l'image, aucun

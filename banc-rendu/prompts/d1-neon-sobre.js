@@ -25,7 +25,15 @@
 // sky.miami). Écart assumé vs DESIGN.md : pas de tramage ni de scanline sur la machine. DESIGN.md
 // dit « le pixel est un accent, pas une texture » et l'image du garage est justement la zone où
 // la moto doit être lue, pas décorée. Le grain reste dans le fond.
-export const version = 'd1-d'
+// Sept tours (d1-a → d1-g). Version retenue : d1-f. d1-g a été essayé et REJETÉ — deux
+// durcissements (interdire le liseré sur le flanc des pneus, et une formulation plus longue du
+// « redresse, ne tourne pas ») ont amélioré la routière et fait régresser les deux autres photos :
+// le stand de paddock est revenu sur IMG_9144 et IMG_9245 s'est ouverte en trois quarts avec le
+// réservoir repeint en rouge. Enseignement à garder : sur ce modèle, allonger une consigne
+// existante la DILUE au lieu de la renforcer. Les gains sont venus de contraintes courtes et
+// mesurables (« la roue avant reste du même côté du cadre », « zéro caractère alphabétique »,
+// « le fond est violet, pas bleu marine »), jamais d'insistance.
+export const version = 'd1-f'
 export const modele = 'gemini-3-pro-image'
 export const entreePx = 1280
 
@@ -116,6 +124,10 @@ Ce réflexe produit des mots inventés et détruit l'image.
 - L'image finie ne contient AUCUN caractère alphabétique. Aucune lettre, même minuscule, même
   floue, même partielle, même comme texture. Pas de nom de marque, pas de nom de modèle, pas de
   nom de pneumatique, pas d'acronyme, pas de nom d'équipe.
+- Cela vaut MÊME pour un texte que tu lis parfaitement sur la photo et dont tu es sûr : le nom du
+  modèle sérigraphié sur le flanc, la marque sur le silencieux, la marque sur le pneu. Tu ne le
+  reproduis pas. À sa place : rien, ou une pastille sourde (voir plus bas). Le carénage d'une moto
+  reste parfaitement reconnaissable sans son lettrage, et une lettre autorisée en ouvre dix autres.
 - SEULE EXCEPTION : les CHIFFRES du numéro de course, s'ils sont nets et certains sur la photo.
   Mêmes chiffres, même place, même couleur, même fond de plaque. Rien d'autre n'a le droit d'être
   un caractère.
@@ -150,27 +162,51 @@ aucune ligne de fuite, aucune bouche d'aération, aucun néon-tube au mur, aucun
 posé, aucun bidon. Si une paroi apparaît dans ton image, l'image est ratée. Il n'y a que la
 machine, la nuit derrière elle, une seule ligne d'horizon lumineuse et le sol sous ses roues.
 ${cadre?.pilote_present
-  ? `Attention : un pilote est en selle sur la photo, et la machine est probablement sur l'angle.
-Retire complètement le pilote — corps, casque, gants, bottes, combinaison — et REDRESSE la moto à
-la verticale, d'aplomb, comme à l'arrêt. Tu conserves le même côté et le même angle de vue qu'à la
-photo (section 2). Les parties que le pilote masquait — selle, réservoir, coque arrière, repose-pieds
-— sont dessinées sobres et cohérentes avec le reste de la déco, sans inventer de motif nouveau.`
-  : `La moto est déjà seule sur la photo. Retire toute béquille, tout support de stand, toute cale.`}
+  ? `ATTENTION, CAS DIFFICILE : un pilote est en selle sur la photo, et la machine est sur l'angle.
+
+Retire complètement le pilote — corps, casque, gants, bottes, combinaison — et REDRESSE la moto à la
+verticale, d'aplomb, comme à l'arrêt.
+
+Redresser, c'est annuler UNIQUEMENT l'inclinaison latérale. L'azimut de la caméra ne change pas :
+tu regardes la machine exactement du même côté et sous le même angle horizontal qu'à la photo. Une
+moto photographiée presque de profil sur l'angle redonne une moto presque de profil à l'arrêt, pas
+un trois quarts avant. Tu redresses, tu ne tournes pas.
+
+Les zones que le pilote masquait — réservoir, selle, coque arrière, platines, cadre — sont
+reconstruites par PROLONGEMENT des zones VISIBLES adjacentes, jamais par imagination. Si le haut du
+carénage visible juste devant le réservoir est noir, le réservoir masqué est noir. Si l'entourage de
+la selle est noir, la coque arrière est noire avec les mêmes accents qu'ailleurs sur la machine.
+INTERDIT : remplir une zone masquée avec la couleur la plus vive de la moto « parce que ça fait
+course ». C'est l'erreur qui transforme une machine noire et blanche à accents rouges en machine
+rouge. Une zone reconstruite est sobre, sombre et discrète — jamais un nouveau motif, jamais un
+nouveau sticker, jamais une nouvelle bande.
+
+Retire aussi tout ce qui appartient à la piste : bitume, ligne blanche, herbe, vibreur, flou de
+vitesse. La machine est immobile.`
+  : `La moto est déjà seule sur la photo. Retire tout ce qui la soutient — béquille latérale, stand
+d'atelier avant ou arrière, diable, support à roulettes, cale, palette. Elle pose directement sur
+ses deux pneus, sans rien sous elle ni derrière elle.`}
 
 Tout le décor de la photo disparaît : paddock, camion, remorque, gravier, herbe, arbres, ciel,
 bâtiments, clôture, fleurs, autres véhicules, personnes, casques, sacs, outils. Rien ne reste au
 sol autour de la machine.
 
-Cadrage carré. Vue entière, aucune roue coupée. La moto occupe environ 82 % de la largeur, centrée,
-son axe légèrement au-dessus du milieu de l'image pour laisser respirer le reflet en bas.
+Cadrage carré. Vue entière, aucune roue coupée. La moto est GRANDE dans le cadre : de la roue avant
+à la roue arrière elle occupe 86 à 90 % de la largeur de l'image. Elle est centrée horizontalement —
+la marge à gauche du pneu et la marge à droite du pneu sont égales, il n'y a pas de grand vide d'un
+seul côté. Son axe est légèrement au-dessus du milieu vertical pour laisser respirer le reflet en
+bas. Ne la réduis pas pour « aérer » : le vide en haut du cadre ne doit pas dépasser un quart de la
+hauteur.
 
 ═══ 5. LE STYLE ═══
 
 Illustration au trait et aplats, propre et graphique. Pas de photoréalisme, pas de rendu 3D
 brillant, pas de cartoon, pas de pixel art, pas d'aquarelle, pas de peinture à touches visibles.
 
-- Contour : un liseré sombre fin et net sur la silhouette et les grandes séparations de carénage.
+- Contour : un liseré SOMBRE fin et net sur la silhouette et les grandes séparations de carénage.
   Le trait s'affine et disparaît dans les zones sombres. Pas de contour noir épais et uniforme.
+  Le contour est sombre, jamais lumineux : aucun trait clair ou cyan ne fait le tour de la machine
+  (voir la règle du liseré en section 6, c'est une erreur récurrente).
 - Volumes : ombrage en 3 ou 4 valeurs par matériau, avec des limites franches entre les valeurs.
   Pas de dégradé mou et lisse partout — l'image doit avoir de l'arête, pas du velours.
 - Matières distinctes, c'est ce qui fait la qualité : la peinture du carénage est laquée, avec un
@@ -184,14 +220,16 @@ brillant, pas de cartoon, pas de pixel art, pas d'aquarelle, pas de peinture à 
 
 ═══ 6. LA LUMIÈRE ET LE FOND ═══
 
-- Fond : indigo TRÈS sombre, presque noir. #0A0620 en haut, à peine réchauffé vers #1A0F38 au
+- Fond : violet-nuit TRÈS sombre, presque noir. #0B0522 en haut, à peine réchauffé vers #21103F au
   niveau du sol. C'est un fond de nuit, pas un fond violet clair : sa zone la plus lumineuse reste
   nettement plus sombre que le pneu de la moto. Aucune tache de projecteur, aucun halo diffus
   derrière la machine.
-- LA TEINTE DU FOND, à ne pas rater : c'est un INDIGO VIOLACÉ, jamais un bleu-vert. Dans la couleur
-  du fond, la composante rouge est SUPÉRIEURE à la composante verte. Pas de turquoise, pas de
-  canard, pas de vert-bleu, pas de sarcelle, pas d'anthracite. Seul le filet d'horizon et les
-  liserés de lumière sont cyan ; la masse du fond est violette.
+- LA TEINTE DU FOND, c'est la dernière erreur qui reste : ne fais PAS un bleu marine. Le bleu
+  marine, le bleu nuit, le bleu-canard, le turquoise, la sarcelle et l'anthracite sont INTERDITS
+  pour le fond. Le fond est du VIOLET SOMBRE, côté prune et aubergine : sa composante rouge est
+  franchement supérieure à sa composante verte, et sa composante bleue ne l'écrase pas. Si en
+  regardant ton fond tu penses « bleu », c'est raté ; tu dois penser « violet très sombre ».
+  Seul le filet d'horizon et les liserés de lumière sont cyan.
 - Une seule ligne d'horizon lumineuse, cyan clair (#3DE0FF), horizontale, fine, nette, calme,
   posée à peu près à la hauteur du moteur. Elle est INTERROMPUE par la silhouette de la moto : on
   la voit à gauche et à droite de la machine, jamais devant elle, jamais par-dessus une pièce. Son
@@ -216,7 +254,8 @@ brillant, pas de cartoon, pas de pixel art, pas d'aquarelle, pas de peinture à 
   n'existe que sur les arêtes réellement tournées vers la source d'appoint, il est INTERROMPU, il
   s'épaissit sur une arête vive et s'éteint complètement dans les creux, sous le carénage, entre les
   rayons. Il ne fait jamais le tour d'un pneu, jamais le tour d'un disque, jamais le tour du
-  carénage entier. Un liseré sur deux tiers de la silhouette au maximum.
+  carénage entier. Critère mesurable : aucun trait clair ne suit le périmètre extérieur de la moto
+  sur plus de la MOITIÉ de sa longueur, et le flanc extérieur des pneus n'en porte jamais.
 - RÈGLE DE COULEUR : le néon vit sur les ARÊTES, dans les REFLETS et sur le SOL. Il ne teinte
   jamais les aplats du carénage. Les couleurs propres de la moto restent celles de la photo.
 - CAS DE LA MACHINE NOIRE, à traiter avec soin : un noir reste un noir NEUTRE, graphite, jamais
@@ -235,8 +274,11 @@ Aucun cadre, aucune bordure, aucune vignette forte, aucun logo, aucune personne.
 2. Y a-t-il une seule lettre dans l'image ? Si oui, enlève-la.
 3. Est-ce bien ce modèle-là de moto, avec cette déco-là, ces jantes-là, ces bagages-là ?
 4. Les proportions de couleurs de la déco sont-elles celles de la photo, ou la couleur vive a-t-elle
-   pris la place du noir ?
-5. Le fond est-il un dégradé continu, sans bande claire, plus sombre que la machine ?
+   pris la place du noir ? Le réservoir a-t-il gardé sa couleur ?
+5. Le fond est-il un VIOLET sombre — pas un bleu marine, pas un bleu-vert ? Est-il un dégradé
+   continu, sans bande claire, plus sombre que la machine ?
 6. Le liseré cyan est-il interrompu, ou fait-il le tour de la moto comme un contour de sticker ?
+7. Reste-t-il un stand, une béquille d'atelier ou un bout de décor sous la machine ?
+8. La moto occupe-t-elle vraiment la largeur du cadre, centrée, sans grand vide d'un seul côté ?
 
 Rends uniquement l'image, format carré.`
