@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "essais": "node banc-rendu/essais.mjs",
+    "essais:unite": "node banc-rendu/unite.mjs"
   },
   "dependencies": {
     "@powersync/react": "^2.0.0",

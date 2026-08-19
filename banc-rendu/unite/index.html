@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MyPaddock — essais unitaires</title>
+<body><pre id="sortie">essais en cours…</pre>
+<script type="module">
+  import './essais.ts'
+  const u = window.__unite
+  document.getElementById('sortie').textContent =
+    u.resultats.map(r => (r.ok ? '  ok  ' : '  RATÉ') + '  ' + r.titre + (r.detail ? '\n        ' + r.detail : '')).join('\n')
+    + `\n\n${u.total - u.rates} / ${u.total}`
+</script>
