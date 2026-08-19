@@ -21,6 +21,7 @@ streams:
       - SELECT * FROM session      WHERE pilote_id = auth.user_id()
       - SELECT * FROM tour         WHERE pilote_id = auth.user_id()
       - SELECT * FROM depense      WHERE pilote_id = auth.user_id()
+      - SELECT * FROM budget_saison WHERE pilote_id = auth.user_id()
       - SELECT * FROM intervention WHERE pilote_id = auth.user_id()
 
   # ─── Le référentiel — lu par tous, écrit par personne (AD-12) ───────────

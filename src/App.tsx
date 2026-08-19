@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { PRODUCT_NAME } from './product'
 import { ouvrirBase } from './db/powersync'
 import {
-  ajouterSession, bilanRoulage, creerRoulage, formaterChrono, formaterEcart, listerRoulages,
-  normaliserCircuits,
+  ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
+  formaterEcart, formaterEuros, listerRoulages, normaliserCircuits, poserBudget,
+  type CoutRoulage,
 } from './db/depot'
+import { Depense, enCentimes } from './ecrans/Depense'
 import { surCompte, type Identite } from './db/compte'
 import { creerConnecteur, powersyncConfigure } from './db/connecteur'
 import { estAdopte } from './db/sauvegarde'
@@ -14,7 +16,7 @@ import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 
 type Db = ReturnType<typeof ouvrirBase>
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'compte' | 'sonde'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'compte' | 'sonde'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -31,6 +33,7 @@ export default function App() {
   const [liste, setListe] = useState<Liste>([])
   const [courant, setCourant] = useState<string | null>(null)
   const [bilan, setBilan] = useState<Bilan>(null)
+  const [cout, setCout] = useState<CoutRoulage | null>(null)
   const [identite, setIdentite] = useState<Identite | null>(null)
 
   useEffect(() => {
@@ -63,7 +66,11 @@ export default function App() {
   if (!db) return <div className="ecran"><div className="libelle">chargement…</div></div>
 
   const ouvrirBilan = async (id: string) => {
-    setCourant(id); setBilan(await bilanRoulage(db, id)); setEcran('bilan')
+    setCourant(id)
+    const b = await bilanRoulage(db, id)
+    setBilan(b)
+    setCout(b ? await coutDuRoulage(db, id, anneeSaison(b.date)) : null)
+    setEcran('bilan')
   }
 
   return (
@@ -81,11 +88,28 @@ export default function App() {
         {ecran === 'session' && courant && (
           <Session onValider={async (ms) => {
             await ajouterSession(db, courant, ms)
-            setBilan(await bilanRoulage(db, courant)); await rafraichir(db); setEcran('bilan')
+            await rafraichir(db)
+            // UN SEUL chemin vers le bilan. En avoir deux, c'était en avoir un
+            // qui oubliait le coût — et un bloc absent ne se signale pas.
+            await ouvrirBilan(courant)
           }} onAnnuler={() => void ouvrirBilan(courant)} />
         )}
         {ecran === 'bilan' && bilan && (
-          <BilanEcran b={bilan} onSession={() => setEcran('session')} onAccueil={() => setEcran('accueil')} />
+          <BilanEcran
+            b={bilan} cout={cout}
+            onSession={() => setEcran('session')}
+            onAccueil={() => setEcran('accueil')}
+            onDepense={() => setEcran('depense')}
+            onBudget={async (centimes) => {
+              await poserBudget(db, anneeSaison(bilan.date), centimes)
+              if (courant) setCout(await coutDuRoulage(db, courant, anneeSaison(bilan.date)))
+            }}
+          />
+        )}
+        {ecran === 'depense' && courant && bilan && (
+          <Depense db={db} roulageId={courant} dateRoulage={bilan.date}
+                   onFini={() => void ouvrirBilan(courant)}
+                   onAnnuler={() => void ouvrirBilan(courant)} />
         )}
         {ecran === 'garage' && <Garage db={db} />}
         {ecran === 'compte' && <Compte db={db} identite={identite} />}
@@ -242,7 +266,11 @@ function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; on
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ b, onSession, onAccueil }: { b: NonNullable<Bilan>; onSession: () => void; onAccueil: () => void }) {
+function BilanEcran({ b, cout, onSession, onAccueil, onDepense, onBudget }: {
+  b: NonNullable<Bilan>; cout: CoutRoulage | null
+  onSession: () => void; onAccueil: () => void; onDepense: () => void
+  onBudget: (centimes: number) => Promise<void>
+}) {
   const record = b.ecart != null && b.ecart < 0
   return (
     <>
@@ -277,8 +305,86 @@ function BilanEcran({ b, onSession, onAccueil }: { b: NonNullable<Bilan>; onSess
         </div>
       </div>
 
+      {cout && <BlocCout c={cout} annee={anneeSaison(b.date)} onDepense={onDepense} onBudget={onBudget} />}
+
       <button className="bouton" onClick={onSession}>Saisir une session</button>
       <button className="bouton secondaire" onClick={onAccueil}>Accueil</button>
     </>
+  )
+}
+
+/* ─── LE COÛT — et la clause de sécurité la plus facile à violer ────────────
+   Le coût de la journée est une CONSTATATION. Le coût au tour est un RAPPORT,
+   et un rapport se manipule : il descend quand on roule plus. Seul, il souffle
+   « roule encore ». Adossé au budget consommé, il redevient une mesure.
+
+   FR-21 : le budget consommé est DANS LE MÊME BLOC, sans interaction pour le
+   révéler — pas un dépliant, pas une seconde page.
+   FR-24 : sans budget déclaré, le coût au tour NE S'AFFICHE PAS. Ni zéro, ni
+   tiret : l'absence est une absence. Un champ unique le demande à ce
+   moment-là — au premier coût affiché, jamais à la création du compte. */
+function BlocCout({ c, annee, onDepense, onBudget }: {
+  c: CoutRoulage; annee: number; onDepense: () => void; onBudget: (centimes: number) => Promise<void>
+}) {
+  const [saisie, setSaisie] = useState('')
+  const centimes = enCentimes(saisie)
+
+  if (!c.journeeCentimes) {
+    return (
+      <div className="bloc pile">
+        <div className="libelle">Ce que la journée a coûté</div>
+        <p className="texte">Rien de saisi. Ça se note plus tard, pas maintenant.</p>
+        <button className="bouton secondaire" onClick={onDepense}>Ajouter une dépense</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bloc pile">
+      <div className="rang">
+        <span className="libelle">Ce que la journée a coûté</span>
+        <span className="chiffre hud-40">{formaterEuros(c.journeeCentimes)}</span>
+      </div>
+
+      {c.auTourCentimes != null && c.budgetCentimes != null ? (
+        <>
+          <div className="rang">
+            <span className="libelle">Au tour · {c.tours} tour{c.tours > 1 ? 's' : ''}</span>
+            <span className="chiffre hud-24 miami">{formaterEuros(c.auTourCentimes)}</span>
+          </div>
+          {/* Jamais séparable du chiffre ci-dessus. */}
+          <div className="rang">
+            <span className="libelle">Saison {annee} · consommé</span>
+            <span className="chiffre hud-16">
+              {formaterEuros(c.consommeCentimes)} <span className="faible">sur {formaterEuros(c.budgetCentimes)}</span>
+            </span>
+          </div>
+          <div className="jauge" role="img"
+               aria-label={`${formaterEuros(c.consommeCentimes)} consommés sur ${formaterEuros(c.budgetCentimes)}`}>
+            <span style={{ width: `${Math.min(100, (c.consommeCentimes / c.budgetCentimes) * 100)}%` }} />
+          </div>
+        </>
+      ) : (
+        <div className="pile">
+          <label className="libelle" htmlFor="budget">Budget de la saison {annee}</label>
+          <p className="note">
+            Sans lui, le coût au tour reste caché : un chiffre qui baisse quand on roule plus
+            n'est pas une mesure.
+          </p>
+          <div className="somme">
+            <input id="budget" className="champ chiffre" value={saisie}
+                   onChange={(e) => setSaisie(e.target.value)}
+                   inputMode="decimal" placeholder="0" autoComplete="off" />
+            <span className="unite">€</span>
+          </div>
+          <button className="bouton secondaire" disabled={!centimes}
+                  onClick={() => centimes && void onBudget(centimes)}>
+            Poser le budget
+          </button>
+        </div>
+      )}
+
+      <button className="lien" onClick={onDepense}>Ajouter une dépense</button>
+    </div>
   )
 }

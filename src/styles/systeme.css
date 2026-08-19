@@ -100,7 +100,14 @@ body {
 /* ─── TYPOGRAPHIE — le poids fait le travail ───────────────────────────────
    Chiffres en tabular partout : un chrono qui saute d'une ligne à l'autre est
    une faute, et ça n'a pas changé. */
-.chiffre { font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -.01em; }
+.chiffre {
+  font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -.01em;
+  /* Un montant ne se coupe jamais avant son unité : « 180,50 » sur une ligne et
+     « € » sur la suivante, ce ne sont plus des euros, ce sont deux nombres. */
+  white-space: nowrap;
+}
+/* En contrepartie, c'est le LIBELLÉ qui plie — il en a les moyens. */
+.rang .libelle { min-width: 0; }
 .hud-64 { font-size: 52px; line-height: 1 }
 .hud-40 { font-size: 34px; line-height: 1.05 }
 .hud-24 { font-size: 22px }
@@ -263,7 +270,10 @@ body {
 }
 .garage .texte { color: var(--encre-faible); font-size: 15px; }
 .garage .note { color: var(--encre-tenue); font-size: 13px; }
-.garage .lien {
+/* Global, et pas par écran : la première version vivait deux fois, enfermée
+   dans `.garage` et `.compte`, et le troisième écran qui s'en servait retombait
+   sur le bouton gris du système. */
+.lien {
   background: none; border: 0; color: var(--encre-tenue); font: inherit; font-size: 13px;
   text-decoration: underline; align-self: flex-start; padding: 6px 0; cursor: pointer;
   min-height: var(--cible-min);
@@ -294,11 +304,6 @@ body {
   color: var(--alerte); font-size: 14px; font-weight: 500;
   border-left: 2px solid var(--alerte); padding-left: 10px;
 }
-.compte .lien {
-  background: none; border: 0; color: var(--encre-tenue); font: inherit; font-size: 13px;
-  text-decoration: underline; align-self: flex-start; padding: 6px 0; cursor: pointer;
-  min-height: var(--cible-min);
-}
 .compte .repris { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; }
 .compte .repris .detail { font-size: 15px; color: var(--encre-faible); }
 .compte .repris .detail b {
@@ -309,3 +314,28 @@ body {
    lit comme une deuxième obligation, alors qu'il n'est qu'une commodité. */
 .compte .repris .champ { margin-top: 6px; }
 .compte .repris .bouton { margin-top: 8px; }
+
+/* ─── LE COÛT ──────────────────────────────────────────────────────────────
+   Un montant se saisit avec son unité collée, pas dans un champ nu suivi d'un
+   mot : au paddock, gants aux mains, on doit voir ce qu'on tape. */
+.somme { display: flex; align-items: stretch; gap: 0; }
+.somme .champ { flex: 1; font-size: 28px; text-align: right; padding-right: 10px; }
+.somme .unite {
+  display: flex; align-items: center; padding: 0 16px; font-size: 22px; font-weight: 600;
+  color: var(--encre-faible); background: rgba(8,12,28,.6);
+  border: 1px solid var(--filet); border-left: 0;
+}
+
+/* La jauge de budget est une TRACE, pas une alarme : elle ne change pas de
+   couleur en approchant du plafond. Dépasser son budget n'est pas une faute,
+   et le produit n'a rien à en dire. */
+.jauge { height: 3px; background: rgba(8,12,28,.8); border: 1px solid var(--filet); }
+.jauge span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--miami), var(--magenta));
+}
+
+.depense { display: flex; flex-direction: column; gap: 14px; }
+.depense .texte { color: var(--encre-faible); font-size: 15px; }
+.depense .note { color: var(--encre-tenue); font-size: 13px; }
+.depense label.libelle { display: block; }

@@ -91,6 +91,14 @@ const depense = new Table({
   libelle: column.text,
 })
 
+// Ce que le pilote S'ÉTAIT FIXÉ — la seule grandeur du coût qui ne se dérive pas.
+// Tant qu'elle est absente, le coût au tour reste caché (FR-24) : un rapport qui
+// descend quand on roule plus est une invitation, pas une mesure.
+const budget_saison = new Table({
+  annee: column.integer,
+  montant_centimes: column.integer,
+})
+
 const intervention = new Table({
   machine_id: column.text,
   categorie: column.text,
@@ -137,6 +145,7 @@ export const AppSchema = new Schema({
   session,
   tour,
   depense,
+  budget_saison,
   intervention,
   circuit,
   organisateur,

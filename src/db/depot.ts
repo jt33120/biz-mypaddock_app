@@ -160,8 +160,15 @@ export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => 
 export type Cible = 'roulage' | 'machine' | 'saison'
 
 /** AD-18 : `saison_annee` est un entier fixé À LA SAISIE et jamais recalculé.
- *  AD-8 : aucune branche ne teste un mois de l'année. On prend l'année de la
- *  date de la dépense, point — ce qui reste vrai pour qui roule en janvier. */
+ *
+ *  Le récit 5.1 demande deux choses qui SEMBLENT en demander trois : « la saison
+ *  en cours si elle existe, sinon la saison à venir », et « aucune expression
+ *  conditionnelle ne compare un mois de l'année ». Les deux clauses se replient
+ *  sur UNE SEULE expression — l'année de la date de la dépense. Si un roulage a
+ *  déjà eu lieu cette année-là, la dépense rejoint une saison en cours ; sinon
+ *  elle rejoint une saison qui n'a pas encore commencé. Même calcul, deux
+ *  lectures. C'est PARCE QUE la règle se replie ainsi qu'aucun mois n'est testé,
+ *  et c'est ce qui la rend vraie pour qui roule en janvier (AD-8). */
 export const anneeSaison = (dateIso: string) => Number(dateIso.slice(0, 4))
 
 export const creerDepense = async (
@@ -177,16 +184,48 @@ export const creerDepense = async (
   return id
 }
 
-export const formaterEuros = (centimes: number) =>
-  (centimes / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' €'
+/** Un montant rond s'écrit sans décimales, un montant à centimes en porte DEUX.
+ *  « 180,5 € » n'est pas une somme d'argent, c'est un nombre — et sur une colonne
+ *  de dépenses ça saute aux yeux. */
+export const formaterEuros = (centimes: number) => {
+  const d = centimes % 100 === 0 ? 0 : 2
+  return (centimes / 100).toLocaleString('fr-FR',
+    { minimumFractionDigits: d, maximumFractionDigits: d }) + ' €'
+}
 
-/** Le budget de saison consommé — toutes cibles confondues, c'est le budget
- *  DU PILOTE. AD-17 : le coût d'une machine serait une autre requête, celle
+/** Ce qui a été DÉPENSÉ sur une saison — toutes cibles confondues, c'est le
+ *  budget DU PILOTE. AD-17 : le coût d'une machine est une autre requête, celle
  *  des seules dépenses qui la désignent. Ne pas confondre les deux. */
-export const budgetSaison = async (db: PowerSyncDatabase, annee: number) => {
+export const depenseSaison = async (db: PowerSyncDatabase, annee: number) => {
   const r = await db.getAll<{ total: number | null }>(
     `SELECT sum(montant_centimes) AS total FROM depense WHERE saison_annee = ?`, [annee])
   return r[0]?.total ?? 0
+}
+
+/** Ce que le pilote S'ÉTAIT FIXÉ. `null` est un état parfaitement normal, et
+ *  c'est LUI qui gouverne l'affichage du coût au tour (FR-24). */
+export const budgetDeclare = async (db: PowerSyncDatabase, annee: number) => {
+  const r = await db.get<{ montant_centimes: number | null }>(
+    `SELECT max(montant_centimes) AS montant_centimes FROM budget_saison WHERE annee = ?`, [annee])
+  return r.montant_centimes ?? null
+}
+
+/** Poser ou corriger le budget d'une saison. On réutilise la ligne existante
+ *  plutôt que d'en créer une seconde : deux budgets pour une même saison n'ont
+ *  aucun sens, et le serveur le refuserait. */
+export const poserBudget = async (db: PowerSyncDatabase, annee: number, centimes: number) => {
+  const exist = await db.getAll<{ id: string }>(
+    `SELECT id FROM budget_saison WHERE annee = ? LIMIT 1`, [annee])
+  if (exist[0]) {
+    await db.execute(`UPDATE budget_saison SET montant_centimes = ? WHERE id = ?`,
+      [centimes, exist[0].id])
+    return exist[0].id
+  }
+  const id = nouvelId()
+  await db.execute(
+    `INSERT INTO budget_saison (id, annee, montant_centimes) VALUES (?, ?, ?)`,
+    [id, annee, centimes])
+  return id
 }
 
 export const coutRoulage = async (db: PowerSyncDatabase, roulageId: string) => {
@@ -216,4 +255,46 @@ export const normaliserCircuits = async (db: PowerSyncDatabase): Promise<number>
     `UPDATE roulage SET circuit_nom = circuit_id, circuit_id = NULL
       WHERE circuit_nom IS NULL AND circuit_id IS NOT NULL`)
   return avant.n
+}
+
+/* ─── LES DEUX COÛTS, ET LA CLAUSE QUI LES SÉPARE ──────────────────────────
+   Le coût de la journée est une CONSTATATION : on a payé ça. Le coût au tour
+   est un RAPPORT, et un rapport se manipule — il descend quand on roule plus.
+   Affiché seul, il souffle « roule encore, ça baissera » ; c'est exactement le
+   mécanisme que les clauses de sécurité du produit interdisent.
+
+   D'où FR-21 et FR-24, tenus ICI plutôt que dans un écran, pour qu'aucun futur
+   écran ne puisse les enfreindre par commodité : le coût au tour n'existe QUE
+   s'il vient avec le budget consommé. Pas de budget, pas de coût au tour — et
+   ni zéro ni tiret, l'absence est une absence. */
+
+export type CoutRoulage = {
+  /** La constatation. Toujours disponible, même à zéro. */
+  journeeCentimes: number
+  tours: number
+  /** Le rapport. `null` tant qu'aucun budget n'est déclaré — et alors il ne
+   *  s'affiche pas du tout, il ne s'affiche pas « vide ». */
+  auTourCentimes: number | null
+  /** Ce qui doit accompagner le rapport DANS LE MÊME BLOC (FR-21). */
+  budgetCentimes: number | null
+  consommeCentimes: number
+}
+
+export const coutDuRoulage = async (
+  db: PowerSyncDatabase, roulageId: string, annee: number,
+): Promise<CoutRoulage> => {
+  const journeeCentimes = await coutRoulage(db, roulageId)
+  const t = await db.get<{ n: number }>(
+    `SELECT count(*) AS n FROM tour t
+       JOIN session s ON s.id = t.session_id
+      WHERE s.roulage_id = ?`, [roulageId])
+  const budgetCentimes = await budgetDeclare(db, annee)
+  const consommeCentimes = await depenseSaison(db, annee)
+
+  // La condition porte sur le BUDGET, pas sur le calcul : le rapport est
+  // calculable sans lui, et c'est précisément pour ça qu'il faut le retenir.
+  const auTourCentimes =
+    budgetCentimes != null && t.n > 0 ? Math.round(journeeCentimes / t.n) : null
+
+  return { journeeCentimes, tours: t.n, auTourCentimes, budgetCentimes, consommeCentimes }
 }
