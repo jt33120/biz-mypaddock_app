@@ -135,9 +135,19 @@ explicitement à Julian plutôt que de la contourner en silence.
   exclue** — elle n'a pas encore les points pour dire quoi que ce soit.
 - Le reste arrive pendant la saison 2027, à mesure que chaque domaine devient utile. L'ordre de
   livraison n'est pas un arbitrage de priorités, c'est une conséquence de dates.
-- **Le développement doit être fini avant que la saison commence** (mars 2027). Les soirées qui
-  servent à construire sont exactement celles qui serviront à remplir : un chantier qui déborde sur
-  avril ne retarde pas une livraison, il mange la saisie, et la saisie conditionne tout le reste.
+- **Le développement doit être fini avant que la saison commence** (mars 2027) — **et le motif a
+  changé le 19 août 2026.** Ce n'est plus « les soirées de construction sont celles de la saisie » :
+  ce chiffrage est retiré, il comptait des soirées de développement de Julian, qui n'écrit pas le
+  code. Le motif qui reste est plus solide : **un produit qu'on découvre au paddock n'est pas un
+  produit qu'on a testé**, et il n'y a qu'une saison par an. Un chantier qui déborde sur avril rate
+  une saison entière de données.
+- **Ne jamais chiffrer le plan en soirées de développement.** Aucun skill n'estime l'effort de
+  Julian en soirées, ne construit de marge sur ce total, et n'en déduit une coupe fonctionnelle.
+  **La rareté réelle est son attention** — décision, jugement esthétique, essai sur son téléphone,
+  réponse que le code ne peut pas produire. Un récit se qualifie donc par *demande Julian* ou non,
+  jamais par une durée. *Motif : une estimation fausse ne se contente pas d'être imprécise, elle
+  fabrique des décisions — celle-là avait produit une coupe dont le seul but était de financer une
+  rareté imaginaire.*
 
 ## 5. Les deux instruments de bord — à prévoir dès la v1
 
@@ -294,7 +304,7 @@ abonnement ; celle-ci n'est plus disqualifiée d'office. Les trois formes resten
 aucune n'est tranchée : abonnement, **pass saison** (natif au modèle, dont l'unité de compte est
 déjà la saison) et **achat définitif du palier** (le seul qui ne crée aucun coût échoué, donc
 aucune incitation à rouler pour amortir). **Candidat, pas décision** — et il ne coûte
-aucune soirée au noyau, ce qui est la raison pour laquelle il peut rester ouvert. Aucun skill de
+rien au noyau, ce qui est la raison pour laquelle il peut rester ouvert. Aucun skill de
 construction n'implémente de paiement, de péage ou de palier payant sans décision explicite de
 Julian.
 
