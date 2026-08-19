@@ -4,8 +4,9 @@ Le récit 1.2 est en place côté application : compte, session qui tient hors l
 adoption de ce qui a été saisi avant, connecteur PowerSync écrit et câblé.
 Ce qui suit se clique dans des consoles, et personne d'autre que toi ne peut le faire.
 
-**Le 2 suffit pour créer ton compte depuis le téléphone.** Le 3 n'est nécessaire
-que pour la synchronisation continue — la sauvegarde par geste marche sans lui.
+**Pour créer ton compte sur ton téléphone : rien à faire, c'est déjà en place.**
+Seul le 3 attend encore un geste, et il ne concerne que la synchronisation
+continue — la sauvegarde par geste marche sans lui.
 
 ---
 
@@ -19,70 +20,58 @@ formulaire sur ton téléphone, pas le message « Sauvegarde non configurée ».
 Rappel pour plus tard : ces variables sont figées **au build**, pas lues à
 l'exécution. En changer une exige un redéploiement.
 
-## 2 · Supabase — la confirmation d'adresse
+## 2 · Supabase — rien à faire non plus ✅
 
-Authentication → URL Configuration :
+Tu peux créer ton compte **maintenant**, sans toucher à aucune console.
 
-- **Site URL** → `https://mypaddock.vercel.app`
-- **Redirect URLs** → la même
+Le déroulé : *Créer mon compte* → un e-mail arrive → tu cliques le lien → il ouvre
+Safari sur une page qui peut sembler vide ou cassée, **aucune importance, la
+confirmation a eu lieu au clic** → tu reviens dans l'application → *J'ai confirmé
+— me connecter*. L'écran le dit mot pour mot, il n'y a rien à retenir.
 
-Authentication → Emails → *Confirm signup* : **ajouter `{{ .Token }}` au gabarit.**
+**Un seul piège, et il n'a rien d'évident.** Le fournisseur d'e-mail par défaut de
+Supabase n'écrit qu'aux adresses rattachées au projet. Inscris-toi avec **l'adresse
+de ton compte Supabase** : avec une autre, rien n'arrivera, et ça ressemblera à une
+panne alors que c'est une règle d'expédition.
 
-C'est le point non évident, et il est structurel. Un lien de confirmation s'ouvre
-dans Safari, **pas** dans l'application posée sur l'écran d'accueil : les deux ne
-partagent pas leur stockage. Le lien authentifierait donc le navigateur et
-laisserait l'application dehors. Un code à six chiffres saisi dans l'application
-ouvre la session **là où elle sert**. L'écran est déjà prêt à le recevoir.
+### Deux améliorations facultatives, quand tu voudras
 
-Repli si tu ne touches pas au gabarit : confirmer par le lien dans Safari, puis
-revenir dans l'application et se connecter par mot de passe. Ça marche, c'est
-juste un aller-retour de plus.
+- Authentication → Emails → *Confirm signup* : ajouter `{{ .Token }}` au gabarit.
+  L'e-mail portera alors un code à six chiffres, et l'application a déjà le champ
+  pour le recevoir — la session s'ouvre **sans quitter l'application**, ce qui est
+  plus propre qu'un aller-retour par Safari. Purement du confort.
+- **Avant toute campagne Meta**, deux choses deviennent obligatoires, et elles
+  rejoignent QO-11 : un **SMTP personnalisé** (sinon aucun inconnu ne recevra quoi
+  que ce soit, voir le piège ci-dessus), et un **quota de génération par compte
+  côté serveur** — le sprite coûte environ 0,16 € l'unité, mille curieux à trois
+  essais font 480 € sans un euro de recette.
 
-**Avant toute campagne Meta**, deux choses s'ajoutent ici, et elles rejoignent
-QO-11 :
-- un **SMTP personnalisé** — le fournisseur par défaut de Supabase n'écrit qu'aux
-  membres du projet et plafonne à quelques messages par heure. Avec des inconnus,
-  personne ne recevra rien.
-- un **quota de génération par compte, côté serveur** — le sprite coûte environ
-  0,16 € l'unité ; mille curieux à trois essais font 480 € sans un euro de recette.
+## 3 · PowerSync — branché ✅
 
-## 3 · PowerSync — il manque un projet, pas un jeton
+Fait le 19 août, de bout en bout, avec ton jeton.
 
-Le jeton du `.env` est bon : il s'authentifie et voit ton organisation `jt33120`.
-Il n'y a simplement **rien à l'intérieur** — zéro projet, zéro instance. Un jeton
-sert à fabriquer une instance, il n'en est pas une.
+- Instance **`mypaddock`** déployée dans le projet `MyPaddock_app`, région Paris.
+  Elle répond : `{"ready":true,"started":true}`.
+- `VITE_POWERSYNC_URL` posée dans `.env.local` **et** dans les trois
+  environnements Vercel. La synchronisation continue est donc active en
+  production dès le prochain déploiement.
+- Rôle Postgres dédié **`powersync_role`** : `REPLICATION` + `BYPASSRLS` pour
+  répliquer, et les droits d'écriture explicitement retirés. AD-12 vaut aussi
+  pour lui. Son mot de passe est dans `.env.local`, jamais dans le dépôt.
+- Publication `powersync` sur exactement les 9 tables des flux. Le barème
+  constructeur en est absent : il n'est pas synchronisé, son WAL ne servirait à
+  rien.
 
-Et le CLI (`npx powersync`) sait tout faire **sauf** créer un projet : il crée des
-instances *dans* un projet existant. C'est donc le seul clic que je ne peux pas
-donner à ta place.
+**Un point tranché par la validation, et il vaut la peine d'être retenu :** le bac
+à sable de Supabase (Supavisor) **ne supporte pas la réplication logique** — un
+multiplexeur de sessions ne peut pas porter un flux de réplication. La connexion
+est donc directe sur `db.<ref>.supabase.co`, qui ne publie plus qu'une adresse
+IPv6. Ça fonctionne : PowerSync en sort.
 
-**Ce qu'il te reste à faire, une fois :** sur `dashboard.powersync.com`, créer un
-projet dans l'organisation `jt33120`, et me donner son identifiant. Deux minutes.
-
-**Ce qui est déjà prêt**, dans `powersync/` :
-
-- `sync-config.yaml` — ce que chaque pilote reçoit. Six requêtes à plat sur sa
-  saison, plus le référentiel. Le barème constructeur en est volontairement
-  absent : un flux global le ferait descendre en entier chez quelqu'un qui
-  possède une moto. Il lui faudra un flux paramétré par le garage, au mouvement 3.
-- `service.yaml` — région Paris, et l'authentification par le **JWKS public** de
-  Supabase plutôt que par un secret partagé. Vérifié : ton projet signe en ES256,
-  donc aucun secret n'a besoin d'exister des deux côtés.
-
-**Ce que je ferai ensuite**, dès que j'ai l'identifiant du projet :
-`powersync link cloud --create` puis `powersync deploy`, et `VITE_POWERSYNC_URL`
-se remplit. La synchronisation s'allume alors après ta première sauvegarde.
-
-**Deux valeurs manqueront encore, et une seule vient de toi.**
-
-- Le **rôle de réplication** : je le crée moi-même sur Postgres, avec son propre
-  mot de passe, pour que tu n'aies jamais à me confier celui de `postgres`. Il lit
-  tout et n'écrit rien — AD-12 vaut aussi pour lui.
-- L'**hôte de connexion** : vérifié le 19 août, `db.<ref>.supabase.co` ne publie
-  plus d'adresse IPv4, seulement une IPv6. Si le service PowerSync sort en IPv4,
-  il faut passer par le bac à sable (Supavisor, mode session). C'est ce que
-  `service.yaml` vise par défaut ; le préfixe exact (`aws-0-` ou `aws-1-`) est
-  celui affiché dans Supabase → Project Settings → Database.
+Rappel du garde-fou côté application : la synchronisation continue ne s'allume
+qu'**après ta première sauvegarde** depuis l'écran Compte. Le journal des
+changements écrit avant le compte ne décrit le passé de personne, et le rejouer
+échouerait — l'adoption pose l'état, puis le suivi prend le relais.
 
 ---
 

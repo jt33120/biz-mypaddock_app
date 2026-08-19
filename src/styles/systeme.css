@@ -305,3 +305,7 @@ body {
   color: var(--miami); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .compte .repris .sep { color: var(--encre-tenue); }
+/* Le chemin secondaire de confirmation est GROUPÉ dans son cadre : sans ça il se
+   lit comme une deuxième obligation, alors qu'il n'est qu'une commodité. */
+.compte .repris .champ { margin-top: 6px; }
+.compte .repris .bouton { margin-top: 8px; }

@@ -69,25 +69,37 @@ function Anonyme({ db }: { db: PowerSyncDatabase }) {
     return (
       <section className="compte">
         <p className="libelle">compte</p>
-        <h1 className="titre neon">Confirme ton adresse</h1>
+        <h1 className="titre neon">Le compte est créé</h1>
         <p className="texte">
-          Un message part vers <b>{email}</b>. S'il porte un code à six chiffres, saisis-le ici —
-          la session s'ouvre alors <b>dans l'application</b>. S'il ne porte qu'un lien, ouvre-le,
-          puis reviens te connecter avec ton mot de passe.
+          Un message part vers <b>{email}</b>. Ouvre-le et clique le lien.
+        </p>
+        <p className="texte">
+          Il t'emmènera dans <b>Safari</b>, sur une page qui peut sembler vide ou cassée —
+          aucune importance : la confirmation a eu lieu au moment du clic. Reviens ici,
+          et connecte-toi.
         </p>
 
-        <input className="champ" value={code} onChange={(e) => setCode(e.target.value)}
-               inputMode="numeric" autoComplete="one-time-code" placeholder="123456" />
         {erreur && <p className="mot-erreur">{erreur}</p>}
 
-        <button className="bouton" disabled={occupe || code.trim().length < 6}
-                onClick={() => void lancer(() => confirmerParCode(email, code))}>
-          Valider le code
-        </button>
-        <button className="bouton secondaire" disabled={occupe}
+        <button className="bouton" disabled={occupe}
                 onClick={() => void lancer(() => seConnecter(email, mdp))}>
-          J'ai confirmé — me connecter
+          {occupe ? 'un instant…' : "J'ai confirmé — me connecter"}
         </button>
+
+        {/* Chemin secondaire, et il ne marche que si le gabarit d'e-mail porte
+            `{{ .Token }}`. Il est meilleur quand il est disponible — un code
+            saisi ici ouvre la session SANS quitter l'application — mais le
+            gabarit par défaut de Supabase n'envoie qu'un lien. */}
+        <div className="plat repris">
+          <p className="libelle">Si l'e-mail contient un code à six chiffres</p>
+          <input className="champ" value={code} onChange={(e) => setCode(e.target.value)}
+                 inputMode="numeric" autoComplete="one-time-code" placeholder="123456" />
+          <button className="bouton secondaire" disabled={occupe || code.trim().length < 6}
+                  onClick={() => void lancer(() => confirmerParCode(email, code))}>
+            Valider le code
+          </button>
+        </div>
+
         <button className="lien" onClick={() => { setEtape('formulaire'); setErreur(null) }}>
           Changer d'adresse
         </button>

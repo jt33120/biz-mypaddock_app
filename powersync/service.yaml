@@ -12,26 +12,24 @@ replication:
     - type: postgresql
       name: supabase-mypaddock
 
-      # ⚠ DEUX CHOSES À TRANCHER AU PREMIER DÉPLOIEMENT, et les deux se vérifient
-      # en une minute plutôt qu'en une soirée :
+      # L'HÔTE EST LA CONNEXION DIRECTE, et ce n'est pas un choix : le bac à sable
+      # (Supavisor) a été essayé et refusé par la validation du 19 août —
+      # « Supavisor does not support logical replication. Connect directly to the
+      # postgres instance. » La réplication logique ne passe pas par un
+      # multiplexeur de sessions, donc il n'y a rien à arbitrer.
       #
-      # 1. L'HÔTE. La connexion directe `db.<ref>.supabase.co` ne publie PLUS
-      #    d'adresse IPv4 — vérifié le 19 août : uniquement un AAAA. Si le service
-      #    PowerSync sort en IPv4, elle est injoignable, et c'est le bac à sable
-      #    (Supavisor, mode session, port 5432) qu'il faut viser. D'où ce choix
-      #    par défaut. Le préfixe exact (`aws-0-` ou `aws-1-`) est celui affiché
-      #    dans Supabase → Project Settings → Database.
-      # 2. L'UTILISATEUR. En passant par le bac à sable, il porte le suffixe du
-      #    projet : `<role>.<ref>`. En direct, il s'écrit sans suffixe.
-      hostname: aws-1-eu-west-3.pooler.supabase.com
+      # Conséquence à connaître : cet hôte ne publie plus d'adresse IPv4, seulement
+      # une IPv6. C'est le service PowerSync qui doit savoir en sortir.
+      hostname: db.oghmwkiklwaptjfouprx.supabase.co
       port: 5432
       database: postgres
 
       # Un rôle DÉDIÉ, jamais `postgres`. Il a besoin de REPLICATION et de
       # BYPASSRLS — il lit pour tout le monde, donc RLS le gênerait — mais il
-      # n'écrit rien. AD-12 vaut aussi pour lui : ce n'est pas parce qu'un rôle
-      # est technique qu'il a le droit de toucher la saison de quelqu'un.
-      username: powersync_role.oghmwkiklwaptjfouprx
+      # n'écrit rien : les droits d'écriture lui sont explicitement retirés.
+      # AD-12 vaut aussi pour lui : ce n'est pas parce qu'un rôle est technique
+      # qu'il a le droit de toucher la saison de quelqu'un.
+      username: powersync_role
       password:
         secret: !env POWERSYNC_DATABASE_PASSWORD
 

@@ -4,3 +4,6 @@
 # This file is managed by the PowerSync CLI.
 # Run \`powersync link --help\` for more information.
 type: cloud
+instance_id: 6a85968f02481fb31b8f5880
+org_id: 6a84a2c90fc40700078f2ce0
+project_id: 6a85968e7b7bfa0007760ce7
