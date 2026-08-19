@@ -12,7 +12,8 @@ import { photoMachine, verserPhotoMachine } from '../db/photos'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import { Atelier } from './Atelier'
-import { Usure } from './Usure'
+import { Poste } from './Poste'
+import type { Categorie } from '../db/atelier'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
 
 /**
@@ -36,6 +37,8 @@ export function Garage({ db, onEcrit }: {
   const [actif, setActif] = useState(0)
   const [bilan, setBilan] = useState<BilanMachine | null>(null)
   const [corriger, setCorriger] = useState(false)
+  /** Le poste d'atelier ouvert EN PAGE. Non nul = le garage cède l'écran. */
+  const [poste, setPoste] = useState<Categorie | null>(null)
   // Le portrait de jeu — récit 3bis.3. Le CANDIDAT n'est rien tant qu'il n'est
   // pas gardé : c'est ce qui rend « le pixel est une présentation, jamais un
   // remplacement destructif » vrai dans le code et pas seulement dans le texte.
@@ -175,6 +178,17 @@ export function Garage({ db, onEcrit }: {
                 machineId={null} onEcrit={onEcrit} />
         <Equipement db={db} onEcrit={onEcrit} />
       </section>
+    )
+  }
+
+  // LA PAGE D'UN POSTE PREND TOUT L'ÉCRAN. Elle ne se superpose pas au garage :
+  // un poste d'atelier est un lieu, pas un tiroir, et c'est ce que demandait
+  // « une page à part entière ».
+  if (poste) {
+    return (
+      <Poste db={db} machine={machine} categorie={poste}
+             onFermer={() => setPoste(null)}
+             onEcrit={() => { void charger(); onEcrit() }} />
     )
   }
 
@@ -327,20 +341,15 @@ export function Garage({ db, onEcrit }: {
       {souci && <p className="mot-erreur">{souci}</p>}
 
       {/* L'ATELIER — épique 8. Il vit DANS le garage parce que c'est la machine
-          qui a un carnet, pas la journée. Trois listes séparées, jamais une. */}
-      {/* ⚠ `onEcrit` doit rafraîchir LE GARAGE AUSSI, pas seulement l'application.
-          Sans `charger()`, l'atelier écrivait un montant que la ligne « ce
-          qu'elle a coûté » ignorait jusqu'au prochain changement de machine.
-          Même défaut qu'au récit précédent, un cran plus bas : un écran qui ne
-          se rafraîchit pas ne se signale jamais. */}
-      <Atelier db={db} machineId={machine.id}
-               onEcrit={() => { void charger(); onEcrit() }} />
+          qui a un carnet, pas la journée. Trois sommaires séparés, jamais un.
+          Chacun ouvre sa page : un accordéon ne tient pas un carnet avec ses
+          factures, ses horloges et son manuel.
 
-      {/* L'USURE — épique 12. Elle vit sous l'atelier parce qu'elle en est la
-          conséquence : une horloge repart d'un geste consigné, pas d'un bouton
-          « remettre à zéro ». */}
-      <Usure db={db} machineId={machine.id}
-             onEcrit={() => { void charger(); onEcrit() }} />
+          L'USURE a suivi l'entretien dans sa page — « la prochaine maintenance,
+          son calendrier de maintenance éditable », c'est exactement ce que sont
+          les horloges, sous un autre nom, et elles sont désormais à côté des
+          gestes qui les font repartir plutôt qu'un écran plus bas. */}
+      <Atelier db={db} machineId={machine.id} onOuvrir={setPoste} />
 
       {/* ─── LE BUDGET — demandé par Julian comme quatrième module ───────────
           Il vient APRÈS l'atelier et pas avant, parce que la plupart de ses

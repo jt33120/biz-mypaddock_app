@@ -184,14 +184,20 @@ const mesure = new Table({
 // file d'envoi, et une saison de paddock la ferait exploser.
 const photo = new Table({
   roulage_id: column.text,
-  // Une photo appartient à un roulage OU à une machine. La photo d'une
-  // réparation non vitale n'a pas de journée : elle a une moto.
+  // Une photo appartient à un roulage, à une machine OU à une intervention. La
+  // photo d'une bricole n'a pas de journée : elle a une moto. La facture des
+  // plaquettes, elle, a un geste — c'est ce qui en fait une preuve.
   machine_id: column.text,
+  intervention_id: column.text,
   geste_id: column.text,
   chemin_objet: column.text,
   largeur: column.integer,
   hauteur: column.integer,
   etat: column.text,
+  /** 'photo' | 'facture'. La photo montre un état, la facture prouve une
+   *  dépense — les compter ensemble annoncerait « 3 preuves » là où il y a
+   *  trois clichés du même disque et aucun justificatif. */
+  genre: column.text,
 })
 
 // Le GESTE — purement déclaratif. Aucune reconnaissance d'image, jamais (FR-28).

@@ -27,6 +27,18 @@ await page.waitForSelector('.garage .modele', { timeout: 20_000 })
 await page.click('text=Reprendre la saison 2026 · Pau-Arnos')
 await page.waitForTimeout(1500)
 
+// LES HORLOGES ONT SUIVI L'ENTRETIEN DANS SA PAGE. « La prochaine maintenance,
+// son calendrier de maintenance éditable » — c'est exactement ce qu'elles sont,
+// sous un autre nom, et elles sont désormais à côté des gestes qui les font
+// repartir plutôt qu'un écran plus bas.
+const pageEntretien = async () => {
+  if (await page.isVisible('.poste-page.entretien')) return
+  if (await page.isVisible('.poste-page')) await page.click('.poste-page .lien:has-text("garage")')
+  await page.click('button.atelier:has-text("Entretien")')
+  await page.waitForSelector('.poste-page.entretien', { timeout: 20_000 })
+}
+await pageEntretien()
+
 // ── Une horloge SANS barème connu : elle compte sans jamais échoir.
 await page.click('text=Suivre un poste d\'usure')
 await page.fill('.champ[placeholder="Plaquettes avant"]', 'Plaquettes avant')

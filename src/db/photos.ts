@@ -117,17 +117,24 @@ export const effacerLocale = async (nom: string) => {
 
 /* ─── LE MODÈLE ────────────────────────────────────────────────────────────── */
 
+/** La photo MONTRE un état, la facture PROUVE une dépense. Julian les a nommées
+ *  séparément et elles ne servent pas à la même chose — les confondre ferait
+ *  annoncer « 3 preuves » là où il y a trois clichés du même disque. */
+export type Genre = 'photo' | 'facture'
+
 export type Photo = {
   id: string
-  /** L'un des deux est renseigné, jamais aucun : une photo appartient à une
-   *  journée ou à une moto. La contrainte est tenue côté serveur. */
+  /** L'un des trois est renseigné, jamais aucun : une photo appartient à une
+   *  journée, à une moto, ou à un geste d'atelier. Tenu côté serveur. */
   roulage_id: string | null
   machine_id: string | null
+  intervention_id: string | null
   geste_id: string | null
   chemin_objet: string
   largeur: number | null
   hauteur: number | null
   etat: 'locale' | 'montee'
+  genre: Genre
 }
 
 /** Le nom du fichier local se dérive de l'identifiant, donc il est connu avant
@@ -139,31 +146,45 @@ export const nomLocal = (p: Pick<Photo, 'id' | 'chemin_objet'>) =>
  *  ⚠ Le type est un OBJET et non deux chaînes positionnelles, précisément parce
  *  qu'un identifiant de machine était passé là où un identifiant de roulage
  *  était attendu — deux `string` se confondent, deux clés nommées non. */
-export type Porteur = { roulageId: string; machineId?: null } | { machineId: string; roulageId?: null }
+export type Porteur =
+  | { roulageId: string; machineId?: null; interventionId?: null }
+  | { machineId: string; roulageId?: null; interventionId?: null }
+  | { interventionId: string; roulageId?: null; machineId?: null }
 
 export const verserPhoto = async (
-  db: PowerSyncDatabase, porteur: Porteur, fichier: Blob,
+  db: PowerSyncDatabase, porteur: Porteur, fichier: Blob, genre: Genre = 'photo',
 ): Promise<Photo> => {
   const roulageId = porteur.roulageId ?? null
   const machineId = porteur.machineId ?? null
+  const interventionId = porteur.interventionId ?? null
   const r = await reduire(fichier)
   const id = nouvelId()
   // Le chemin porte le pilote en PREMIER SEGMENT : c'est ce que la politique du
   // bucket compare à auth.uid(). Il est posé à `local` tant qu'aucun compte
   // n'existe, et réécrit au moment du téléversement — comme le propriétaire
   // d'une ligne, qui est une conséquence du compte et non une donnée locale.
-  const chemin = `local/${roulageId ?? machineId}/${id}.${r.extension}`
+  const chemin = `local/${roulageId ?? machineId ?? interventionId}/${id}.${r.extension}`
   await ecrireLocale(`${id}.${r.extension}`, r.blob)
   await db.execute(
-    `INSERT INTO photo (id, roulage_id, machine_id, chemin_objet, largeur, hauteur, etat)
-     VALUES (?, ?, ?, ?, ?, ?, 'locale')`,
-    [id, roulageId, machineId, chemin, r.largeur, r.hauteur])
+    `INSERT INTO photo
+       (id, roulage_id, machine_id, intervention_id, chemin_objet, largeur, hauteur, etat, genre)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'locale', ?)`,
+    [id, roulageId, machineId, interventionId, chemin, r.largeur, r.hauteur, genre])
   await marquerSaisie(db)
   return {
-    id, roulage_id: roulageId, machine_id: machineId, geste_id: null,
-    chemin_objet: chemin, largeur: r.largeur, hauteur: r.hauteur, etat: 'locale',
+    id, roulage_id: roulageId, machine_id: machineId, intervention_id: interventionId,
+    geste_id: null, chemin_objet: chemin, largeur: r.largeur, hauteur: r.hauteur,
+    etat: 'locale', genre,
   }
 }
+
+/** Les pièces d'un geste d'atelier — photos et factures, dans l'ordre d'écriture
+ *  (donc chronologique, l'UUID v7 portant l'instant, AD-14). */
+export const piecesDeLIntervention = (db: PowerSyncDatabase, interventionId: string) =>
+  db.getAll<Photo>(
+    `SELECT id, roulage_id, machine_id, intervention_id, geste_id, chemin_objet,
+            largeur, hauteur, etat, genre
+       FROM photo WHERE intervention_id = ? ORDER BY id`, [interventionId])
 
 /**
  * LA PHOTO DE LA MACHINE — récit 3bis.3.
@@ -204,7 +225,8 @@ export const photoMachine = async (chemin: string | null): Promise<File | null> 
 
 export const photosDuRoulage = (db: PowerSyncDatabase, roulageId: string) =>
   db.getAll<Photo>(
-    `SELECT id, roulage_id, machine_id, geste_id, chemin_objet, largeur, hauteur, etat
+    `SELECT id, roulage_id, machine_id, intervention_id, geste_id, chemin_objet,
+            largeur, hauteur, etat, genre
        FROM photo WHERE roulage_id = ? ORDER BY id`, [roulageId])
 
 /* ─── LE TÉLÉVERSEMENT DIFFÉRÉ ─────────────────────────────────────────────
@@ -219,13 +241,24 @@ export const televerserEnAttente = async (
 ): Promise<number> => {
   if (!supabase || !navigator.onLine) return 0
   const l = await db.getAll<Photo>(
-    `SELECT id, roulage_id, geste_id, chemin_objet, largeur, hauteur, etat
+    `SELECT id, roulage_id, machine_id, intervention_id, geste_id, chemin_objet,
+            largeur, hauteur, etat, genre
        FROM photo WHERE etat = 'locale'`)
   let montees = 0
   for (const p of l) {
     const f = await lireLocale(nomLocal(p))
     if (!f) continue
-    const chemin = `${piloteId}/${p.roulage_id}/${nomLocal(p)}`
+    // ⚠ LE DEUXIÈME SEGMENT EST LE PORTEUR RÉEL, pas `roulage_id` en dur.
+    // Une photo de machine ou de geste d'atelier a un `roulage_id` nul : le
+    // chemin composé valait littéralement `pilote/null/xxx.webp`. Ce n'était
+    // pas bloquant — la politique du bucket ne compare que le PREMIER segment
+    // à auth.uid(), et le nom de fichier porte déjà l'UUID — mais toutes les
+    // photos hors roulage finissaient dans un même dossier nommé « null »,
+    // c'est-à-dire dans un rangement qui ment. Un chemin qui ment se paie au
+    // premier ménage : c'est le genre de dossier qu'on supprime en le croyant
+    // vide de sens.
+    const porteur = p.roulage_id ?? p.machine_id ?? p.intervention_id ?? 'sans-porteur'
+    const chemin = `${piloteId}/${porteur}/${nomLocal(p)}`
     const { error } = await supabase.storage.from('photos')
       .upload(chemin, f, { upsert: true, contentType: f.type || 'image/webp' })
     if (error) continue      // on retentera : ce n'est pas une perte, c'est un report

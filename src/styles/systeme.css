@@ -547,3 +547,42 @@ label.bouton { cursor: pointer; }
   font-size: 11px; line-height: 1.35; color: var(--encre-tenue);
   text-transform: none; letter-spacing: 0;
 }
+
+/* ─── LA PAGE D'UN POSTE D'ATELIER ─────────────────────────────────────────
+   Un poste est un LIEU, pas un tiroir : il prend l'écran. Il reprend la peau du
+   garage — même densité, mêmes filets — parce qu'il en est la continuation, et
+   sa barre de couleur reste celle de sa catégorie pour qu'on sache où l'on est
+   sans lire le titre. */
+.poste-page .garage-titre { border-left: 3px solid var(--filet); padding-left: 12px; }
+.poste-page.entretien .garage-titre { border-left-color: var(--miami); }
+.poste-page.amelioration .garage-titre { border-left-color: var(--encre-tenue); }
+.poste-page.reparation_non_vitale .garage-titre { border-left-color: var(--magenta); }
+.poste-page .garage-tete .lien { min-height: 40px; }
+
+.geste-atelier { gap: 10px; }
+
+/* LES PIÈCES D'UN GESTE — la preuve. Elles défilent horizontalement dans leur
+   propre conteneur : une facture de plus ne doit jamais élargir la page. */
+.pieces {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.pieces::-webkit-scrollbar { display: none }
+.vignette {
+  position: relative; flex: 0 0 auto; width: 84px; height: 84px;
+  border: 1px solid var(--filet); background: var(--surface); overflow: hidden;
+}
+.vignette img { width: 100%; height: 100%; object-fit: cover; display: block }
+.vignette.vide { background: repeating-linear-gradient(-45deg,
+  var(--surface) 0 6px, transparent 6px 12px); }
+/* La facture se signale, parce qu'elle ne prouve pas la même chose qu'une photo :
+   l'une montre un état, l'autre prouve une dépense. */
+.vignette figcaption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: rgba(7,11,26,.86); color: var(--miami);
+  font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+  text-align: center; padding: 2px 0;
+}
+
+/* Le sommaire d'atelier est devenu un bouton pleine largeur : il ouvre une page. */
+button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-items: center; }
