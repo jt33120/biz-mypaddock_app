@@ -5,7 +5,7 @@ import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
   listerMachines, type Machine,
   circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
-  normaliserEtats, poserBudget, type Propose,
+  normaliserEtats, poserBudget, supprimerRoulage, type Propose,
   type CoutRoulage,
 } from './db/depot'
 import { Depense } from './ecrans/Depense'
@@ -19,10 +19,7 @@ import { Recap } from './ecrans/Recap'
 import { lireLocale, nomLocal, photosDuRoulage } from './db/photos'
 import { gestesDuRoulage, listerCaps } from './db/gestes'
 import type { Matiere } from './recap/composer'
-import {
-  conseilDuJour, direAVenir, direPasse, ecarterInvite, etatPlan, poserPlan, sourceAccueil,
-  type EtatPlan, type Source,
-} from './db/accueil'
+import { conseilDuJour, direAVenir, direPasse, sourceAccueil, type Source } from './db/accueil'
 import { Compte } from './ecrans/Compte'
 import { Garage } from './ecrans/Garage'
 import { Legal } from './ecrans/Legal'
@@ -39,6 +36,8 @@ import {
 } from './db/chiffres'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
+import { useGeste } from './ecrans/geste'
+import { Trophee } from './ecrans/Trophee'
 
 type Db = ReturnType<typeof ouvrirBase>
 type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal'
@@ -67,7 +66,6 @@ export default function App() {
   const [identite, setIdentite] = useState<Identite | null>(null)
   const [src, setSrc] = useState<Source | null>(null)
   const [conseil, setConseil] = useState<string | null>(null)
-  const [plan, setPlan] = useState<EtatPlan | null>(null)
 
   useEffect(() => {
     const d = ouvrirBase()
@@ -121,7 +119,6 @@ export default function App() {
     // manqué son rendez-vous — l'accueil est immunisé par construction.
     setSrc(await sourceAccueil(base, aujourdhui()))
     setConseil(await conseilDuJour(base, aujourdhui()))
-    setPlan(await etatPlan(base, aujourdhui()))
   }, [])
   useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
 
@@ -211,11 +208,8 @@ export default function App() {
       <div className="sol" aria-hidden />
       <div className="ecran">
         {ecran === 'accueil' && (
-          <Accueil db={db} src={src} conseil={conseil} plan={plan}
+          <Accueil db={db} src={src} conseil={conseil}
                    onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan}
-                   onPlan={async (t) => { await poserPlan(db, t); await rafraichir(db) }}
-                   onEcarter={() => { ecarterInvite(); void rafraichir(db) }}
-                   onCompte={() => setEcran('compte')} onSonde={() => setEcran('sonde')}
                    onLegal={() => setEcran('legal')} />
         )}
         {ecran === 'roulages' && <Roulages db={db} liste={liste} onOuvrir={ouvrirBilan}
@@ -263,8 +257,9 @@ export default function App() {
                    onAnnuler={() => void ouvrirBilan(courant)} />
         )}
         {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
-        {ecran === 'compte' && <Compte db={db} identite={identite} onLegal={() => setEcran('legal')} />}
-        {ecran === 'sonde' && <Sonde db={db} />}
+        {ecran === 'compte' && <Compte db={db} identite={identite} onLegal={() => setEcran('legal')}
+                                       onSonde={() => setEcran('sonde')} />}
+        {ecran === 'sonde' && <Sonde db={db} onFermer={() => setEcran('compte')} />}
         {/* QO-11 : les textes existent, et ils sont ATTEIGNABLES. Un document
             juridique que rien ne lie n'a jamais été publié. */}
         {ecran === 'legal' && <Legal onFermer={() => setEcran('compte')} />}
@@ -286,13 +281,25 @@ export default function App() {
           on déclare sa moto. AD-2 le dit déjà — une machine sans roulage est un
           état valide, donc un garage sans machine en est un aussi.
 
-          Compte et Sonde ne sont pas des destinations du produit : ce sont un
-          réglage et un instrument. Ils vivent en tête de l'accueil, discrets,
-          et ne prennent pas la place d'un lieu. */}
+          ⚠ LE COMPTE EST DESCENDU DANS LA BARRE — retour de Julian : « le bouton
+          compte un peu décevant, ça fait pas app mobile, ce serait quoi le
+          mieux, en bas non ? ». Il avait raison sur les deux plans. Un lien
+          souligné de treize pixels en tête d'écran, c'est la convention du web
+          de 2005 ; sur un téléphone, ce qu'on atteint au pouce est en bas. Et
+          surtout, ce lien portait la SAUVEGARDE — la seule chose qui empêche une
+          saison entière de mourir avec le téléphone. Le ranger comme un réglage
+          discret disait au pilote qu'elle en était un.
+
+          La sonde, elle, reste un instrument et n'est pas un lieu : elle
+          s'atteint depuis le compte. « À propos » reste en tête de l'accueil,
+          parce qu'il doit se lire SANS compte — un inconnu venu d'une publicité
+          ne doit pas avoir à ouvrir l'onglet du compte pour savoir ce qu'on fait
+          de ses données. */}
       <nav className="barre">
         <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
         <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => setEcran('garage')}>GARAGE</button>
         <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => setEcran('roulages')}>ROULAGES</button>
+        <button className="onglet" data-actif={ecran === 'compte' || ecran === 'sonde' ? '1' : '0'} onClick={() => setEcran('compte')}>COMPTE</button>
       </nav>
     </>
   )
@@ -313,29 +320,26 @@ export default function App() {
    FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
    échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
    rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
-function Accueil({ db, src, conseil, plan, onNouveau, onOuvrir, onPlan, onEcarter, onCompte, onSonde, onLegal }: {
-  db: Db; src: Source | null; conseil: string | null; plan: EtatPlan | null
+function Accueil({ db, src, conseil, onNouveau, onOuvrir, onLegal }: {
+  db: Db; src: Source | null; conseil: string | null
   onNouveau: () => void; onOuvrir: (id: string) => void
-  onPlan: (texte: string) => Promise<void>; onEcarter: () => void
-  onCompte: () => void; onSonde: () => void; onLegal: () => void
+  onLegal: () => void
 }) {
   return (
     <>
       <header className="tete">
         <h1 className="titre neon">{PRODUCT_NAME}</h1>
         <nav className="reglages">
-          <button className="lien" onClick={onCompte}>compte</button>
           {/* ATTEIGNABLE SANS COMPTE, et c'est le point : un inconnu venu d'une
               publicité doit pouvoir lire ce qu'on fait de ses données AVANT de
-              donner son adresse, pas après. */}
+              donner son adresse, pas après. Le compte, lui, est descendu dans la
+              barre basse — voir le commentaire de la barre. */}
           <button className="lien" onClick={onLegal}>à propos</button>
-          <button className="lien" onClick={onSonde}>sonde</button>
         </nav>
       </header>
       <ZoneTemporelle src={src} onNouveau={onNouveau} onOuvrir={onOuvrir} />
       {src && src.genre !== 'vide' && <ZoneChiffres db={db} />}
       {conseil && <Conseil texte={conseil} />}
-      {plan && <Plan etat={plan} onPlan={onPlan} onEcarter={onEcarter} />}
     </>
   )
 }
@@ -354,43 +358,25 @@ function Conseil({ texte }: { texte: string }) {
   )
 }
 
-/** LE PLAN SI-ALORS — l'intervention comportementale la mieux établie du
- *  dossier (d ≈ 0,65 sur 94 essais), et elle ne fonctionne que formulée par la
- *  personne elle-même. Le produit ne reformule rien, ne corrige rien, ne note
- *  rien. L'invite est UNIQUE : refusée, elle ne revient pas. */
-function Plan({ etat, onPlan, onEcarter }: {
-  etat: EtatPlan; onPlan: (t: string) => Promise<void>; onEcarter: () => void
-}) {
-  const [texte, setTexte] = useState('')
+/* ─── LE PLAN SI-ALORS EST RETIRÉ DE L'ACCUEIL — retour de Julian ──────────
+   « Ça fait un peu gamin, personne va prendre le temps de le remplir. L'utilité
+   est pas clair : c'est un quizz qui rapporte des points ? un message de
+   prévention ? Là l'effet c'est : c'est quoi cette merde. »
 
-  if (etat.texte) {
-    return (
-      <div className="conseil plan-pose">
-        <p className="libelle">Ton plan</p>
-        {/* Mot pour mot. Aucune retouche, aucune note, aucun commentaire. */}
-        <p className="texte">{etat.texte}</p>
-      </div>
-    )
-  }
-  if (!etat.inviter) return null
+   C'était l'intervention comportementale la mieux établie du dossier — d ≈ 0,65
+   sur 94 essais — et je la retire quand même, sans la remplacer. Le motif n'est
+   pas que la littérature ait tort ; c'est que sa condition d'efficacité est que
+   la personne formule la phrase ELLE-MÊME. Une invite qui produit du rejet ne
+   produit pas une phrase, donc elle ne produit aucun effet — elle ne coûte que
+   la confiance dans l'écran où elle apparaît.
 
-  return (
-    <div className="conseil">
-      <p className="libelle">Une phrase, une seule fois</p>
-      <p className="texte">
-        Écris ce que tu feras dans une situation précise, dans tes mots.
-        Par exemple : « si je me fais rattraper, alors je lève et je le laisse passer. »
-      </p>
-      <input className="champ" value={texte} onChange={(e) => setTexte(e.target.value)}
-             placeholder="si… alors…" autoComplete="off" />
-      <div className="rang">
-        <button className="bouton secondaire" disabled={!texte.trim()}
-                onClick={() => void onPlan(texte)}>Garder cette phrase</button>
-        <button className="lien" onClick={onEcarter}>Pas maintenant</button>
-      </div>
-    </div>
-  )
-}
+   ⚠ CE QUI RESTE : la table `plan_si_alors` reste au schéma et dans l'ordre
+   d'envoi. Retirer une table d'une file de synchronisation déjà déployée est un
+   geste à part entière, et il n'a rien à voir avec ce retour-là. Elle ne porte
+   plus aucun écran ; elle ne coûte rien à personne.
+
+   ⚠ CE QUI N'EST PAS CONCERNÉ : le conseil du jour reste. Il n'a jamais rien
+   demandé au pilote — c'est une phrase à lire, pas un champ à remplir. */
 
 function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
   src: Source | null; onNouveau: () => void; onOuvrir: (id: string) => void
@@ -495,7 +481,9 @@ function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
               {src.meilleurIci != null ? 'Ton meilleur tour ici' : 'Jamais roulé ici'}
             </span>
             {src.meilleurIci != null && (
-              <span className="chiffre hud-40 miami">{formaterChrono(src.meilleurIci)}</span>
+              <span className="chiffre hud-40 miami avec-trophee">
+                <Trophee taille={20} />{formaterChrono(src.meilleurIci)}
+              </span>
             )}
           </div>
         ) : (
@@ -503,7 +491,12 @@ function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
             {r.meilleur != null && (
               <div className="rang">
                 <span className="libelle">Meilleur tour du jour</span>
-                <span className="chiffre hud-40 miami">{formaterChrono(r.meilleur)}</span>
+                {/* Le trophée marque un FAIT MESURÉ — le meilleur tour — et rien
+                    d'autre. Il n'est jamais posé sur un objectif ni sur un reste
+                    à faire : le produit constate, il ne décerne pas. */}
+                <span className="chiffre hud-40 miami avec-trophee">
+                  <Trophee taille={20} />{formaterChrono(r.meilleur)}
+                </span>
               </div>
             )}
             <div className="rang">
@@ -652,23 +645,13 @@ function Roulages({ db, liste, onOuvrir, onNouveau, onEcrit }: {
           (FR-55), jamais réservé à une fin de saison. */}
       <Saison db={db} />
 
-      <div className="libelle">Roulages · {liste.length}</div>
+      {/* UN ROULAGE EST UNE JOURNÉE, jamais une session — Julian a eu à le
+          rappeler, ce qui veut dire que l'écran ne le disait pas. Il le dit
+          maintenant, une fois, à l'endroit où l'on compte. */}
+      <div className="libelle">Roulages · {liste.length} journée{liste.length > 1 ? 's' : ''}</div>
       <div className="pile">
         {liste.map((r) => (
-          <div key={r.id} className="bloc pile" onClick={() => onOuvrir(r.id)}>
-            <div className="rang">
-              <span className="titre" style={{ fontSize: 20 }}>{r.circuit_nom}</span>
-              <span className="libelle">{r.date_jour}</span>
-            </div>
-            <div className="rang">
-              <span className="hud-12 faible">
-                {r.groupe_nom ?? '—'}{r.groupe_rang ? ` · ${r.groupe_rang}/${r.groupe_total}` : ''}
-              </span>
-              <span className="chiffre hud-24 miami">
-                {r.meilleur != null ? formaterChrono(r.meilleur) : '—'}
-              </span>
-            </div>
-          </div>
+          <LigneRoulage key={r.id} db={db} r={r} onOuvrir={onOuvrir} onEcrit={onEcrit} />
         ))}
       </div>
       <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
@@ -678,6 +661,65 @@ function Roulages({ db, liste, onOuvrir, onNouveau, onEcrit }: {
           chose à montrer quand rien n'est encore réservé. */}
       <Evenements db={db} onEcrit={onEcrit} />
     </>
+  )
+}
+
+/**
+ * UNE JOURNÉE, ET LE MOYEN DE LA RETIRER.
+ *
+ * Ce bouton manquait, et son absence a coûté cher : Julian s'est retrouvé avec
+ * vingt-cinq roulages là où il en avait saisi cinq, sans aucun moyen d'en
+ * effacer un. Une liste fausse qu'on ne peut pas corriger n'est pas une gêne
+ * d'affichage — c'est la fin de la saisie.
+ *
+ * DEUX TAPS, et le second est explicite. Un roulage porte ses sessions, ses
+ * tours, ses photos et ses gestes : il n'y a pas d'annulation après coup, donc
+ * il y a une question avant. Le mot « définitivement » y est parce qu'il est
+ * vrai.
+ */
+function LigneRoulage({ db, r, onOuvrir, onEcrit }: {
+  db: Db; r: Liste[number]; onOuvrir: (id: string) => void; onEcrit: () => void
+}) {
+  const [confirme, setConfirme] = useState(false)
+  const [retirer, occupe] = useGeste(async () => {
+    await supprimerRoulage(db, r.id)
+    onEcrit()
+  })
+
+  return (
+    <div className="bloc pile">
+      <div className="pile" onClick={() => onOuvrir(r.id)}>
+        <div className="rang">
+          <span className="titre" style={{ fontSize: 20 }}>{r.circuit_nom}</span>
+          <span className="libelle">{r.date_jour}</span>
+        </div>
+        <div className="rang">
+          <span className="hud-12 faible">
+            {r.groupe_nom ?? '—'}{r.groupe_rang ? ` · ${r.groupe_rang}/${r.groupe_total}` : ''}
+          </span>
+          <span className="chiffre hud-24 miami">
+            {r.meilleur != null ? formaterChrono(r.meilleur) : '—'}
+          </span>
+        </div>
+      </div>
+
+      {confirme ? (
+        <div className="pile">
+          <p className="note">
+            Cette journée part définitivement, avec ses {r.sessions} session{r.sessions > 1 ? 's' : ''},
+            ses chronos et ses photos.
+          </p>
+          <div className="rang">
+            <button className="bouton secondaire" disabled={occupe} onClick={() => void retirer()}>
+              {occupe ? 'suppression…' : 'Retirer définitivement'}
+            </button>
+            <button className="lien" onClick={() => setConfirme(false)}>Garder</button>
+          </div>
+        </div>
+      ) : (
+        <button className="lien" onClick={() => setConfirme(true)}>Retirer cette journée</button>
+      )}
+    </div>
   )
 }
 
@@ -732,7 +774,7 @@ function ChoixCircuit({ db, valeur, sur }: {
 /* ─── NOUVEAU ROULAGE — sélecteurs plutôt que clavier partout où c'est possible */
 function Nouveau({ db, onValider, onAnnuler }: {
   db: Db
-  onValider: (r: { circuit: string; date: string; groupeNom: string | null; rang: number | null; total: number | null; machineId: string | null }) => void
+  onValider: (r: { circuit: string; date: string; groupeNom: string | null; rang: number | null; total: number | null; machineId: string | null }) => Promise<void> | void
   onAnnuler: () => void
 }) {
   const [circuit, setCircuit] = useState('')
@@ -745,6 +787,7 @@ function Nouveau({ db, onValider, onAnnuler }: {
   // le schéma et nulle part dans les données.
   const [machines, setMachines] = useState<Machine[]>([])
   const [machineId, setMachineId] = useState<string | null>(null)
+  const [valider, occupe] = useGeste(onValider)
   useEffect(() => {
     void listerMachines(db).then((m) => {
       setMachines(m)
@@ -796,21 +839,33 @@ function Nouveau({ db, onValider, onAnnuler }: {
         </div>
       </div>
 
-      <button className="bouton" disabled={!circuit.trim()}
-              onClick={() => onValider({
+      {/* ⚠ CE BOUTON A ÉCRIT 25 ROULAGES POUR 5 SAISIES. Il restait vivant
+          pendant toute l'écriture — worker OPFS, marquage de saisie, puis quatre
+          requêtes de recalcul de l'accueil — et rien ne bougeait à l'écran. On
+          retape, et chaque tap est une journée de plus, indélébile jusqu'ici.
+          Le verrou est dans `useGeste` et il est mutable, pas d'état : deux taps
+          dans la même image de rendu voient tous les deux l'ancien état. */}
+      <button className="bouton" disabled={!circuit.trim() || occupe}
+              onClick={() => void valider({
                 circuit: circuit.trim(), date,
                 groupeNom: rang ? GROUPES[rang - 1] : null,
                 rang, total: rang ? GROUPES.length : null, machineId,
               })}>
-        Continuer
+        {occupe ? 'enregistrement…' : 'Continuer'}
       </button>
       <button className="bouton secondaire" onClick={onAnnuler}>Annuler</button>
     </>
   )
 }
 
-function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; onAnnuler: () => void }) {
+function Session({ onValider, onAnnuler }: {
+  onValider: (ms: number) => Promise<void> | void; onAnnuler: () => void
+}) {
   const [ms, setMs] = useState(107300)
+  // Même verrou, même motif : la saisie d'une session écrit une session, un
+  // tour, un marquage, puis recompose le récapitulatif. C'est le geste le plus
+  // long du produit, donc celui qu'on retape le plus.
+  const [valider, occupe] = useGeste(onValider)
   return (
     <>
       <div className="libelle">Meilleur tour de la session</div>
@@ -818,7 +873,9 @@ function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; on
       <div style={{ textAlign: 'center' }}>
         <span className="chiffre hud-64 miami">{formaterChrono(ms)}</span>
       </div>
-      <button className="bouton" onClick={() => onValider(ms)}>Enregistrer la session</button>
+      <button className="bouton" disabled={occupe} onClick={() => void valider(ms)}>
+        {occupe ? 'enregistrement…' : 'Enregistrer la session'}
+      </button>
       <button className="bouton secondaire" onClick={onAnnuler}>Retour</button>
     </>
   )

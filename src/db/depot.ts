@@ -2,6 +2,7 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
 import { CIRCUITS_EMBARQUES } from './corpus'
+import { effacerLocale, nomLocal } from './photos'
 
 /** Toutes les lectures et écritures passent ici. Aucun écran n'écrit de SQL. */
 
@@ -150,6 +151,51 @@ export const listerRoulages = (db: PowerSyncDatabase) =>
        FROM roulage r
       ORDER BY r.date_jour DESC, r.id DESC`,
   )
+
+/**
+ * RETIRER UNE JOURNÉE — et c'est la seule opération destructive que le pilote
+ * puisse déclencher sur ses propres données de roulage.
+ *
+ * Elle existe parce qu'elle manquait : Julian s'est retrouvé avec vingt-cinq
+ * roulages là où il en avait saisi cinq, et le produit n'offrait AUCUN moyen
+ * d'en retirer un seul. Une donnée qu'on ne peut pas corriger cesse d'être
+ * saisie — c'est l'instrument ① qui l'aurait constaté, six mois trop tard.
+ *
+ * ⚠ ELLE DESCEND L'ARBRE ENTIER, dans l'ordre des feuilles vers la racine. Une
+ * ligne orpheline n'est pas un détail cosmétique : côté serveur la clé étrangère
+ * la refuse, la ligne est écartée, et c'est toute la file d'envoi qui s'arrête
+ * derrière elle. Le même incident s'est déjà produit deux fois sur ce produit.
+ *
+ * Ce qu'elle NE touche pas, délibérément :
+ *   · les dépenses de cible `machine` ou `saison` — elles ne désignent pas cette
+ *     journée, et AD-7 fait des trois cibles des mondes séparés ;
+ *   · les octets déjà partis au stockage objet. La ligne disparaît, la copie
+ *     locale aussi ; l'objet distant devient orphelin et sera ramassé par
+ *     l'effacement de compte, qui est le seul endroit qui parle au stockage.
+ */
+export const supprimerRoulage = async (db: PowerSyncDatabase, roulageId: string) => {
+  // Les photos d'abord, parce qu'elles ont un corps hors de la base : leur
+  // copie locale doit partir avec leur ligne, sinon le téléphone garde des
+  // octets que plus rien ne référence.
+  const ph = await db.getAll<{ id: string; chemin_objet: string }>(
+    `SELECT id, chemin_objet FROM photo WHERE roulage_id = ?`, [roulageId])
+  for (const p of ph) {
+    try { await effacerLocale(nomLocal(p)) } catch { /* déjà partie : rien à faire */ }
+  }
+
+  await db.writeTransaction(async (tx) => {
+    await tx.execute(
+      `DELETE FROM tour WHERE session_id IN (SELECT id FROM session WHERE roulage_id = ?)`,
+      [roulageId])
+    await tx.execute(`DELETE FROM session WHERE roulage_id = ?`, [roulageId])
+    await tx.execute(`DELETE FROM photo WHERE roulage_id = ?`, [roulageId])
+    await tx.execute(`DELETE FROM geste WHERE roulage_id = ?`, [roulageId])
+    await tx.execute(`DELETE FROM checklist_ligne WHERE roulage_id = ?`, [roulageId])
+    await tx.execute(
+      `DELETE FROM depense WHERE cible = 'roulage' AND roulage_id = ?`, [roulageId])
+    await tx.execute(`DELETE FROM roulage WHERE id = ?`, [roulageId])
+  })
+}
 
 /** AD-3 : une session porte une COLLECTION de tours, même quand la v1 n'en
  *  écrit qu'un. Et tout chrono porte sa provenance — il n'y a pas de GPS. */

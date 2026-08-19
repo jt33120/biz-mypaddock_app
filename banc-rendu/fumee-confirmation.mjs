@@ -17,13 +17,17 @@ await page.route('**/auth/v1/signup*', r => r.fulfill({
   body: JSON.stringify({ user: { id: 'x', email: 'julian@exemple.fr' }, session: null }),
 }))
 
-// Compte et Sonde ne sont plus des onglets : ce sont des liens en TÊTE DE
-// L'ACCUEIL, parce qu'un réglage et un instrument ne sont pas des destinations.
+// LE COMPTE EST UN ONGLET DE LA BARRE depuis le retour de Julian. La sonde
+// reste un instrument et s'atteint depuis le compte.
 const onglet = async (n) => {
   const bas = `nav.barre .onglet:has-text("${n}")`
   if (await page.isVisible(bas)) return page.click(bas)
-  await page.click('nav.barre .onglet:has-text("ACCUEIL")')
-  return page.click(`.tete .reglages .lien:has-text("${n.toLowerCase()}")`)
+  // COMPTE est descendu dans la barre basse — « ça fait pas app mobile », et il
+  // portait la sauvegarde. La SONDE, elle, s'atteint depuis le compte : c'est un
+  // instrument, pas un lieu du produit.
+  await page.click('nav.barre .onglet:has-text("COMPTE")')
+  await page.waitForSelector('section.compte', { timeout: 10_000 })
+  return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
 
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })

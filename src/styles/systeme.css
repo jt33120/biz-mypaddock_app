@@ -484,3 +484,12 @@ label.bouton { cursor: pointer; }
 }
 .recap .texte { color: var(--encre-faible); font-size: 15px; }
 .recap a.bouton { text-decoration: none; }
+
+/* ─── LE TROPHÉE — retour de Julian ────────────────────────────────────────
+   Il prend la couleur du chrono qu'il accompagne (`currentColor`), et jamais un
+   or décoratif : c'est le MÊME fait qui est dit deux fois, par le signe et par
+   le nombre. Un trophé d'une autre couleur en ferait une seconde information.
+   `baseline` plutôt que `center` — le tracé doit s'asseoir sur la ligne des
+   chiffres, sinon il flotte au-dessus d'un chrono de 40 px. */
+.avec-trophee { display: inline-flex; align-items: baseline; gap: 8px; }
+.trophee { flex: 0 0 auto; align-self: center; opacity: .85; }

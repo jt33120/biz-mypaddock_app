@@ -21,8 +21,12 @@ const pret = () => page.waitForFunction(() => !document.body.textContent.include
 const onglet = async (n) => {
   const bas = `nav.barre .onglet:has-text("${n}")`
   if (await page.isVisible(bas)) return page.click(bas)
-  await page.click('nav.barre .onglet:has-text("ACCUEIL")')
-  return page.click(`.tete .reglages .lien:has-text("${n.toLowerCase()}")`)
+  // COMPTE est descendu dans la barre basse — « ça fait pas app mobile », et il
+  // portait la sauvegarde. La SONDE, elle, s'atteint depuis le compte : c'est un
+  // instrument, pas un lieu du produit.
+  await page.click('nav.barre .onglet:has-text("COMPTE")')
+  await page.waitForSelector('section.compte', { timeout: 10_000 })
+  return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
 const propositions = () => page.$$eval('.circuit .nom', ns => ns.map(n => n.textContent))
 const champ = '.champ[placeholder="Pau-Arnos"]'

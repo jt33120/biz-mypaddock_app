@@ -47,7 +47,7 @@ console.log('   dit honnêtement qu\'aucune adresse n\'est publiée :',
 // ── ② L'inscription contracte sur quelque chose.
 await page.click('text=Retour')
 await page.click('nav.barre .onglet:has-text("ACCUEIL")')
-await page.click('.tete .lien:has-text("compte")')
+await page.click('nav.barre .onglet:has-text("COMPTE")')
 await page.waitForSelector('section.compte', { timeout: 10_000 })
 const c = (await page.textContent('section.compte')).replace(/\s+/g, ' ')
 console.log('② l\'inscription énonce ce qu\'elle engage :',

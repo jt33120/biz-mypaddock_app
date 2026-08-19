@@ -9,7 +9,7 @@ type Etat = { cle: string; val: string; ton?: 'oui' | 'non' | 'attente' }
 /** La sonde du récit 0.1, conservée comme instrument. Elle a déjà rendu son
  *  verdict — OPFS confirmé, persist() accordé sur PWA installée — mais elle
  *  reste le seul endroit où l'on voit ce que l'appareil fait réellement. */
-export function Sonde({ db }: { db: PowerSyncDatabase }) {
+export function Sonde({ db, onFermer }: { db: PowerSyncDatabase; onFermer: () => void }) {
   const [etats, setEtats] = useState<Etat[]>([])
   const [journal, setJournal] = useState<string[]>([])
   const [occupe, setOccupe] = useState(false)
@@ -58,6 +58,12 @@ export function Sonde({ db }: { db: PowerSyncDatabase }) {
     setOccupe(true)
     try {
       const db = await ouvrir()
+      // ⚠ ELLE NETTOIE SA MESURE PRÉCÉDENTE AVANT D'EN FAIRE UNE NOUVELLE.
+      // Sans ça, chaque appui laissait un roulage de plus dans la liste du
+      // pilote — c'est une part des vingt-cinq roulages de Julian, et c'était
+      // pire qu'un affichage sale : ces journées comptaient dans l'horloge
+      // d'usure et dans le bilan de saison, où un instrument n'a rien à peser.
+      await effacerLesMesures(db)
       const t = performance.now()
       const r = nouvelId(), s = nouvelId()
       // ⚠ CETTE LIGNE A BLOQUÉ UNE SAUVEGARDE RÉELLE. Elle écrivait
@@ -109,6 +115,11 @@ export function Sonde({ db }: { db: PowerSyncDatabase }) {
         {occupe ? 'écriture…' : 'Écrire 40 tours'}
       </button>
       <button className="bouton secondaire" onClick={() => void compter()}>Compter ce qui a survécu</button>
+      <button className="bouton secondaire" onClick={() => void ouvrir()
+        .then(effacerLesMesures).then(() => dire('les écritures de sonde sont retirées'))
+        .then(compter)}>
+        Retirer ce que la sonde a écrit
+      </button>
       <button className="bouton secondaire" onClick={() => void navigator.storage?.persist?.().then((o) => { dire('persist() → ' + (o ? 'accordé' : 'refusé')); void mesurer() })}>
         Demander la persistance
       </button>
@@ -117,8 +128,31 @@ export function Sonde({ db }: { db: PowerSyncDatabase }) {
           {journal.map((m, i) => <div key={i} className="libelle" style={{ fontSize: 12, textTransform: 'none' }}>{m}</div>)}
         </div>
       )}
+      <button className="bouton secondaire" onClick={onFermer}>Retour au compte</button>
     </>
   )
+}
+
+/**
+ * CE QUE LA SONDE A ÉCRIT, ET RIEN D'AUTRE.
+ *
+ * Le critère est le circuit nommé « Sonde » — la seule marque que l'instrument
+ * laisse, et une marque qu'aucune saisie de pilote ne produit : le formulaire
+ * refuse un circuit vide, et personne ne tape « Sonde » comme nom de piste.
+ *
+ * L'ordre descend des feuilles vers la racine, pour la même raison qu'au dépôt :
+ * une ligne orpheline est refusée côté serveur et bloque la file derrière elle.
+ */
+const effacerLesMesures = async (db: PowerSyncDatabase) => {
+  await db.writeTransaction(async (tx) => {
+    await tx.execute(
+      `DELETE FROM tour WHERE session_id IN (
+         SELECT s.id FROM session s JOIN roulage r ON r.id = s.roulage_id
+          WHERE r.circuit_nom = 'Sonde')`)
+    await tx.execute(
+      `DELETE FROM session WHERE roulage_id IN (SELECT id FROM roulage WHERE circuit_nom = 'Sonde')`)
+    await tx.execute(`DELETE FROM roulage WHERE circuit_nom = 'Sonde'`)
+  })
 }
 
 /* ─── LES TROIS INSTRUMENTS DE BORD — récit 7.1 ────────────────────────────

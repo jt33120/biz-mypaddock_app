@@ -28,8 +28,13 @@ import { effacerAuServeur, effacerLeTelephone } from '../db/effacer'
 
 type Etape = 'formulaire' | 'confirmation'
 
-export function Compte({ db, identite, onLegal }: {
+export function Compte({ db, identite, onLegal, onSonde }: {
   db: PowerSyncDatabase; identite: Identite | null; onLegal: () => void
+  /** La sonde vit ICI depuis que le compte a pris sa place dans la barre basse.
+   *  C'est un instrument, pas un lieu : elle n'a jamais eu à occuper un onglet,
+   *  mais elle doit rester atteignable — le récit 7.1 exige que les trois
+   *  instruments de bord soient LISIBLES, pas seulement calculés. */
+  onSonde: () => void
 }) {
   return (
     <>
@@ -60,6 +65,9 @@ export function Compte({ db, identite, onLegal }: {
       <section className="compte">
         <button className="lien" onClick={onLegal}>
           Ce que fait cette application, tes données, qui écrire
+        </button>
+        <button className="lien" onClick={onSonde}>
+          Instruments et sonde — ce que l'appareil fait réellement
         </button>
       </section>
 

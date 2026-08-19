@@ -1,4 +1,16 @@
-// Récit 6.3 — le conseil déterministe, l'invite UNIQUE, et le plan gardé MOT POUR MOT.
+// Récit 6.3 — le conseil déterministe. ET LA PREUVE QUE L'INVITE A DISPARU.
+//
+// Le plan si-alors est retiré sur retour de Julian : « ça fait un peu gamin,
+// personne va prendre le temps de le remplir… là l'effet c'est : c'est quoi
+// cette merde ». C'était l'intervention la mieux étayée du dossier (d ≈ 0,65 sur
+// 94 essais) et elle est partie quand même — parce que son efficacité tient à ce
+// que la phrase soit formulée par la personne, et qu'une invite qui produit du
+// rejet ne produit aucune phrase.
+//
+// L'essai ne vérifie donc plus qu'elle apparaît au bon moment : il vérifie
+// qu'elle N'APPARAÎT JAMAIS, à aucun nombre de sessions. Une fonctionnalité
+// retirée sans assertion est une fonctionnalité qui revient à la première
+// fusion distraite.
 import { chromium } from 'playwright-core'
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -7,15 +19,17 @@ const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceSc
 const erreurs = []
 page.on('console', m => { if (m.type() === 'error') erreurs.push('console: ' + m.text()) })
 page.on('pageerror', e => erreurs.push('pageerror: ' + e.message))
-// Compte et Sonde ne sont plus des onglets : ce sont des liens de tête, parce
-// qu'un réglage et un instrument ne sont pas des destinations du produit.
-// Compte et Sonde ne sont plus des onglets : ce sont des liens en TÊTE DE
-// L'ACCUEIL, parce qu'un réglage et un instrument ne sont pas des destinations.
+// LE COMPTE EST UN ONGLET DE LA BARRE depuis le retour de Julian. La sonde
+// reste un instrument et s'atteint depuis le compte.
 const onglet = async (n) => {
   const bas = `nav.barre .onglet:has-text("${n}")`
   if (await page.isVisible(bas)) return page.click(bas)
-  await page.click('nav.barre .onglet:has-text("ACCUEIL")')
-  return page.click(`.tete .reglages .lien:has-text("${n.toLowerCase()}")`)
+  // COMPTE est descendu dans la barre basse — « ça fait pas app mobile », et il
+  // portait la sauvegarde. La SONDE, elle, s'atteint depuis le compte : c'est un
+  // instrument, pas un lieu du produit.
+  await page.click('nav.barre .onglet:has-text("COMPTE")')
+  await page.waitForSelector('section.compte', { timeout: 10_000 })
+  return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
 const pret = () => page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
 
@@ -62,26 +76,25 @@ for (let i = 0; i < 3; i++) {
   if (i < 2) await page.click('text=Saisir une session')
 }
 await onglet('ACCUEIL')
-console.log('② à 3 sessions — invite :', await page.isVisible('text=Une phrase, une seule fois'))
+const invite = async () => await page.isVisible('text=Une phrase, une seule fois')
+console.log('② à 3 sessions — invite :', await invite() ? 'PRÉSENTE — RETIRÉE À TORT' : 'absente')
 
+// Le seuil de l'ancienne invite était QUATRE sessions saisies. On le franchit
+// exprès : c'est le seul point où elle serait réapparue.
 await onglet('ROULAGES'); await page.click('.bloc')
 await page.click('text=Saisir une session')
 await enregistrerSession()
 await onglet('ACCUEIL')
-await page.waitForSelector('text=Une phrase, une seule fois', { timeout: 10_000 })
-console.log('③ à 4 sessions — invite : oui')
+console.log('③ à 4 sessions — invite :', await invite() ? 'PRÉSENTE — RETIRÉE À TORT' : 'absente')
 
-// Le plan est gardé MOT POUR MOT — ponctuation, majuscules, accents compris.
-const PHRASE = "si je me fais rattraper, ALORS je lève et je le laisse passer — pas d'ego"
-await page.fill('.conseil .champ', PHRASE)
-await page.click('text=Garder cette phrase')
-await page.waitForSelector('.plan-pose', { timeout: 10_000 })
-const garde = await page.textContent('.plan-pose .texte')
-console.log('④ mot pour mot :', garde === PHRASE ? 'oui' : `NON — « ${garde} »`)
+// Et rien ne l'a remplacée par un autre champ à remplir : l'accueil ne réclame
+// aucune saisie de texte au pilote. Le conseil se lit, il ne se remplit pas.
+console.log('④ aucun champ à remplir sur l\'accueil :',
+  await page.isVisible('.conseil .champ') ? 'NON — UN CHAMP EST REVENU' : 'oui')
 
-// L'invite ne revient pas.
+// Le conseil, lui, est TOUJOURS là — c'est la moitié du récit qui reste.
 await page.reload({ waitUntil: 'networkidle' }); await pret()
-console.log('⑤ invite après plan posé :', await page.isVisible('text=Une phrase, une seule fois'))
+console.log('⑤ conseil toujours présent :', await page.isVisible('.conseil .texte') ? 'oui' : 'NON')
 
 // Aucune notification, jamais — la contre-mesure C1.
 const notif = await page.evaluate(() => ({

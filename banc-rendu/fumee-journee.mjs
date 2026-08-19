@@ -1,0 +1,109 @@
+// LA JOURNÉE — retirer un roulage, et ne jamais en écrire deux pour un tap.
+//
+// Cet essai vient d'un bug réel signalé par Julian : « il y a eu un bug et j'ai
+// 25 roulages au lieu des 4 ». Deux défauts distincts se cachaient derrière ce
+// chiffre, et il faut donc deux assertions.
+//
+// ① LE BOUTON RESTAIT VIVANT PENDANT L'ÉCRITURE. Rien ne bouge à l'écran
+//   pendant qu'OPFS écrit dans son worker, alors on retape — et chaque tap est
+//   une journée de plus. L'essai tape trois fois d'affilée, sans respirer, et
+//   exige qu'UNE SEULE journée existe ensuite.
+//
+// ② RIEN NE PERMETTAIT D'EN RETIRER UNE. Une liste fausse qu'on ne peut pas
+//   corriger n'est pas une gêne d'affichage : c'est la fin de la saisie.
+import { chromium } from 'playwright-core'
+const nav = await chromium.launch({
+  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+})
+const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
+const erreurs = []
+page.on('console', m => { if (m.type() === 'error') erreurs.push('console: ' + m.text()) })
+page.on('pageerror', e => erreurs.push('pageerror: ' + e.message))
+const pret = () => page.waitForFunction(
+  () => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
+const onglet = n => page.click(`nav.barre .onglet:has-text("${n}")`)
+
+/**
+ * ⚠ CET ESSAI SORT EN ÉCHEC, il ne se contente pas de l'imprimer.
+ *
+ * Le banc a été écrit en lisant ses propres sorties, et ça a marché tant qu'un
+ * humain les lisait. Deux défauts de cette session ont pourtant été trouvés en
+ * relisant le TEXTE d'un essai qui rendait un code de sortie vert — c'est-à-dire
+ * deux fois trop tard. Une vérification qui ne peut pas faire tomber la suite
+ * n'est pas une vérification, c'est un commentaire.
+ */
+const manques = []
+const verifier = (titre, vrai, detail = '') => {
+  console.log(`${vrai ? '  ok ' : '  ÉCHEC '} ${titre}${detail ? ' — ' + detail : ''}`)
+  if (!vrai) manques.push(titre)
+}
+
+await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
+await pret()
+
+// ── ① TROIS TAPS, UNE SEULE JOURNÉE ────────────────────────────────────────
+await page.click('text=Saisir mon premier roulage')
+await page.fill('.champ[placeholder="Pau-Arnos"]', 'Pau-Arnos')
+
+// `noWaitAfter` et `force` : on ne laisse PAS Playwright attendre la stabilité
+// entre les taps — c'est exactement ce que le pilote impatient ne fait pas non
+// plus. Trois appuis dans la même poignée de millisecondes.
+const bouton = page.locator('.bouton:has-text("Continuer"), .bouton:has-text("enregistrement")')
+for (let i = 0; i < 3; i++) {
+  await bouton.click({ force: true, noWaitAfter: true, timeout: 2_000 }).catch(() => {})
+}
+await page.waitForSelector('text=Meilleur tour de la session', { timeout: 30_000 })
+
+await page.click('text=Retour')
+await page.waitForTimeout(400)
+await onglet('ROULAGES')
+await page.waitForSelector('.libelle:has-text("Roulages ·")', { timeout: 20_000 })
+const apres3taps = await page.$$eval('.pile > .bloc', n => n.length)
+verifier('① trois taps sur « Continuer » n\'écrivent qu\'une journée',
+  apres3taps === 1, `${apres3taps} journée(s) écrite(s)`)
+
+// Le libellé dit ce qu'on compte : une journée, pas une session.
+verifier('   le compteur nomme la journée',
+  (await page.textContent('.libelle:has-text("Roulages ·")')).includes('journée'))
+
+// ── ② RETIRER LA JOURNÉE ───────────────────────────────────────────────────
+verifier('② le retrait est offert', await page.isVisible('text=Retirer cette journée'))
+
+// Un tap ne suffit pas : le premier ouvre la question, le second seul efface.
+await page.click('text=Retirer cette journée')
+verifier('   demande confirmation avant d\'effacer',
+  await page.isVisible('text=Retirer définitivement'))
+verifier('   laisse revenir en arrière', await page.isVisible('text=Garder'))
+
+await page.click('text=Garder')
+await page.waitForTimeout(200)
+const gardee = await page.$$eval('.pile > .bloc', n => n.length)
+verifier('   « Garder » ne retire rien', gardee === 1, `${gardee} restante(s)`)
+
+await page.click('text=Retirer cette journée')
+await page.click('text=Retirer définitivement')
+await page.waitForFunction(
+  () => document.querySelectorAll('.pile > .bloc').length === 0, null, { timeout: 20_000 })
+  .then(() => verifier('③ la journée est partie', true))
+  .catch(() => verifier('③ la journée est partie', false, 'elle est toujours là'))
+
+// ── ④ ELLE EST PARTIE JUSQU'EN BASE, avec ses descendants ──────────────────
+// Une session ou un tour orphelin est refusé côté serveur en 23503, et une
+// ligne refusée arrête toute la file d'envoi derrière elle. Le vérifier à
+// l'écran ne suffit pas : on compte dans la base.
+await page.reload({ waitUntil: 'networkidle' }); await pret()
+await onglet('COMPTE')
+await page.waitForSelector('section.compte', { timeout: 15_000 })
+const restes = (await page.textContent('section.compte')).replace(/\s+/g, ' ')
+verifier('④ plus aucune ligne de roulage en attente d\'envoi',
+  !/roulage/i.test(restes), restes.slice(0, 120))
+
+await page.screenshot({ path: process.argv[2] ?? '/tmp/journee.png', fullPage: true })
+verifier('⑤ aucune erreur de console', erreurs.length === 0, erreurs.join(' | '))
+await nav.close()
+
+if (manques.length) {
+  console.error(`\n✗ ${manques.length} vérification(s) en échec :\n  · ${manques.join('\n  · ')}`)
+  process.exit(1)
+}
+console.log('\n✓ la journée s\'écrit une fois et se retire')
