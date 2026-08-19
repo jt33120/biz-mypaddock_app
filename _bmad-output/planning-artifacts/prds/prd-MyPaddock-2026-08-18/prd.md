@@ -1042,6 +1042,70 @@ automatique.** Le partage reste une décision explicite, geste par geste. Coût 
 > et proposer un geste **à aller chercher** ne sont pas la même chose : le premier énonce, le second
 > dirige. Les deux sont désormais permis. Quand rien ne tranche entre eux, préférer le premier.
 
+### L'arbitrage du 19 août 2026 — ce que la réorientation coupe pour se payer
+
+La réorientation demandait **15,5 soirées contre 5 disponibles**. Julian la maintient et choisit de
+la financer par une coupe. **Une réorientation qui ne coupe rien n'est pas une réorientation, c'est
+un vœu.**
+
+**Ce qui se réduit : l'épique du coût, de 5 soirées à 2.** Un montant, un champ libre, une somme.
+Elle a été choisie plutôt qu'une autre pour une raison qui n'est pas le confort : **le coût est le
+seul domaine du noyau dont la version minimale reste vraie.** Une somme est une somme ; elle ne se
+contredira pas au mouvement 2. Les trois cibles exclusives (**AD-7**) restent posées dans le schéma
+— c'est l'écran qui se réduit, pas le modèle, **donc la coupe est réversible sans migration**.
+
+**Effet non prévu et qui mérite d'être noté : cette coupe *renforce* une clause de sécurité.**
+FR-24 interdisait d'afficher un coût au tour sans le budget consommé dans le même bloc. Le coût au
+tour sortant du noyau, la perversité qu'elle surveillait **devient impossible plutôt que
+surveillée**. C'est la seule coupe du dossier dont c'est vrai.
+
+**Ce que la coupe achète :** le garage avec la machine en scène, le **détourage au doigt** et le
+**pipeline pixel local**.
+
+### La porte de rendu — l'exigence que Julian ajoute au pipeline
+
+**Le pipeline ne s'écrit pas avant d'avoir été vu tourner sur de vraies photos de moto de piste.**
+Une sonde d'une soirée précède l'épique, sur les photos de Julian, avec ses critères énoncés
+**avant** que la première sortie soit regardée.
+
+**Et l'exigence qu'il formule, qui est la plus dure des deux :** le rendu doit être **solide *et*
+reproductible pour les autres utilisateurs**. Cela a une conséquence directe sur le jeu d'essai —
+**il ne peut pas être choisi pour flatter le rendu.** Trois motos distinctes au minimum, dont au
+moins une qui n'est pas la sienne ; un fond de paddock chargé ; un contre-jour ; un profil et un
+trois-quarts avant. Et le critère qui tranche : **les mêmes réglages passent sur toutes les photos
+sans réglage manuel par photo.** Si une photo demande un ajustement à la main, le pipeline n'est pas
+reproductible — **c'est un échec, pas un cas particulier.**
+
+> **Pourquoi cette porte est tenable en une soirée, et c'est une propriété technique.** Le pipeline
+> est **déterministe et entièrement local** : réduction, détourage, quantification, palette,
+> contour. Aucun modèle génératif, aucune API, aucune clé. Un pipeline déterministe **se débogue sur
+> un cas et se prouve sur un jeu** ; un modèle génératif ne garantit rien d'un utilisateur au
+> suivant. La reproductibilité que Julian exige n'est pas atteignable autrement.
+
+**La porte est aussi l'interrupteur d'abandon.** Elle rend un verdict à trois issues — *pixel*,
+*photo en scène*, *échec* — et au verdict *photo en scène* les trois soirées **retournent à
+l'épique du coût**. Le scénario B n'engage donc qu'**une** soirée avant son propre verdict.
+
+**Pourquoi « photo en scène » n'est pas un lot de consolation.** Forzavista et Scapes ne font pas
+autre chose : l'attachement vient de la **mise en scène**, pas du rendu. C'est ce qui rend l'abandon
+supportable — et donc décidable honnêtement le soir de la sonde.
+
+### Deux règles de propriété intellectuelle, tranchées et sourcées
+
+**Aucun service génératif tiers ne touche une photo de machine.** Les conditions de Tripo (§5.2.1,
+11 juillet 2025) stipulent que « Tripo retains all rights […] as well as all Intellectual Property
+rights arising therefrom » — **le maillage et la photo source lui appartiennent**. Le palier gratuit
+de Gemini entraîne sur les données versées. Sur un produit dont la machine devient le cœur, les deux
+sont rédhibitoires.
+
+**Le détourage se fait au doigt, sur l'appareil.** Mesuré : **~88 % d'IoU en ~145 ms, 0 ko de modèle
+ajouté**. Contre-intuitif et mesuré aussi : **peindre plus dégrade** — 83 % à quarante-cinq traits
+contre 88 % à dix, donc l'interface doit demander *peu* de traits. Rien ne quitte l'appareil : pas
+de clé d'API, pas de fonction serverless, pas de quota anti-abus, **et aucun chantier RGPD**.
+
+**Pour du 3D plus tard, s'il y en a :** Scaniverse (Niantic) — gratuit, illimité, entièrement sur
+l'appareil, sous 90 secondes, export `.SPZ`. Noté comme voie, pas comme plan.
+
 ---
 
 ## 6. Contraintes et garde-fous
@@ -1388,7 +1452,9 @@ mange la saisie, et la saisie conditionne tout le reste.
 | **Le schéma à deux axes** | FR-5, FR-2 | Décision de modèle. La seule dont le coût explose si elle est différée. |
 | **Le roulage** | FR-6 → FR-10 | L'unité de compte. Rien ne fonctionne sans. |
 | **Le meilleur tour du jour** | FR-16 → FR-19 | Le plaisir immédiat, et la porte d'entrée de Kévin. |
-| **Le coût de la journée et le coût au tour** | FR-21 → FR-25 | Le territoire vide du marché. Et FR-23 dès le noyau, sinon le budget est faux. |
+| **Le coût de la journée** *(forme minimale, 19 août)* | FR-22, FR-52, FR-53 | Le territoire vide du marché. **Réduit à un montant, un champ, une somme** pour financer le garage ; FR-23 reste posée dans le schéma, FR-21 et FR-24 partent au mouvement 2. |
+| **Le garage — la machine en scène** *(19 août)* | §5bis | Le centre du produit depuis la réorientation. **Conditionné à la porte de rendu**, qui peut le réduire à la photo mise en scène. |
+| **Le conseil du jour et le plan si-alors** *(19 août)* | §5bis | Meilleur rapport valeur/coût de la réorientation, et le seul de ses garde-fous soutenu par la littérature. |
 | **La photo et le geste déclaré** | FR-28, FR-29, FR-32 | La fierté qui n'a nulle part où aller. Coût de saisie nul. |
 | **Le récapitulatif sur un seul roulage** | FR-33 → FR-37 | Le seul moteur d'acquisition, et la condition du premier jour. |
 | **L'accueil temporel, deux sources** | FR-11 → FR-15 | Presque gratuit à ce stade, et c'est ce qui fait exister le produit entre deux roulages. |
@@ -1402,6 +1468,12 @@ produit est différée — donc qu'elle ne peut pas porter le premier roulage.
 dans cet ordre : la reconnaissance de reçu (FR-25) tombe avant la saisie manuelle du coût ; la
 saisie assistée de l'entretien tombe avant l'affichage de l'état de la machine ; **la photo, le
 geste et le récapitulatif ne tombent pas.**
+
+> **État du budget au 19 août 2026 : 44 soirées demandées contre ≈ 45 disponibles — 1 soirée de
+> marge, contre 5 avant l'arbitrage.** Ce n'est plus « tendu », c'est **à la limite**, et c'est le
+> prix annoncé du scénario B. Le décompte détaillé et l'ordre de coupe suivant vivent dans
+> `epics.md`, qui est l'artefact qui fait foi sur l'effort — **ce document ne recopie pas des
+> chiffres qu'il ne recalcule pas.**
 
 ### 10.2 Séquencement — trois mouvements, ancrés sur des dates extérieures
 
@@ -1530,6 +1602,7 @@ et **QO-1 a été rouverte le 18 août après réconciliation** — elle avait �
 | **QO-3** | **Quand on appuie sur « partager » depuis une application web, l'image arrive-t-elle vraiment dans une story Instagram ?** Meta ne documente aucun chemin, et les destinations de la feuille de partage iOS ont déjà disparu une fois par le passé. | **Requalifiée le 18 août : à faire, mais hors du plan de base**, au même titre que les fonctions de second temps. Une page de test vivra sur la branche `dev`. FR-37 rend le produit indépendant de la réponse, et l'acquisition payante lui donne un second canal — donc ce n'est plus bloquant. | Sur `dev`, quand ça arrange |
 | **QO-11** | **Le plafond de dépense publicitaire, et les préconditions réglementaires.** Politique de confidentialité, base légale RGPD, CGU, suppression de compte et export — plus la licence de fonte (NFR-18). | Un montant décidé à l'avance, et une liste cochée. **Aucune campagne ne se lance avant.** | Avant la première publicité |
 | **QO-1** | **Le nom public n'est pas trouvé, et MyPaddock ne peut pas l'être.** Vérifié le 18 août 2026, et **plus grave que ce que le dossier du 16 écrivait** : [MyPaddock](https://www.redbullracing.com/int-en/projects/my-paddock-loyalty-programme) est le programme de fidélité d'Oracle Red Bull Racing — lancé en 2021, **750 000 membres**, 6,2 M de visites en 2025, et il fonctionne **aux points et aux paliers**, donc même secteur et mécanique voisine. [ThePaddock](https://thepaddock.app/) n'est pas un voisin mais **le même produit** : chronos et records personnels, partage d'accomplissements, photos de sessions, journal de roulages — déjà sur l'App Store. [PaddockPro](https://paddock-pro.com/) est lui-même contesté entre trois domaines, et Paddock Manager, ThePaddock.live et Paddock Tracker occupent le reste. La graphie « MyPadock » n'élimine ni les collisions phonétiques, ni typographiques, ni celles des résultats de recherche. | **Report décidé par Julian le 18 août 2026, et non oubli.** On construit sous le nom de code ; le nom public se choisira devant le produit qui tourne plutôt que devant un PRD. Ce report est **gratuit à une condition, portée par le récit 0.3** : le nom d'affichage vient d'une seule constante, donc le renommage reste un changement d'une ligne. **Déclencheur de levée** — la recherche à l'identique sur [`data.inpi.fr`](https://data.inpi.fr) est gratuite et instantanée ; la recherche en **similarité est payante et faite par des documentalistes INPI**, donc elle ne se lance que sur un seul nom, ce qui impose de réduire d'abord. Puis conseil professionnel. **Rien de public sous « MyPaddock »** : ni campagne, ni boutique, ni dépôt. | **Avant le premier euro de publicité.** QO-1 rejoint la liste de QO-11 |
+| **QO-12** | **Le jeu ne peut mesurer aucune constance au 1er décembre, et c'est structurel.** AD-3 prévoit *n* tours par session, mais le noyau n'en écrit **qu'un** (récit 2.4). Avec un seul tour, **la seule métrique calculable est le meilleur** — exactement celle qu'il ne faut pas mettre en cap. Aucune métrique de régularité n'existe sous cinq tours chronométrés. Conséquence tranchée : **zéro cap de performance au 1er décembre**, et ce n'est pas une version allégée — un cap sur le meilleur tour serait **strictement pire que rien**, il construirait l'incitation exacte que le produit existe pour ne pas construire. | **Une conversation, pas une soirée de code.** Demander à trois pilotes s'ils repartent d'une session avec la **liste** de leurs tours ou seulement leur meilleur temps. Si c'est le meilleur seul, tout le volet performance du jeu tombe — **pour zéro soirée dépensée**. Si c'est la liste, deux règles de conception sont déjà écrites : la fenêtre de régularité se centre sur la **médiane** et jamais sur le meilleur *(une ligne, et l'incitation s'inverse complètement)*, et toute série reste **bornée à l'intérieur d'une session**. | **Cette semaine.** Décide trois soirées |
 | **QO-5** | **La calibration du coefficient d'usure.** Aucune source ne l'étaye (A14). Tranché à court terme par FR-42 — il part à 1 — mais la valeur juste reste inconnue. | Mesure sur les données réelles de la saison 2027. | Saison 2027 |
 
 ### 12.2 Ce qui a été tranché le 18 août 2026

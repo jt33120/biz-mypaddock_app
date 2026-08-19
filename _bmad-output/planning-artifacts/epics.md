@@ -77,6 +77,10 @@ attendent le mouvement 2. **L'invariant est tenu, l'outillage attend.**
 
 **40 soirées demandées contre ≈ 45 disponibles — cinq soirées de marge, soit 11 %.**
 
+> **Ce verdict a été réarbitré le 19 août 2026.** Il reste juste pour le noyau tel que le §10.1 du
+> PRD le définissait ; le total en vigueur est **44**, et le calcul de l'écart est à la section
+> suivante. Le verdict d'origine est conservé parce que c'est lui qui a rendu la coupe possible.
+
 > **Correction assumée.** J'avais d'abord écrit 37 : une erreur d'addition dans mon propre calcul,
 > corrigée après avoir totalisé les récits un par un. La marge réelle est **plus mince que ce que
 > j'annonçais**, et c'est exactement le genre de chiffre qu'il ne faut pas arrondir dans le bon sens.
@@ -91,6 +95,34 @@ et que Julian ne perd pas trois soirées sur un problème de synchronisation. **
 pourquoi les sondes passent en premier** : si l'épique 0 révèle que le SDK web ne tient pas sur iOS,
 la question n'est plus le découpage, c'est le choix du moteur, et il vaut mieux l'apprendre le
 25 août que le 20 novembre.
+
+### Réarbitrage du 19 août 2026 — le scénario B
+
+**Julian maintient la réorientation du garage et la finance par une coupe, pas par un allongement
+du délai.** Le calcul est refait ici plutôt que corrigé silencieusement.
+
+| Mouvement | Soirées |
+|---|---|
+| Total du noyau coupé (verdict ci-dessus) | 40 |
+| − Épique 5 ramenée à sa forme minimale : un montant, un champ, une somme | **−3** |
+| + Récit 0.5 · la porte de rendu | **+1** |
+| + Épique 3bis · le garage et la présence de la machine | **+5** |
+| + Récit 6.3 · le conseil du jour et le plan si-alors | **+1** |
+| **Nouveau total** | **44** |
+
+**44 demandées contre ≈ 45 disponibles — une soirée de marge, soit 2 %.**
+
+> **Ce chiffre doit être lu comme il est écrit.** La marge passe de 11 % à 2 %. Ce n'est plus
+> « tendu », c'est **à la limite** : une seule soirée perdue déclenche la liste de coupe ci-dessous,
+> et elle la déclenche dès la première semaine de septembre. C'est le prix du scénario B, il était
+> annoncé avant la décision, et il est écrit ici pour qu'on ne le redécouvre pas en novembre.
+
+**Ce qui rend ce prix acceptable, et c'est une propriété et non un espoir.** L'épique 3bis est
+**adossée à un interrupteur d'abandon armé avant sa première ligne de code** : le récit 0.5 tranche
+sur les photos réelles de Julian si le rendu pixel tient. S'il ne tient pas, l'épique 3bis se
+réduit à son premier récit, **les trois soirées retournent à l'épique 5, et la marge revient à
+11 %**. Le scénario B n'est donc pas un pari à 3 soirées — c'est un pari à **une** soirée, celle de
+la sonde, et le reste ne s'engage qu'après un verdict écrit.
 
 ### Si la marge disparaît quand même
 
@@ -206,15 +238,20 @@ Extraites des deux épines, chacune produisant du travail identifiable :
 
 | # | Épique | Récits | Soirées |
 |---|---|---|---|
-| **0** | Sondes et préconditions | 4 | 5 |
+| **0** | Sondes et préconditions | 5 | 6 |
 | **1** | Le schéma à deux axes | 4 | 6 |
 | **2** | Le roulage et le chrono | 5 | 9 |
 | **3** | La photo et le geste | 3 | 4 |
+| **3bis** | **Le garage — la machine devient une présence** | 3 | 5 |
 | **4** | Le récapitulatif partageable | 3 | 6 |
-| **5** | Le coût de la journée | 3 | 5 |
-| **6** | L'accueil temporel | 2 | 3 |
+| **5** | Le coût de la journée *(forme minimale)* | 1 | 2 |
+| **6** | L'accueil temporel | 3 | 4 |
 | **7** | Les instruments de bord | 1 | 2 |
-| | **Total noyau** | **25** | **40** |
+| | **Total noyau** | **24** | **44** |
+
+**Réarbitrage du 19 août 2026 (scénario B).** L'épique 5 passe de 5 à 2 soirées et finance
+l'épique 3bis ; le récit 0.5 arme l'interrupteur d'abandon ; le récit 6.3 entre au noyau. Marge
+restante : **1 soirée sur ≈ 45**. Détail du calcul en tête de document.
 
 ### Mouvement 2 — décembre 2026 à février 2027
 
@@ -222,7 +259,7 @@ Extraites des deux épines, chacune produisant du travail identifiable :
 |---|---|---|
 | **8** | L'axe machine prend ses écrans | Journal d'interventions daté et indépendant de tout roulage · la pièce achetée non montée comme état de première classe · les **trois catégories séparées** et jamais fusionnées · la réparation non vitale née d'une photo · l'événement visé |
 | **9** | L'accueil temporel se branche sur l'atelier | Les quatre sources supplémentaires · **c'est ce branchement qui referme le vide saisonnier**, pas l'axe machine seul |
-| **10** | Ce que le noyau a coupé | La reconnaissance de reçu · l'accueil réarrangeable · le catalogue d'achievements outillé |
+| **10** | Ce que le noyau a coupé | La reconnaissance de reçu · l'accueil réarrangeable · le catalogue d'achievements outillé · **et depuis le 19 août : le sélecteur des trois cibles de dépense, le coût au tour, le compteur de crédits, le budget de saison, le coût par machine** — aucun n'exige de migration |
 
 ### Mouvement 3 — saison 2027, sur condition d'allumage
 
@@ -257,12 +294,20 @@ Aucune date : chaque épique s'allume sur une condition observable.
 | FR-18 | 1.1, 2.2 | FR-55, FR-56 | Épique 15 |
 | FR-19 | 2.3 | FR-57 → FR-60 | **7.1** |
 | FR-20 | Épique 11 | | |
-| FR-21 → FR-24 | 5.2, 5.3 | | |
+| FR-21 → FR-24 | **Coupé** → Épique 10 *(FR-24 tenue par construction, voir 5.1)* | | |
 | FR-25 | **Coupé** → Épique 10 | | |
-| FR-26, FR-27 | 5.1, 5.3 | | |
+| FR-26, FR-27 | **Coupé** → Épique 10 | | |
+| FR-22 | 5.1 *(la somme seule)* | | |
 
-**Aucune FR n'est orpheline.** Trois sont explicitement reportées avec leur épique : FR-4, FR-20 et
-FR-25.
+**Aucune FR n'est orpheline.** Reportées avec leur épique : FR-4, FR-20, FR-25, et depuis le
+réarbitrage du 19 août **FR-21, FR-23 partiellement, FR-24, FR-26 et FR-27** — toutes vers
+l'épique 10, **aucune n'exigeant de migration**.
+
+**Deux récits ne portent aucune FR, et c'est volontaire.** Le récit **0.5** (la porte de rendu) et
+l'épique **3bis** (le garage) naissent de la réorientation des 18–19 août, postérieure aux 62 FR du
+PRD. Leur contrat est écrit dans leurs critères d'acceptation et dans le §5bis du PRD ; les FR
+correspondantes seront numérotées à la prochaine passe du PRD plutôt que faufilées ici — **on ne
+renumérote pas 62 exigences pour un ajout.**
 
 ---
 
@@ -361,6 +406,65 @@ lui est substituée dans les tokens — et le choix est consigné.
 **Étant donné** les trois familles retenues
 **Quand** elles sont intégrées
 **Alors** elles le sont **en data URI**, et le produit démarre sans réseau (UX-DR2).
+
+---
+
+### Récit 0.5 : La porte de rendu — *1 soirée*
+
+En tant que **Julian**, je veux **voir ce que le pipeline pixel fait de mes propres photos de moto
+de piste avant qu'on l'écrive dans l'application**, afin de **savoir si le garage mérite trois
+soirées ou s'il reste une photo mise en scène**.
+
+**C'est l'interrupteur d'abandon du scénario B.** Cette sonde est la seule soirée engagée avant le
+verdict ; l'épique 3bis ne démarre pas sans lui.
+
+**Critères d'acceptation**
+
+**Étant donné** le banc d'essai
+**Quand** il est construit
+**Alors** il est **déterministe et entièrement local** — réduction, détourage, quantification,
+palette, contour — **aucun modèle génératif, aucun appel réseau, aucune clé d'API**. C'est la
+propriété qui rend le résultat reproductible : un pipeline déterministe se débogue sur un cas et se
+**prouve** sur un jeu, là où un modèle génératif ne garantit rien d'un utilisateur au suivant.
+
+**Étant donné** le jeu d'essai
+**Quand** il est constitué
+**Alors** il ne peut pas être choisi pour flatter le rendu. Il contient **au minimum** : trois motos
+distinctes dont **au moins une qui n'est pas celle de Julian**, un fond de paddock chargé — camion,
+parasol, autres motos —, une photo en contre-jour, une de profil et une de trois-quarts avant.
+**Une photo cadrée proprement sur fond uni ne prouve rien**, c'est le cas facile.
+
+**Étant donné** les critères de jugement
+**Quand** ils sont énoncés
+**Alors** ils le sont **avant** que la première sortie soit regardée, et ils sont ceux-ci : *les
+rayons sont-ils des rayons ? le disque de frein est-il perforé ? la silhouette est-elle
+reconnaissable de profil ? est-ce que tu la montrerais à un pote ?*
+
+**Étant donné** le critère de reproductibilité
+**Quand** il est évalué
+**Alors** **les mêmes réglages passent sur toutes les photos du jeu sans réglage manuel par
+photo**. Si une photo demande un ajustement à la main, le pipeline **n'est pas reproductible** — et
+c'est un échec, pas un cas particulier. C'est l'exigence explicite de Julian et c'est la seule qui
+distingue un rendu qui marche chez lui d'un rendu qui marche chez ses utilisateurs.
+
+**Étant donné** une photo d'iPhone récent
+**Quand** elle entre dans le pipeline
+**Alors** elle est réduite par `createImageBitmap` **avant tout `drawImage`** — une photo de 48 Mpx
+dépasse le plafond de 16 777 216 px de Safari et **fait planter l'onglet** (AD-13). Le banc mesure
+aussi le temps de rendu sur appareil réel, cible **sous une seconde**.
+
+**Étant donné** un chrono mesuré sous Chrome headless
+**Quand** il est lu
+**Alors** **il est refusé** : le mode headless avance en **temps virtuel** et `performance.now()`
+saute jusqu'au budget alloué — le banc a rendu 19 990 ms sur une image de 340 px. Le verdict de
+performance se rend **en navigateur réel, sur l'iPhone**. La planche headless sert à juger l'image,
+jamais la vitesse.
+
+**Étant donné** la fin de la sonde
+**Quand** elle est close
+**Alors** elle produit **un verdict écrit à trois issues** — *pixel*, *photo en scène*, *échec* — et
+ce verdict **commande l'épique 3bis** : au verdict *photo en scène*, les trois soirées retournent à
+l'épique 5.
 
 ---
 
@@ -606,6 +710,12 @@ part au retour du réseau (FR-32).
 **Alors** elle l'est **depuis la même origine ou avec un CORS correct** — sinon la composition lève
 `SecurityError` (AD-13).
 
+**Étant donné** une photo prise avec un iPhone récent
+**Quand** elle est versée
+**Alors** elle est réduite par `createImageBitmap(file, {resizeWidth, resizeHeight, resizeQuality,
+imageOrientation: 'from-image'})` **avant tout `drawImage`** — au-delà de 16 777 216 px Safari
+refuse le canevas et **l'onglet meurt**. Une photo de 48 Mpx est le cas normal, pas le cas limite.
+
 **Étant donné** un téléversement qui échoue
 **Quand** l'erreur est présentée
 **Alors** elle dit ce qui s'est passé, **ce qui est conservé**, et ce qui va se passer.
@@ -654,6 +764,102 @@ FR-30).
 **Quand** il est présenté
 **Alors** le produit **énonce le fait** — « genou gauche posé » — et **ne décerne rien** : ni badge,
 ni médaille, ni étoile, ni points.
+
+---
+
+## Épique 3bis : Le garage — la machine devient une présence
+
+**Objectif.** Le centre du produit depuis la réorientation du 18 août. **Financée par la coupe de
+l'épique 5, pas par un report du 1er décembre.**
+
+**Précondition dure : le récit 0.5 doit rendre le verdict *pixel*.** Au verdict *photo en scène*,
+cette épique se réduit à son premier récit et les trois soirées retournent à l'épique 5.
+
+### Récit 3bis.1 : La machine en scène — *2 soirées*
+
+En tant que **Julian**, je veux **ouvrir l'application et voir ma moto**, afin que **le garage soit
+un endroit et non une liste**.
+
+**Critères d'acceptation**
+
+**Étant donné** une machine avec une photo
+**Quand** le garage s'ouvre
+**Alors** elle est **présentée en scène** — cadre, sol, horizon, éclairage — et non affichée en
+vignette dans une ligne de tableau.
+
+**Étant donné** une machine **sans** photo
+**Quand** le garage s'ouvre
+**Alors** la scène existe quand même et la machine y est représentée par sa silhouette. **Le garage
+n'est jamais vide et ne demande jamais une photo pour fonctionner** — AD-2 fait de la machine une
+racine de premier rang, pas un objet conditionnel à un média.
+
+**Étant donné** plusieurs machines
+**Quand** le garage s'ouvre
+**Alors** elles sont toutes atteignables, et **le roulage se rattache à celle qui a roulé** (FR-2,
+AD-2).
+
+**Étant donné** que le pilote est hors ligne
+**Quand** le garage s'ouvre
+**Alors** la scène et la photo sont là — **rien dans cet écran ne dépend du réseau**.
+
+### Récit 3bis.2 : Le détourage au doigt — *1 soirée*
+
+En tant que **pilote**, je veux **passer le doigt sur ma moto pour la détacher du fond**, afin
+d'**obtenir une image propre sans qu'aucun service extérieur ne voie ma photo**.
+
+**Critères d'acceptation**
+
+**Étant donné** une photo et quelques traits au doigt
+**Quand** le détourage est calculé
+**Alors** il l'est **entièrement sur l'appareil** — aucun téléversement, aucun modèle téléchargé,
+**zéro kilo-octet de poids ajouté au bundle**. Cible mesurée : **~145 ms**, qualité de l'ordre de
+**88 % d'IoU** avec une dizaine de traits.
+
+**Étant donné** le guidage à l'écran
+**Quand** il est écrit
+**Alors** il demande **peu de traits, pas beaucoup** : mesuré, quarante-cinq traits **dégradent** le
+résultat — 83 % contre 88 % à dix. C'est contre-intuitif, donc l'interface doit le dire, sinon le
+pilote peindra jusqu'à abîmer sa propre image.
+
+**Étant donné** un détourage que le pilote juge raté
+**Quand** il le refait
+**Alors** il repart de la photo intacte — **la photo d'origine n'est jamais écrasée**.
+
+**Étant donné** la question de la propriété
+**Quand** on cherche l'endroit où l'image sort du téléphone
+**Alors** **il n'y en a pas.** C'est la raison du choix : les conditions de Tripo (§5.2.1, 11 juillet
+2025) attribuent au service **le maillage et la photo source**, et le palier gratuit de Gemini
+entraîne sur les données versées. Rien ne quitte l'appareil, donc rien n'est cédé, **et aucun
+chantier RGPD ne s'ouvre**.
+
+### Récit 3bis.3 : Le pipeline pixel dans l'application — *2 soirées*
+
+En tant que **Julian**, je veux **que ma moto ait sa forme de jeu**, afin qu'**elle devienne l'objet
+qui monte en niveau**.
+
+**Critères d'acceptation**
+
+**Étant donné** les réglages validés par le récit 0.5
+**Quand** ils entrent dans l'application
+**Alors** ils y entrent **tels quels et en un seul endroit** — un module, des constantes nommées, et
+**aucun réglage par photo**.
+
+**Étant donné** une machine passée au pipeline
+**Quand** le rendu est produit
+**Alors** il est **calculé une fois et conservé** — le garage ne recalcule pas à chaque ouverture, et
+la conservation suit le chemin d'écriture normal, local d'abord.
+
+**Étant donné** le vocabulaire à l'écran
+**Quand** il est écrit
+**Alors** **c'est la machine qui monte en niveau, jamais le pilote.** Toute progression s'énonce sur
+l'objet — la moto, ses kilomètres, son entretien. Double effet : on ne peut pas « aller chercher »
+un kilomètre comme on va chercher un genou au sol, et la fierté se pose sur quelque chose qu'on
+montre.
+
+**Étant donné** un rendu que le pilote n'aime pas
+**Quand** il le refuse
+**Alors** **la photo réelle reprend sa place** — le pixel est une présentation, jamais un
+remplacement destructif.
 
 ---
 
@@ -727,69 +933,55 @@ nulle part** — ni dans le code, ni dans l'interface (FR-37).
 ## Épique 5 : Le coût de la journée
 
 **Objectif.** Le territoire vide du marché. Et la clause de sécurité la plus facile à violer par
-commodité.
+commodité. **Réduite le 19 août 2026 à sa forme minimale pour financer l'épique 3bis** — c'est la
+coupe du scénario B, elle est réversible, et le récit 0.5 peut la révoquer.
 
-### Récit 5.1 : La dépense et ses trois cibles — *2 soirées*
+### Récit 5.1 : Un montant, un champ, une somme — *2 soirées*
 
-En tant que **pilote**, je veux **rattacher une dépense à un roulage, à une moto ou à la saison**,
-afin que **mon budget soit complet**.
+En tant que **Julian**, je veux **saisir ce que la journée a coûté en un seul champ**, afin de **le
+consigner sans tenir une comptabilité**.
+
+**Forme minimale assumée le 19 août 2026.** Ce qui suit n'est pas ce que le §10.1 demandait : c'est
+la coupe qui finance l'épique 3bis. Elle a été choisie plutôt qu'une autre parce que **le coût est
+le seul domaine du noyau dont la version minimale reste vraie** — une somme est une somme, elle ne
+ment pas et elle ne se contredira pas au mouvement 2.
 
 **Critères d'acceptation**
 
 **Étant donné** une dépense
-**Quand** elle est créée
-**Alors** sa cible est **exclusive et obligatoire** parmi roulage, machine ou saison (FR-23, AD-7).
+**Quand** elle est écrite en base
+**Alors** **l'invariant de cible exclusive tient toujours** — roulage, machine ou saison, jamais deux,
+jamais aucune (FR-23, AD-7). Il est déjà posé par le récit 1.1 et **la coupe ne le touche pas** :
+c'est l'écran qui se réduit, pas le schéma. Le mouvement 2 ouvre les deux autres cibles **sans
+migration**.
 
-**Étant donné** une dépense sans roulage
-**Quand** elle est rattachée
-**Alors** elle va à la saison en cours si elle existe, **sinon à la saison à venir** — et
-`saison_annee` est un **entier fixé à la saisie, jamais recalculé** (AD-18).
-
-**Étant donné** le code
-**Quand** il est relu
-**Alors** **aucune expression conditionnelle ne compare un mois de l'année** (FR-53, AD-8).
-
-**Étant donné** une dépense marquée « pièce »
-**Quand** elle est enregistrée
-**Alors** elle se rattache à la machine (FR-26).
-
-### Récit 5.2 : Le coût de la journée — *1 soirée*
-
-En tant que **Julian**, je veux **savoir ce que la journée a coûté**, afin de **le consigner sans
-tenir une comptabilité**.
-
-**Critères d'acceptation**
+**Étant donné** l'écran du noyau
+**Quand** il est livré
+**Alors** il n'offre **qu'une cible : le roulage.** Un montant, un libellé libre, et rien d'autre.
+Pas de catégories, pas de reconnaissance de reçu, pas de sélecteur de cible.
 
 **Étant donné** un roulage avec des dépenses
 **Quand** j'ouvre son détail
-**Alors** le coût de la journée est la somme de ses dépenses (FR-22).
+**Alors** le coût de la journée est **la somme de ses dépenses** (FR-22) — et c'est le seul chiffre
+de coût du noyau.
 
-**Étant donné** que je demande « ce que cette moto m'a coûté »
-**Quand** le calcul est fait
-**Alors** c'est **exclusivement** la somme des dépenses dont la cible est cette machine — **jamais
-une jointure implicite par les roulages** (AD-17).
+**Étant donné** le noyau livré
+**Quand** on cherche le coût au tour
+**Alors** **il n'y est pas** — donc FR-24 est tenue par construction : la perversité qu'elle
+interdisait, un coût au tour affiché sans le budget consommé à côté, **devient impossible plutôt que
+surveillée**. C'est la seule coupe du dossier qui *renforce* une clause de sécurité au lieu de la
+fragiliser.
 
-### Récit 5.3 : Le coût au tour et le compteur de crédits — *2 soirées*
+**Étant donné** le code
+**Quand** il est relu
+**Alors** **aucune expression conditionnelle ne compare un mois de l'année** (FR-53, AD-8), et
+`saison_annee` reste **un entier fixé à la saisie, jamais recalculé** (AD-18).
 
-En tant que **Julian**, je veux **voir mon coût au tour**, afin de **transformer un chiffre qui
-descend en victoire**.
-
-**Critères d'acceptation**
-
-**Étant donné** un budget de saison déclaré
-**Quand** le coût au tour s'affiche
-**Alors** le budget consommé est **dans le même bloc visuel**, sans interaction pour le révéler
-(FR-21).
-
-**Étant donné** qu'aucun budget n'est déclaré
-**Quand** un coût s'affiche
-**Alors** **le coût au tour ne s'affiche pas** — seul le coût de la journée, qui ne porte pas la même
-perversité. **Pas de zéro, pas de tiret** (FR-24).
-
-**Étant donné** le premier affichage d'un coût
-**Quand** aucun budget n'existe
-**Alors** un champ unique le demande — **jamais à la création du compte**, jamais comme étape
-d'installation.
+> **Ce qui part au mouvement 2, épique 10 :** le sélecteur des trois cibles à l'écran, la catégorie
+> « pièce » rattachée à la machine (FR-26), le **coût au tour** et le compteur de crédits (FR-21,
+> FR-24), le budget de saison déclaré, le coût par machine (AD-17), et la reconnaissance de reçu
+> (FR-25) déjà coupée au verdict initial. **Aucun de ces éléments n'exige de migration** — c'est
+> précisément ce qui rend cette coupe réversible, et c'est pourquoi c'est celle-là qui a été choisie.
 
 ---
 
@@ -847,6 +1039,50 @@ et la zone des chiffres est en dessous (FR-15, disposition par défaut complète
 **Quand** la barre de navigation s'affiche
 **Alors** elle montre **deux onglets** — Accueil et Roulages. **Machine, Saison et Cercle
 n'apparaissent pas tant qu'ils n'ont rien à montrer** (UX-DR9).
+
+### Récit 6.3 : Le conseil du jour et le plan si-alors — *1 soirée*
+
+En tant que **pilote**, je veux **une chose technique à la fois quand j'ouvre l'application**, afin
+de **progresser sans me faire pousser**.
+
+**Meilleur rapport valeur/coût de la réorientation**, et le seul de ses garde-fous qui soit soutenu
+par la littérature.
+
+**Critères d'acceptation**
+
+**Étant donné** le corpus de conseils
+**Quand** il est implémenté
+**Alors** il vit **en base**, comme le catalogue de caps (AD-10) — un conseil s'ajoute **sans
+redéploiement**.
+
+**Étant donné** une ouverture
+**Quand** l'accueil s'affiche
+**Alors** **un seul** conseil est présenté, choisi de façon **déterministe à partir de la date**, et
+il **énonce une technique** — jamais une performance à atteindre, jamais un chiffre à battre.
+
+**Étant donné** le contenu livré
+**Quand** il est relu
+**Alors** **aucun bandeau de prévention n'y figure.** Mesuré : l'attention à un message
+d'avertissement chute **dès la deuxième exposition**, et une menace sans action facile associée
+produit **de la défense, pas du changement** (Witte & Allen, 93 études). Écrire « la plupart des
+chutes arrivent l'après-midi » sans dire quoi faire est **pire que ne rien écrire**.
+
+**Étant donné** un pilote qui a saisi **quatre sessions**
+**Quand** il ouvre l'application
+**Alors** il reçoit **une invite unique** — pas récurrente — lui proposant d'écrire un **plan
+si-alors dans ses propres mots** (« si je me fais rattraper, alors je lève et je le laisse passer »).
+C'est l'intervention comportementale la mieux établie du dossier, **d ≈ 0,65 sur 94 essais**.
+
+**Étant donné** un plan si-alors écrit
+**Quand** il est conservé
+**Alors** il l'est **mot pour mot** — le produit ne le reformule jamais, ne le corrige jamais, ne le
+note jamais. **C'est le fait qu'il soit dans ses mots qui le fait fonctionner.**
+
+**Étant donné** le conseil et l'invite
+**Quand** on cherche la notification
+**Alors** **il n'y en a aucune** — ni push, ni rappel, ni relance. Ils sont là **quand le pilote
+ouvre**, ils ne vont pas le chercher — contre-mesure **C1** du §11.2 du PRD : *notifications de
+relance envoyées = 0*, « le signal d'échec le plus important du dispositif ».
 
 ---
 

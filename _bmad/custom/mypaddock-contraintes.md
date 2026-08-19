@@ -184,15 +184,45 @@ où l'axe machine domine ». La correction de cadence du même jour pointe au m�
 et l'entretien font vivre l'application toute l'année, le roulage est le motif le plus rare.
 
 **La moto devient une présence, pas une ligne de texte.** À partir d'une photo réelle, le produit en
-fabrique une représentation — pixel produit localement, et/ou modèle 3D généré par service externe.
-Le roulage s'y rattache, l'entretien s'y rattache, l'usure s'y lit. C'est le garage qu'on ouvre, pas
-un formulaire.
+fabrique une représentation. Le roulage s'y rattache, l'entretien s'y rattache, l'usure s'y lit.
+C'est le garage qu'on ouvre, pas un formulaire. Une machine **sans** photo a quand même sa place dans
+la scène : AD-2 en fait une racine de premier rang, pas un objet conditionnel à un média.
 
-**Deux inconnues à mesurer avant d'en planifier quoi que ce soit**, et qu'aucune source ne
-documente : ce que donne réellement une **moto** passée en 3D générative — rayons, durites,
-carénages sont parmi les sujets les plus durs — et lequel, du pixel ou du 3D, émeut vraiment son
-propriétaire. Une sonde d'une soirée tranche les deux. **Ne pas bâtir la spec sur la réponse
-espérée.**
+### Tranché le 19 août 2026 — trois règles, à appliquer sans les rediscuter
+
+**1. Aucun service génératif tiers ne touche une photo de machine.** Les conditions de Tripo
+(§5.2.1, 11 juillet 2025) lui attribuent « all rights […] as well as all Intellectual Property
+rights arising therefrom » — **le maillage et la photo source**. Le palier gratuit de Gemini entraîne
+sur les données versées. Sur un produit dont la machine est le cœur, les deux sont rédhibitoires.
+Corollaire : **le pipeline de rendu est déterministe et entièrement local** — réduction, détourage,
+quantification, palette, contour. Aucune clé d'API, aucune fonction serverless, aucun quota
+anti-abus, **et aucun chantier RGPD**. Pour du 3D plus tard : Scaniverse (Niantic), sur l'appareil.
+
+**2. Le détourage se fait au doigt, et l'interface demande *peu* de traits.** ~88 % d'IoU en
+~145 ms, 0 ko ajouté au bundle. Mesuré et contre-intuitif : **peindre plus dégrade** — 83 % à
+quarante-cinq traits contre 88 % à dix. Un skill qui écrit ce guidage doit demander peu, pas
+beaucoup.
+
+**3. C'est la machine qui monte en niveau, jamais le pilote.** Toute progression s'énonce sur
+l'objet — la moto, ses kilomètres, son entretien. Deux effets : **on ne peut pas « aller chercher »
+un kilomètre** comme on va chercher un genou au sol, et la fierté se pose sur quelque chose qu'on
+montre. Forme éprouvée (Monster Hunter, Dark Souls) : toute la puissance passe par l'objet.
+
+**Et une porte, qui n'est pas une formalité.** Le pipeline ne s'écrit pas avant d'avoir été vu
+tourner sur de **vraies photos de moto de piste**, avec ses critères énoncés **avant** que la
+première sortie soit regardée. Exigence de Julian : le rendu doit être solide **et reproductible pour
+les autres utilisateurs** — donc le jeu d'essai ne peut pas être choisi pour flatter le rendu
+(plusieurs motos dont une qui n'est pas la sienne, fond de paddock chargé, contre-jour, profil et
+trois-quarts), et **les mêmes réglages doivent passer sur toutes les photos sans réglage manuel par
+photo**. Une photo qui demande un ajustement à la main est un **échec du pipeline**, pas un cas
+particulier. Verdict à trois issues — *pixel*, *photo en scène*, *échec* — et au verdict *photo en
+scène* le garage reste la photo réelle mise en scène, **ce qui n'est pas un lot de consolation** :
+Forzavista et Scapes ne font pas autre chose, l'attachement vient de la mise en scène.
+
+**Piège d'implémentation qui tue l'onglet, pas seulement le rendu.** Toute photo entrant dans un
+canevas passe d'abord par `createImageBitmap(file, {resizeWidth, resizeHeight, resizeQuality,
+imageOrientation: 'from-image'})`. Au-delà de **16 777 216 px** Safari refuse le canevas ; une photo
+d'iPhone récent à 48 Mpx est le **cas normal**, pas le cas limite.
 
 ## 7. Cadrage du projet
 

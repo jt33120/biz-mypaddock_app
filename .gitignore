@@ -24,3 +24,8 @@ dist/
 # Reference uniquement. Condition 5 de l'audit de viabilite : secrets
 # historiques renouveles, aucun ancien extracteur reactive.
 context/
+
+# Banc de rendu — photos personnelles, jamais versionnées
+banc-rendu/photos/*
+!banc-rendu/photos/.gitkeep
+banc-rendu/sorties/
