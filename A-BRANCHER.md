@@ -46,48 +46,56 @@ QO-11 :
 - un **quota de génération par compte, côté serveur** — le sprite coûte environ
   0,16 € l'unité ; mille curieux à trois essais font 480 € sans un euro de recette.
 
-## 3 · PowerSync — l'instance
+## 3 · PowerSync — il manque un projet, pas un jeton
 
-`VITE_POWERSYNC_URL` est vide, donc la synchronisation continue est éteinte et
-l'application le dit en clair. En attendant, la sauvegarde est un geste : le
-bouton dépose l'état sur le serveur, et c'est déjà la promesse tenue.
+Le jeton du `.env` est bon : il s'authentifie et voit ton organisation `jt33120`.
+Il n'y a simplement **rien à l'intérieur** — zéro projet, zéro instance. Un jeton
+sert à fabriquer une instance, il n'en est pas une.
 
-Pour l'allumer : créer l'instance, la connecter au Postgres Supabase, publier les
-tables, puis coller ces règles.
+Et le CLI (`npx powersync`) sait tout faire **sauf** créer un projet : il crée des
+instances *dans* un projet existant. C'est donc le seul clic que je ne peux pas
+donner à ta place.
 
-```yaml
-bucket_definitions:
-  saison_du_pilote:
-    parameters: select request.user_id() as pilote_id
-    data:
-      - select * from machine      where pilote_id = bucket.pilote_id
-      - select * from roulage      where pilote_id = bucket.pilote_id
-      - select * from session      where pilote_id = bucket.pilote_id
-      - select * from tour         where pilote_id = bucket.pilote_id
-      - select * from depense      where pilote_id = bucket.pilote_id
-      - select * from intervention where pilote_id = bucket.pilote_id
+**Ce qu'il te reste à faire, une fois :** sur `dashboard.powersync.com`, créer un
+projet dans l'organisation `jt33120`, et me donner son identifiant. Deux minutes.
 
-  referentiel:
-    data:
-      - select * from circuit
-      - select * from organisateur
-      - select * from roulage_publie
-```
+**Ce qui est déjà prêt**, dans `powersync/` :
 
-Trois remarques qui valent mieux qu'une découverte plus tard :
+- `sync-config.yaml` — ce que chaque pilote reçoit. Six requêtes à plat sur sa
+  saison, plus le référentiel. Le barème constructeur en est volontairement
+  absent : un flux global le ferait descendre en entier chez quelqu'un qui
+  possède une moto. Il lui faudra un flux paramétré par le garage, au mouvement 3.
+- `service.yaml` — région Paris, et l'authentification par le **JWKS public** de
+  Supabase plutôt que par un secret partagé. Vérifié : ton projet signe en ES256,
+  donc aucun secret n'a besoin d'exister des deux côtés.
 
-- **Le barème n'est pas dans les règles, et c'est volontaire.** Un seau global le
-  ferait descendre en entier chez un pilote qui possède une moto. Il lui faudra un
-  seau paramétré par les machines du garage, au mouvement 3 — pas avant.
-- **`session`, `tour` et `intervention` portent désormais `pilote_id`** (migration
-  du 19 août). Sans ça elles étaient insynchronisables : une règle PowerSync ne
-  fait pas de jointure. Les politiques RLS exigent toujours la cohérence avec le
-  parent, la frontière n'a pas bougé.
-- **Le palier gratuit désactive une instance après une semaine d'inactivité.** Pour
-  un produit ouvert onze fois par an, ce n'est pas un détail de facturation, c'est
-  un défaut de conception du palier. À trancher avant décembre : palier payant, ou
-  réveil programmé, ou un autre moteur.
+**Ce que je ferai ensuite**, dès que j'ai l'identifiant du projet :
+`powersync link cloud --create` puis `powersync deploy`, et `VITE_POWERSYNC_URL`
+se remplit. La synchronisation s'allume alors après ta première sauvegarde.
 
-Une fois l'URL posée, la synchronisation ne s'allume qu'après **une première
-sauvegarde** depuis l'écran Compte. C'est voulu : le journal des changements écrit
-avant le compte ne décrit le passé de personne, et le rejouer échouerait.
+**Deux valeurs manqueront encore, et une seule vient de toi.**
+
+- Le **rôle de réplication** : je le crée moi-même sur Postgres, avec son propre
+  mot de passe, pour que tu n'aies jamais à me confier celui de `postgres`. Il lit
+  tout et n'écrit rien — AD-12 vaut aussi pour lui.
+- L'**hôte de connexion** : vérifié le 19 août, `db.<ref>.supabase.co` ne publie
+  plus d'adresse IPv4, seulement une IPv6. Si le service PowerSync sort en IPv4,
+  il faut passer par le bac à sable (Supavisor, mode session). C'est ce que
+  `service.yaml` vise par défaut ; le préfixe exact (`aws-0-` ou `aws-1-`) est
+  celui affiché dans Supabase → Project Settings → Database.
+
+---
+
+## Correction — le motif de la migration du 19 août était faux
+
+J'ai ajouté `pilote_id` sur `session`, `tour` et `intervention` en invoquant une
+contrainte du moteur : « une règle PowerSync ne fait pas de jointure ». **C'est
+faux.** Vrai des anciens `bucket_definitions`, faux des Sync Streams en édition 3,
+qui acceptent les sous-requêtes, les `INNER JOIN` et les CTE.
+
+Les colonnes restent, sur un motif plus faible mais réel : le flux descendant
+s'écrit à plat, le connecteur n'a aucun cas particulier, et les politiques RLS
+exigent toujours la cohérence avec le parent — la dénormalisation ne peut pas
+diverger de l'ascendance. Ce n'est plus une nécessité, c'est une simplification
+assumée. Le modèle strictement normalisé reste atteignable, au prix d'une
+migration ; dis-le si tu le préfères.

@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/cli-schemas@latest/json-schema/service-config.json
+
+_type: cloud
+
+name: mypaddock
+# Le Postgres est à Paris (eu-west-3). Faire répliquer depuis les États-Unis
+# ajouterait un aller-retour transatlantique à chaque écriture.
+region: eu
+
+replication:
+  connections:
+    - type: postgresql
+      name: supabase-mypaddock
+
+      # ⚠ DEUX CHOSES À TRANCHER AU PREMIER DÉPLOIEMENT, et les deux se vérifient
+      # en une minute plutôt qu'en une soirée :
+      #
+      # 1. L'HÔTE. La connexion directe `db.<ref>.supabase.co` ne publie PLUS
+      #    d'adresse IPv4 — vérifié le 19 août : uniquement un AAAA. Si le service
+      #    PowerSync sort en IPv4, elle est injoignable, et c'est le bac à sable
+      #    (Supavisor, mode session, port 5432) qu'il faut viser. D'où ce choix
+      #    par défaut. Le préfixe exact (`aws-0-` ou `aws-1-`) est celui affiché
+      #    dans Supabase → Project Settings → Database.
+      # 2. L'UTILISATEUR. En passant par le bac à sable, il porte le suffixe du
+      #    projet : `<role>.<ref>`. En direct, il s'écrit sans suffixe.
+      hostname: aws-1-eu-west-3.pooler.supabase.com
+      port: 5432
+      database: postgres
+
+      # Un rôle DÉDIÉ, jamais `postgres`. Il a besoin de REPLICATION et de
+      # BYPASSRLS — il lit pour tout le monde, donc RLS le gênerait — mais il
+      # n'écrit rien. AD-12 vaut aussi pour lui : ce n'est pas parce qu'un rôle
+      # est technique qu'il a le droit de toucher la saison de quelqu'un.
+      username: powersync_role.oghmwkiklwaptjfouprx
+      password:
+        secret: !env POWERSYNC_DATABASE_PASSWORD
+
+      sslmode: verify-full
+
+# ─── Qui a le droit de se synchroniser ─────────────────────────────────────
+# On vérifie les jetons Supabase par leur JWKS public plutôt que par un secret
+# partagé. Vérifié le 19 août : le projet signe en ES256 (clé asymétrique), donc
+# aucun secret n'a besoin d'exister des deux côtés — et il n'y a rien à faire
+# tourner le jour où la clé est renouvelée.
+client_auth:
+  jwks_uri: https://oghmwkiklwaptjfouprx.supabase.co/auth/v1/.well-known/jwks.json
+  # Supabase émet ses jetons avec `aud: authenticated`.
+  additional_audiences:
+    - authenticated
+  # Aucun jeton de développement en production : le seul moyen d'entrer est un
+  # vrai compte.
+  allow_temporary_tokens: false

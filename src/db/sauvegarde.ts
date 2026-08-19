@@ -29,9 +29,10 @@ export type BilanEnvoi = Record<string, number>
 const ORDRE = ['machine', 'roulage', 'session', 'tour', 'depense', 'intervention'] as const
 
 /** TOUTES les tables de pilote portent leur propriétaire côté serveur, feuilles
- *  comprises — parce qu'une règle de synchronisation PowerSync ne joint pas, et
- *  qu'une table sans propriétaire en colonne est hors d'atteinte de toute
- *  synchronisation. Le local, lui, n'en garde aucun : il est apposé ici. */
+ *  comprises, pour que le flux descendant s'écrive à plat et que l'envoi n'ait
+ *  aucun cas particulier. Ce n'est pas une contrainte du moteur — les Sync
+ *  Streams acceptent les sous-requêtes — c'est une simplification assumée.
+ *  Le local, lui, n'en garde aucun : le propriétaire est apposé ici. */
 export const PORTE_PROPRIETAIRE: ReadonlySet<string> = new Set<string>(ORDRE)
 
 /** Ce qui est là, avant tout envoi. Sert à montrer au pilote ce que le compte

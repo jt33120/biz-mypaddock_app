@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-sync-rules@latest/schema/sync_rules.json
+
+# Ce que chaque pilote reçoit sur son téléphone — et rien d'autre.
+#
+# Le filtre par `pilote_id` n'est PAS la sécurité : la sécurité, c'est RLS côté
+# Postgres, qui refuse déjà toute ligne d'autrui. Ici on décide ce qui DESCEND,
+# c'est-à-dire ce que le pilote transporte dans sa poche. Sur un produit qui
+# vit au paddock sans réseau, ce que l'on ne fait pas descendre n'existe pas.
+config:
+  edition: 3
+
+streams:
+  # ─── La saison du pilote ────────────────────────────────────────────────
+  # Toutes les tables portent `pilote_id`, y compris les feuilles : la requête
+  # reste plate et sans sous-requête imbriquée sur trois niveaux.
+  saison_du_pilote:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM machine      WHERE pilote_id = auth.user_id()
+      - SELECT * FROM roulage      WHERE pilote_id = auth.user_id()
+      - SELECT * FROM session      WHERE pilote_id = auth.user_id()
+      - SELECT * FROM tour         WHERE pilote_id = auth.user_id()
+      - SELECT * FROM depense      WHERE pilote_id = auth.user_id()
+      - SELECT * FROM intervention WHERE pilote_id = auth.user_id()
+
+  # ─── Le référentiel — lu par tous, écrit par personne (AD-12) ───────────
+  # Le BARÈME CONSTRUCTEUR EST VOLONTAIREMENT ABSENT. Un flux global le ferait
+  # descendre en entier chez un pilote qui possède une moto. Il lui faudra un
+  # flux paramétré par les machines du garage, au mouvement 3 — pas avant.
+  referentiel:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM circuit
+      - SELECT * FROM organisateur
+      - SELECT * FROM roulage_publie
