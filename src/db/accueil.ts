@@ -23,6 +23,15 @@ import { marquerSaisie } from './mesures'
 export type Source =
   | { genre: 'a_venir'; roulage: Prochain; jours: number; meilleurIci: number | null }
   | { genre: 'dernier'; roulage: Prochain; jours: number; meilleurIci: number | null }
+  // ─── ÉPIQUE 9 : les quatre sources de l'atelier ────────────────────────
+  // « C'est ce branchement qui referme le vide saisonnier », pas l'axe machine
+  // seul. Sans elles, entre novembre et avril, l'accueil n'a qu'un roulage
+  // vieux de cinq mois à montrer — et un produit qui répète la même chose
+  // pendant cinq mois est un produit qu'on cesse d'ouvrir.
+  | { genre: 'anniversaire'; libelle: string; circuit: string; ans: number }
+  | { genre: 'evenement'; libelle: string; jours: number | null; centimes: number | null }
+  | { genre: 'piece'; libelle: string; machine: string; n: number }
+  | { genre: 'reparations'; n: number; machine: string }
   | { genre: 'vide' }
 
 export type Prochain = {
@@ -57,15 +66,75 @@ const LIGNE = `
  * ③ Et s'il n'y a rien, il n'y a pas d'écran vide : il y a une seule action.
  */
 export const sourceAccueil = async (db: PowerSyncDatabase, jour: string): Promise<Source> => {
+  // ① L'ANNIVERSAIRE D'UN GESTE gagne sur tout, parce qu'il est AUJOURD'HUI.
+  //    Rien n'est plus proche dans le temps que zéro jour, et c'est la seule
+  //    source qui disparaît d'elle-même le lendemain.
+  //
+  //    ⚠ FR-53 tient toujours : comparer deux dates sur leur jour et leur mois
+  //    n'est pas « tester un mois de l'année ». La distinction est nette — ici
+  //    aucune branche ne dit « si on est en décembre », elle dit « si ces deux
+  //    dates tombent le même jour ». Le comportement suit la donnée du pilote,
+  //    jamais le calendrier.
+  const anniv = await db.getAll<{ libelle: string; circuit: string; annee: string }>(
+    `SELECT coalesce(c.libelle, g.cap_code) AS libelle, r.circuit_nom AS circuit,
+            substr(r.date_jour, 1, 4) AS annee
+       FROM geste g
+       JOIN roulage r ON r.id = g.roulage_id
+       LEFT JOIN cap c ON c.code = g.cap_code
+      WHERE substr(r.date_jour, 6, 5) = substr(?, 6, 5)
+        AND substr(r.date_jour, 1, 4) < substr(?, 1, 4)
+      ORDER BY r.date_jour ASC LIMIT 1`, [jour, jour])
+  if (anniv[0]) {
+    return {
+      genre: 'anniversaire', libelle: anniv[0].libelle, circuit: anniv[0].circuit,
+      ans: Number(jour.slice(0, 4)) - Number(anniv[0].annee),
+    }
+  }
+
   const aVenir = await db.getAll<Prochain>(
     `${LIGNE} WHERE r.date_jour > ? ORDER BY r.date_jour ASC LIMIT 1`, [jour])
-  if (aVenir[0]) {
+
+  // ② Le roulage à venir et l'ÉVÉNEMENT VISÉ se disputent la place, et c'est
+  //    LE PLUS PROCHE qui l'emporte (FR-11) — pas le plus « officiel ». Un
+  //    événement daté de juin devant un roulage réservé en septembre est bien
+  //    ce que le pilote a envie de voir.
+  const ev = await db.getAll<{ libelle: string; date_approx: string | null; c: number | null }>(
+    `SELECT libelle, date_approx, cout_estime_centimes AS c FROM evenement_vise
+      WHERE date_approx IS NULL OR date_approx > ?
+      ORDER BY coalesce(date_approx, '9999') ASC LIMIT 1`, [jour])
+
+  const joursRoulage = aVenir[0] ? ecartJours(jour, aVenir[0].date_jour) : null
+  const joursEv = ev[0]?.date_approx ? ecartJours(jour, ev[0].date_approx) : null
+
+  if (aVenir[0] && (joursEv === null || (joursRoulage ?? 0) <= joursEv)) {
     return {
       genre: 'a_venir',
       roulage: aVenir[0],
-      jours: ecartJours(jour, aVenir[0].date_jour),
+      jours: joursRoulage ?? 0,
       meilleurIci: await meilleurAuCircuit(db, aVenir[0].circuit_nom, aVenir[0].id),
     }
+  }
+  if (ev[0]) {
+    return { genre: 'evenement', libelle: ev[0].libelle, jours: joursEv, centimes: ev[0].c }
+  }
+
+  // ③ CE QUI ATTEND AU GARAGE, et seulement quand aucun futur n'est en vue.
+  //    C'est exactement le trou de novembre à avril : plus rien devant, et le
+  //    dernier roulage remonte à cinq mois. Une pièce sur l'établi, elle, est
+  //    quelque chose dont on a envie — pas une corvée qu'on rappelle. La
+  //    formulation le tient : on énonce sa présence, jamais son attente.
+  const attente = await db.getAll<{ categorie: string; n: number; libelle: string; machine: string }>(
+    `SELECT i.categorie, count(*) AS n, min(i.libelle) AS libelle,
+            min(m.modele) AS machine
+       FROM intervention i JOIN machine m ON m.id = i.machine_id
+      WHERE i.etat = 'visee' GROUP BY i.categorie`)
+  const piece = attente.find((a) => a.categorie !== 'reparation_non_vitale')
+  if (piece) {
+    return { genre: 'piece', libelle: piece.libelle, machine: piece.machine, n: piece.n }
+  }
+  const rep = attente.find((a) => a.categorie === 'reparation_non_vitale')
+  if (rep) {
+    return { genre: 'reparations', n: rep.n, machine: rep.machine }
   }
 
   const dernier = await db.getAll<Prochain>(

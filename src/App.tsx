@@ -26,6 +26,7 @@ import {
 import { Compte } from './ecrans/Compte'
 import { Garage } from './ecrans/Garage'
 import { Legal } from './ecrans/Legal'
+import { evenements, viserEvenement, type Evenement } from './db/atelier'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 
@@ -202,7 +203,9 @@ export default function App() {
                    onCompte={() => setEcran('compte')} onSonde={() => setEcran('sonde')}
                    onLegal={() => setEcran('legal')} />
         )}
-        {ecran === 'roulages' && <Roulages liste={liste} onOuvrir={ouvrirBilan} onNouveau={() => setEcran('nouveau')} />}
+        {ecran === 'roulages' && <Roulages db={db} liste={liste} onOuvrir={ouvrirBilan}
+                                            onNouveau={() => setEcran('nouveau')}
+                                            onEcrit={() => void rafraichir(db)} />}
         {ecran === 'nouveau' && (
           <Nouveau db={db} onValider={async (r) => {
             const id = await creerRoulage(db, r)
@@ -394,6 +397,64 @@ function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
     )
   }
 
+  /* ─── LES QUATRE SOURCES DE L'ATELIER — épique 9 ────────────────────────
+     Chacune énonce UN FAIT et ne demande rien (FR-13). Aucune ne porte de
+     compteur à rebours, aucune ne dit ce qui reste à faire, et aucune ne
+     désigne une saisie manquante — c'est la clause qui a fait réécrire la
+     deuxième ligne du tableau de FR-12. */
+
+  if (src.genre === 'anniversaire') {
+    return (
+      <div className="bloc pile">
+        <div className="libelle">Il y a {src.ans === 1 ? 'un an' : `${src.ans} ans`}, jour pour jour</div>
+        <div className="titre">{src.libelle}</div>
+        <div className="libelle faible">à {src.circuit}</div>
+      </div>
+    )
+  }
+
+  if (src.genre === 'evenement') {
+    return (
+      <div className="bloc pile">
+        <div className="rang">
+          <span className="libelle">Tu vises</span>
+          {/* Une date APPROXIMATIVE se dit approximative. Afficher « dans
+              97 jours » sur un « juin » inventerait une précision. */}
+          {src.jours != null && <span className="hud-16 miami">{direAVenir(src.jours)}</span>}
+        </div>
+        <div className="titre">{src.libelle}</div>
+        {src.centimes != null && (
+          <div className="libelle faible">environ {formaterEuros(src.centimes)} estimés</div>
+        )}
+      </div>
+    )
+  }
+
+  if (src.genre === 'piece') {
+    return (
+      <div className="bloc pile">
+        <div className="libelle">Au garage</div>
+        <div className="titre">{src.libelle}</div>
+        <div className="libelle faible">
+          {src.n > 1 ? `et ${src.n - 1} autre${src.n > 2 ? 's' : ''} · ` : ''}
+          sur la {src.machine}
+        </div>
+      </div>
+    )
+  }
+
+  if (src.genre === 'reparations') {
+    return (
+      <div className="bloc pile">
+        <div className="libelle">Ça peut attendre</div>
+        <div className="titre">
+          {src.n} chose{src.n > 1 ? 's' : ''} à regarder
+        </div>
+        <div className="libelle faible">sur la {src.machine}</div>
+      </div>
+    )
+  }
+
   const r = src.roulage
   const aVenir = src.genre === 'a_venir'
 
@@ -446,6 +507,66 @@ function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
       </div>
 
       <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
+
+    </>
+  )
+}
+
+/**
+ * LES ÉVÉNEMENTS VISÉS — FR-54, « un objet léger ».
+ *
+ * Sa pauvreté est le sujet, pas un manque : une date APPROXIMATIVE et un coût
+ * ESTIMÉ. Exiger un jour précis transformerait un désir en engagement, et le
+ * pilote cesserait d'en poser. Rien ici ne relance, rien ne décompte.
+ */
+function Evenements({ db, onEcrit }: { db: Db; onEcrit: () => void }) {
+  const [liste, setListe] = useState<Evenement[]>([])
+  const [saisie, setSaisie] = useState(false)
+  const [libelle, setLibelle] = useState('')
+  const [date, setDate] = useState('')
+  const [cout, setCout] = useState('')
+
+  const charger = useCallback(async () => setListe(await evenements(db)), [db])
+  useEffect(() => { void charger() }, [charger])
+
+  const poser = async () => {
+    await viserEvenement(db, {
+      libelle, date: date || null, centimes: cout.trim() ? enCentimes(cout) : null,
+    })
+    setLibelle(''); setDate(''); setCout(''); setSaisie(false)
+    await charger(); onEcrit()
+  }
+
+  return (
+    <>
+      {liste.length > 0 && <div className="libelle">Ce que tu vises</div>}
+      {liste.map((e) => (
+        <div key={e.id} className="bloc rang">
+          <span className="texte">{e.libelle}</span>
+          <span className="libelle faible">
+            {e.date_approx ?? 'sans date'}
+            {e.cout_estime_centimes != null ? ` · ~${formaterEuros(e.cout_estime_centimes)}` : ''}
+          </span>
+        </div>
+      ))}
+      {saisie ? (
+        <div className="bloc pile">
+          <div className="libelle">Ce que tu vises</div>
+          <input className="champ" value={libelle} onChange={(e) => setLibelle(e.target.value)}
+                 placeholder="Bol d'Or" autoComplete="off" />
+          <div className="libelle">Quand, à peu près</div>
+          <input className="champ" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <div className="libelle">Ce que ça coûterait, à vue de nez</div>
+          <input className="champ" value={cout} onChange={(e) => setCout(e.target.value)}
+                 placeholder="600" inputMode="decimal" />
+          <button className="bouton" disabled={!libelle.trim()} onClick={() => void poser()}>
+            Le viser
+          </button>
+          <button className="lien" onClick={() => setSaisie(false)}>Annuler</button>
+        </div>
+      ) : (
+        <button className="lien" onClick={() => setSaisie(true)}>Viser un événement</button>
+      )}
     </>
   )
 }
@@ -474,7 +595,9 @@ function ZoneChiffres({ liste }: { liste: Liste }) {
   )
 }
 
-function Roulages({ liste, onOuvrir, onNouveau }: { liste: Liste; onOuvrir: (id: string) => void; onNouveau: () => void }) {
+function Roulages({ db, liste, onOuvrir, onNouveau, onEcrit }: {
+  db: Db; liste: Liste; onOuvrir: (id: string) => void; onNouveau: () => void; onEcrit: () => void
+}) {
   return (
     <>
       <div className="libelle">Roulages · {liste.length}</div>
@@ -497,6 +620,11 @@ function Roulages({ liste, onOuvrir, onNouveau }: { liste: Liste; onOuvrir: (id:
         ))}
       </div>
       <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
+      {/* FR-54 — L'ÉVÉNEMENT VISÉ vit ici et non au garage : il ne touche pas la
+          machine, il vise une SORTIE. « Désiré avant d'être réservé » : c'est
+          exactement ce qui manquait à l'accueil temporel pour avoir quelque
+          chose à montrer quand rien n'est encore réservé. */}
+      <Evenements db={db} onEcrit={onEcrit} />
     </>
   )
 }
