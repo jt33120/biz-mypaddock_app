@@ -391,3 +391,14 @@ body {
   background: rgba(8,12,28,.5); border-left: 2px solid var(--record);
 }
 label.bouton { cursor: pointer; }
+
+/* ─── LE RÉCAPITULATIF ─────────────────────────────────────────────────────
+   L'image occupe l'écran : c'est elle le produit ici, tout le reste est une
+   commande. Pas de cadre décoratif autour — l'image porte déjà le sien. */
+.recap { display: flex; flex-direction: column; gap: 14px; }
+.recap .recap-image {
+  width: 100%; height: auto; display: block; border: 1px solid var(--filet);
+  background: rgba(8,12,28,.6);
+}
+.recap .texte { color: var(--encre-faible); font-size: 15px; }
+.recap a.bouton { text-decoration: none; }

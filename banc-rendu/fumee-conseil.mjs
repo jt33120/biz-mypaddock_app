@@ -19,6 +19,29 @@ const onglet = async (n) => {
 }
 const pret = () => page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
 
+// FR-36 : depuis l'épique 4, la fin d'une saisie ouvre LE RÉCAPITULATIF, pas le
+// bilan — il se compose tout seul et s'affiche sans avoir été demandé. Les
+// essais passent donc par lui pour atteindre le roulage.
+const enregistrerSession = async () => {
+  await page.click('text=Enregistrer la session')
+  // Playwright ne mélange pas un sélecteur CSS et un `text=` dans une liste :
+  // on attend l'un OU l'autre par une condition, pas par un sélecteur composé.
+  await page.waitForFunction(() =>
+    !!document.querySelector('section.recap .recap-image')
+    || document.body.textContent.includes('Meilleur tour du jour'), null, { timeout: 40_000 })
+  if (await page.isVisible('section.recap')) {
+    await page.click('text=Retour au roulage')
+    await page.waitForSelector('text=Meilleur tour du jour', { timeout: 20_000 })
+  }
+  // Le bilan se recompose (coût, photos, gestes) : on attend qu'il soit STABLE
+  // avant de rendre la main, sinon le clic suivant vise un nœud détaché.
+  await page.waitForSelector('.bloc:has-text("Photos et gestes")', { timeout: 20_000 })
+  // Le bloc coût et la bande photo arrivent de requêtes distinctes et changent
+  // la hauteur de la page : sans ce répit, le clic suivant vise une cible qui
+  // bouge encore. C'est une contrainte d'ESSAI, pas un défaut du produit.
+  await page.waitForTimeout(500)
+}
+
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
 await pret()
 
@@ -35,8 +58,7 @@ await page.click('text=Saisir mon premier roulage')
 await page.fill('.champ[placeholder="Pau-Arnos"]', 'Pau-Arnos')
 await page.click('text=Continuer')
 for (let i = 0; i < 3; i++) {
-  await page.click('text=Enregistrer la session')
-  await page.waitForSelector('text=Meilleur tour du jour')
+  await enregistrerSession()
   if (i < 2) await page.click('text=Saisir une session')
 }
 await onglet('ACCUEIL')
@@ -44,8 +66,7 @@ console.log('② à 3 sessions — invite :', await page.isVisible('text=Une phr
 
 await onglet('ROULAGES'); await page.click('.bloc')
 await page.click('text=Saisir une session')
-await page.click('text=Enregistrer la session')
-await page.waitForSelector('text=Meilleur tour du jour')
+await enregistrerSession()
 await onglet('ACCUEIL')
 await page.waitForSelector('text=Une phrase, une seule fois', { timeout: 10_000 })
 console.log('③ à 4 sessions — invite : oui')

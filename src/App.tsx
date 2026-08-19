@@ -3,6 +3,7 @@ import { PRODUCT_NAME } from './product'
 import { demanderPersistance, ouvrirBase } from './db/powersync'
 import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
+  listerMachines,
   enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits, poserBudget,
   type CoutRoulage,
 } from './db/depot'
@@ -13,6 +14,10 @@ import { estAdopte } from './db/sauvegarde'
 import { ouverture } from './db/mesures'
 import { surRetourDeReseau, televerserEnAttente } from './db/photos'
 import { Photos } from './ecrans/Photos'
+import { Recap } from './ecrans/Recap'
+import { lireLocale, nomLocal, photosDuRoulage } from './db/photos'
+import { gestesDuRoulage, listerCaps } from './db/gestes'
+import type { Matiere } from './recap/composer'
 import {
   conseilDuJour, direAVenir, direPasse, ecarterInvite, etatPlan, poserPlan, sourceAccueil,
   type EtatPlan, type Source,
@@ -23,7 +28,7 @@ import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 
 type Db = ReturnType<typeof ouvrirBase>
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'compte' | 'sonde'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'recap' | 'compte' | 'sonde'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -41,6 +46,7 @@ export default function App() {
   const [courant, setCourant] = useState<string | null>(null)
   const [bilan, setBilan] = useState<Bilan>(null)
   const [cout, setCout] = useState<CoutRoulage | null>(null)
+  const [matiere, setMatiere] = useState<Matiere | null>(null)
   const [identite, setIdentite] = useState<Identite | null>(null)
   const [src, setSrc] = useState<Source | null>(null)
   const [conseil, setConseil] = useState<string | null>(null)
@@ -115,11 +121,43 @@ export default function App() {
 
   if (!db) return <div className="ecran"><div className="libelle">chargement…</div></div>
 
-  const ouvrirBilan = async (id: string) => {
+  /** La matière du récapitulatif — rassemblée à partir des mêmes données que
+   *  l'écran, jamais recalculée autrement. La photo de fond vient de la COPIE
+   *  LOCALE : une URL distante teinterait le canevas, et FR-36 exige de toute
+   *  façon que le récapitulatif se compose sans réseau. */
+  const rassembler = async (id: string): Promise<Matiere | null> => {
+    const b = await bilanRoulage(db, id)
+    if (!b) return null
+    const ph = await photosDuRoulage(db, id)
+    const caps = await listerCaps(db)
+    const g = await gestesDuRoulage(db, id)
+    return {
+      circuit: b.circuit, date: b.date, sessions: b.sessions,
+      meilleurMs: b.meilleur, ecartMs: b.ecart,
+      premiere: b.reference == null,
+      cout: await coutDuRoulage(db, id, anneeSaison(b.date)),
+      gestes: g.map((x) => caps.find((c) => c.code === x.cap_code)?.libelle ?? x.cap_code),
+      // À défaut de photo, le portrait de la machine qui a roulé. Déjà local,
+      // déjà payé : la bande visuelle du récapitulatif ne reste jamais vide.
+      sprite: (await listerMachines(db))[0]?.sprite ?? null,
+      fond: ph[0] ? await lireLocale(nomLocal(ph[0])) : null,
+    }
+  }
+
+  /** Charge un roulage SANS décider de l'écran. Séparer les deux a supprimé un
+   *  clignotement réel : la fin d'une saisie affichait le bilan une fraction de
+   *  seconde avant de basculer sur le récapitulatif. Un écran qui apparaît pour
+   *  disparaître aussitôt se lit comme un bug, même quand il ne l'est pas. */
+  const chargerRoulage = async (id: string) => {
     setCourant(id)
     const b = await bilanRoulage(db, id)
     setBilan(b)
     setCout(b ? await coutDuRoulage(db, id, anneeSaison(b.date)) : null)
+    return b
+  }
+
+  const ouvrirBilan = async (id: string) => {
+    await chargerRoulage(id)
     setEcran('bilan')
   }
 
@@ -145,9 +183,13 @@ export default function App() {
           <Session onValider={async (ms) => {
             await ajouterSession(db, courant, ms)
             await rafraichir(db)
-            // UN SEUL chemin vers le bilan. En avoir deux, c'était en avoir un
-            // qui oubliait le coût — et un bloc absent ne se signale pas.
-            await ouvrirBilan(courant)
+            // FR-36 : LE RÉCAPITULATIF SE COMPOSE TOUT SEUL ET S'AFFICHE SANS
+            // AVOIR ÉTÉ DEMANDÉ à la fin de la saisie. Ce n'est pas une
+            // fonctionnalité qu'on va chercher : c'est ce que le produit rend
+            // au pilote pour le travail qu'il vient de faire.
+            await chargerRoulage(courant)
+            setMatiere(await rassembler(courant))
+            setEcran('recap')
           }} onAnnuler={() => void ouvrirBilan(courant)} />
         )}
         {ecran === 'bilan' && bilan && courant && (
@@ -156,6 +198,7 @@ export default function App() {
             onSession={() => setEcran('session')}
             onAccueil={() => setEcran('accueil')}
             onDepense={() => setEcran('depense')}
+            onRecap={() => void rassembler(courant).then((m) => { setMatiere(m); setEcran('recap') })}
             photos={<Photos db={db} roulageId={courant} />}
             onBudget={async (centimes) => {
               await poserBudget(db, anneeSaison(bilan.date), centimes)
@@ -163,12 +206,15 @@ export default function App() {
             }}
           />
         )}
+        {ecran === 'recap' && matiere && courant && (
+          <Recap db={db} matiere={matiere} onFermer={() => void ouvrirBilan(courant)} />
+        )}
         {ecran === 'depense' && courant && bilan && (
           <Depense db={db} roulageId={courant} dateRoulage={bilan.date}
                    onFini={() => void ouvrirBilan(courant)}
                    onAnnuler={() => void ouvrirBilan(courant)} />
         )}
-        {ecran === 'garage' && <Garage db={db} />}
+        {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
         {ecran === 'compte' && <Compte db={db} identite={identite} />}
         {ecran === 'sonde' && <Sonde db={db} />}
       </div>
@@ -484,9 +530,9 @@ function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; on
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ b, cout, photos, onSession, onAccueil, onDepense, onBudget }: {
+function BilanEcran({ b, cout, photos, onSession, onAccueil, onDepense, onRecap, onBudget }: {
   b: NonNullable<Bilan>; cout: CoutRoulage | null; photos: React.ReactNode
-  onSession: () => void; onAccueil: () => void; onDepense: () => void
+  onSession: () => void; onAccueil: () => void; onDepense: () => void; onRecap: () => void
   onBudget: (centimes: number) => Promise<void>
 }) {
   const record = b.ecart != null && b.ecart < 0
@@ -527,6 +573,7 @@ function BilanEcran({ b, cout, photos, onSession, onAccueil, onDepense, onBudget
 
       {cout && <BlocCout c={cout} annee={anneeSaison(b.date)} onDepense={onDepense} onBudget={onBudget} />}
 
+      <button className="bouton secondaire" onClick={onRecap}>Voir le récapitulatif</button>
       <button className="bouton" onClick={onSession}>Saisir une session</button>
       <button className="bouton secondaire" onClick={onAccueil}>Accueil</button>
     </>

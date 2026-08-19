@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
-  bilanMachine, coutMachine, creerMachine, formaterChrono, formaterEuros, listerMachines,
-  poserSprite, type Machine,
+  ajouterSession, bilanMachine, coutMachine, creerMachine, creerRoulage, formaterChrono,
+  formaterEuros, listerMachines, poserSprite, type Machine,
 } from '../db/depot'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
 
@@ -15,7 +15,14 @@ import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
  *   — c'est la MACHINE qui monte en niveau, jamais le pilote : tous les chiffres affichés
  *     portent sur l'objet — ses kilomètres, ses roulages, ce qu'elle a coûté.
  */
-export function Garage({ db }: { db: PowerSyncDatabase }) {
+export function Garage({ db, onEcrit }: {
+  db: PowerSyncDatabase
+  /** Le garage écrit des roulages et des machines : sans ce rappel, le reste de
+   *  l'application ne le savait pas et la liste des roulages restait vide.
+   *  Trouvé par l'essai, pas par la relecture — un écran qui ne se rafraîchit
+   *  pas ne se signale jamais. */
+  onEcrit: () => void
+}) {
   const [machines, setMachines] = useState<Machine[]>([])
   const [actif, setActif] = useState(0)
   const [bilan, setBilan] = useState<{ roulages: number; meilleurMs: number | null } | null>(null)
@@ -38,7 +45,44 @@ export function Garage({ db }: { db: PowerSyncDatabase }) {
   // Reprise explicite, jamais silencieuse : le pilote voit ce qu'il importe et pourquoi.
   const importerCbr = async () => {
     await creerMachine(db, { marque: 'Honda', modele: 'CBR 1000 RR · 83', annee: 2012, sprite: SPRITE_CBR83 })
-    await charger()
+    await charger(); onEcrit()
+  }
+
+  /**
+   * La saison 2026 de Julian, telle qu'il l'a dictée : quatre roulages à
+   * Pau-Arnos, 2'10 puis 1'52 puis 1'42 puis 1'38, et le prochain en septembre.
+   *
+   * ⚠ ELLE PASSE PAR LE CHEMIN D'ÉCRITURE NORMAL, pas par une injection dans le
+   * serveur. Les identifiants sont des UUID v7 posés ici, les instruments
+   * marquent l'ouverture, la synchronisation la reprend comme le reste. Une
+   * donnée entrée par une porte dérobée est une donnée qu'aucune règle n'a
+   * traversée.
+   *
+   * Les JOURS sont choisis (des samedis) — les mois viennent de lui, pas les
+   * dates exactes. À corriger d'un mot si l'un est faux.
+   */
+  const importerSaison = async () => {
+    const saison: [string, number][] = [
+      ['2026-04-18', 130_000],   // 2'10
+      ['2026-06-20', 112_000],   // 1'52
+      ['2026-07-18', 102_000],   // 1'42
+      ['2026-08-15', 98_000],    // 1'38
+    ]
+    const m = machines[0]
+    for (const [date, ms] of saison) {
+      const id = await creerRoulage(db, {
+        circuit: 'Pau-Arnos', date, groupeNom: null, rang: null, total: null,
+        machineId: m?.id ?? null,
+      })
+      await ajouterSession(db, id, ms)
+    }
+    // Le prochain roulage n'a pas de chrono : il n'a pas encore eu lieu. C'est
+    // lui qui prend la tête de l'accueil temporel.
+    await creerRoulage(db, {
+      circuit: 'Pau-Arnos', date: '2026-09-19', groupeNom: null, rang: null, total: null,
+      machineId: m?.id ?? null,
+    })
+    await charger(); onEcrit()
   }
 
   if (!machines.length) {
@@ -104,6 +148,10 @@ export function Garage({ db }: { db: PowerSyncDatabase }) {
           <p className="va">{cout ? formaterEuros(cout) : '—'}</p>
         </div>
       </div>
+
+      <button className="lien" onClick={() => void importerSaison()}>
+        Reprendre la saison 2026 · Pau-Arnos
+      </button>
 
       {machine.sprite && (
         <button className="lien" onClick={() => void poserSprite(db, machine.id, null).then(charger)}>
