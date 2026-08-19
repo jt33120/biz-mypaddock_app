@@ -28,7 +28,9 @@ import { effacerAuServeur, effacerLeTelephone } from '../db/effacer'
 
 type Etape = 'formulaire' | 'confirmation'
 
-export function Compte({ db, identite }: { db: PowerSyncDatabase; identite: Identite | null }) {
+export function Compte({ db, identite, onLegal }: {
+  db: PowerSyncDatabase; identite: Identite | null; onLegal: () => void
+}) {
   return (
     <>
       {!supabaseConfigure ? (
@@ -40,7 +42,7 @@ export function Compte({ db, identite }: { db: PowerSyncDatabase; identite: Iden
             et l'emport ci-dessous est alors la seule copie possible.
           </p>
         </section>
-      ) : identite ? <Connecte db={db} identite={identite} /> : <Anonyme db={db} />}
+      ) : identite ? <Connecte db={db} identite={identite} /> : <Anonyme db={db} onLegal={onLegal} />}
 
       {/* HORS DES TROIS BRANCHES, et c'est tout l'intérêt : l'emport ne dépend
           ni d'un compte, ni d'un serveur, ni même d'une configuration. Il est
@@ -55,6 +57,12 @@ export function Compte({ db, identite }: { db: PowerSyncDatabase; identite: Iden
       {/* EN DERNIER, et seulement avec un compte : c'est le geste le plus
           destructeur de l'application, et il n'a rien à faire sur le chemin de
           quelqu'un qui n'a rien à effacer. */}
+      <section className="compte">
+        <button className="lien" onClick={onLegal}>
+          Ce que fait cette application, tes données, qui écrire
+        </button>
+      </section>
+
       {identite && <section className="compte"><Effacer db={db} /></section>}
     </>
   )
@@ -226,7 +234,7 @@ function Emporter({ db }: { db: PowerSyncDatabase }) {
 
 /* ─── SANS COMPTE ────────────────────────────────────────────────────────── */
 
-function Anonyme({ db }: { db: PowerSyncDatabase }) {
+function Anonyme({ db, onLegal }: { db: PowerSyncDatabase; onLegal: () => void }) {
   const [etape, setEtape] = useState<Etape>('formulaire')
   const [email, setEmail] = useState('')
   const [mdp, setMdp] = useState('')
@@ -324,6 +332,15 @@ function Anonyme({ db }: { db: PowerSyncDatabase }) {
               onClick={() => void lancer(() => seConnecter(email, mdp))}>
         J'ai déjà un compte
       </button>
+
+      {/* C'EST LE SEUL ÉCRAN OÙ LE PRODUIT CONTRACTE AVEC QUELQU'UN, et il ne
+          contractait sur rien : ni mention, ni lien, ni texte à lire. Une
+          formulation ÉNONCIATIVE, jamais une case à cocher — cocher ne fait pas
+          lire, et le produit énonce (FR-13). */}
+      <p className="note">
+        Créer un compte fait partir ta saison vers un serveur en Europe.
+        {' '}<button className="lien" onClick={onLegal}>Ce qu'on en fait, et tes droits</button>.
+      </p>
     </section>
   )
 }

@@ -25,11 +25,12 @@ import {
 } from './db/accueil'
 import { Compte } from './ecrans/Compte'
 import { Garage } from './ecrans/Garage'
+import { Legal } from './ecrans/Legal'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 
 type Db = ReturnType<typeof ouvrirBase>
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'recap' | 'compte' | 'sonde'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -198,7 +199,8 @@ export default function App() {
                    onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan}
                    onPlan={async (t) => { await poserPlan(db, t); await rafraichir(db) }}
                    onEcarter={() => { ecarterInvite(); void rafraichir(db) }}
-                   onCompte={() => setEcran('compte')} onSonde={() => setEcran('sonde')} />
+                   onCompte={() => setEcran('compte')} onSonde={() => setEcran('sonde')}
+                   onLegal={() => setEcran('legal')} />
         )}
         {ecran === 'roulages' && <Roulages liste={liste} onOuvrir={ouvrirBilan} onNouveau={() => setEcran('nouveau')} />}
         {ecran === 'nouveau' && (
@@ -243,8 +245,11 @@ export default function App() {
                    onAnnuler={() => void ouvrirBilan(courant)} />
         )}
         {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
-        {ecran === 'compte' && <Compte db={db} identite={identite} />}
+        {ecran === 'compte' && <Compte db={db} identite={identite} onLegal={() => setEcran('legal')} />}
         {ecran === 'sonde' && <Sonde db={db} />}
+        {/* QO-11 : les textes existent, et ils sont ATTEIGNABLES. Un document
+            juridique que rien ne lie n'a jamais été publié. */}
+        {ecran === 'legal' && <Legal onFermer={() => setEcran('compte')} />}
       </div>
 
       {/* UX-DR9 — LA BARRE SE CALCULE, elle n'est pas une liste figée. Un onglet
@@ -290,11 +295,11 @@ export default function App() {
    FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
    échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
    rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
-function Accueil({ src, liste, conseil, plan, onNouveau, onOuvrir, onPlan, onEcarter, onCompte, onSonde }: {
+function Accueil({ src, liste, conseil, plan, onNouveau, onOuvrir, onPlan, onEcarter, onCompte, onSonde, onLegal }: {
   src: Source | null; liste: Liste; conseil: string | null; plan: EtatPlan | null
   onNouveau: () => void; onOuvrir: (id: string) => void
   onPlan: (texte: string) => Promise<void>; onEcarter: () => void
-  onCompte: () => void; onSonde: () => void
+  onCompte: () => void; onSonde: () => void; onLegal: () => void
 }) {
   return (
     <>
@@ -302,6 +307,10 @@ function Accueil({ src, liste, conseil, plan, onNouveau, onOuvrir, onPlan, onEca
         <h1 className="titre neon">{PRODUCT_NAME}</h1>
         <nav className="reglages">
           <button className="lien" onClick={onCompte}>compte</button>
+          {/* ATTEIGNABLE SANS COMPTE, et c'est le point : un inconnu venu d'une
+              publicité doit pouvoir lire ce qu'on fait de ses données AVANT de
+              donner son adresse, pas après. */}
+          <button className="lien" onClick={onLegal}>à propos</button>
           <button className="lien" onClick={onSonde}>sonde</button>
         </nav>
       </header>

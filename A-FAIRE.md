@@ -51,7 +51,31 @@ chemin par le lien fonctionne.
 
 ---
 
-## 4 · Ce qui demandera ta relecture, pas ton action
+## 4 · `VITE_CONTACT` et `VITE_EDITEUR` — deux variables, trente secondes
+
+**Ce qui attend :** deux variables d'environnement sur Vercel (les trois environnements) :
+
+- `VITE_CONTACT` — l'adresse qui répond. Le §7 du PRD dit « au minimum une adresse **qui
+  répond** », donc ce ne peut pas être une adresse inventée.
+- `VITE_EDITEUR` — ton nom ou ta raison sociale, tel que tu veux qu'il apparaisse.
+
+**Pourquoi je ne l'ai pas fait :** publier une adresse de contact et un nom d'éditeur engage
+une personne réelle. Ce n'est pas un réglage technique et ce n'est pas à moi de le trancher —
+en particulier, je ne publie pas ton adresse personnelle sans que tu le décides.
+
+**Ce que ça débloque :** la campagne. L'écran « à propos » existe, il est atteignable sans
+compte depuis l'accueil, et il est exact — il nomme les sous-traitants réels, la région des
+données, la base légale et les trois mesures. Tant que les deux variables manquent, il le dit
+honnêtement : *« Aucune adresse de contact n'est encore publiée. Tant qu'elle manque, cette
+application ne devrait être partagée avec personne. »* C'est la seule phrase qui reste entre le
+produit et sa première publicité.
+
+**Ce que ça ne débloque pas :** rien d'autre. Le reste du texte est déjà juste, et il ne
+demande aucune relecture juridique tant que le service reste gratuit et sans traceur.
+
+---
+
+## 5 · Ce qui demandera ta relecture, pas ton action
 
 - **Le contenu des conseils** (récit 6.3). Six conseils embarqués tiennent la clause de forme
   — chacun énonce une technique, aucun ne fixe une performance — mais ils sont provisoires et
