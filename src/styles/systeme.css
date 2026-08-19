@@ -254,6 +254,20 @@ body {
    dépassement se lit sur le chiffre et se dit en toutes lettres. */
 .usure { border-left: 3px solid var(--filet); }
 
+/* LA CHECKLIST. Une coche est une CIBLE DE DOIGT GANTÉ : elle occupe toute la
+   largeur de son libellé et pas seulement un carré de 20 px. */
+.coche {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-height: var(--cible-min);
+  background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+  font-family: var(--face); color: var(--encre-faible);
+}
+.coche::before {
+  content: ''; width: 18px; height: 18px; flex: 0 0 18px;
+  border: 1px solid var(--filet-vif); background: transparent;
+}
+.coche[data-actif='1'] { color: var(--encre); }
+.coche[data-actif='1']::before { background: var(--miami); border-color: var(--miami); }
+
 /* ─── SÉMANTIQUE — le signe porte le sens, jamais la couleur seule ────────── */
 .mieux { color: var(--mieux) } .plus-lent { color: var(--plus-lent) }
 .record { color: var(--record) } .record-texte { color: var(--record-clair) }

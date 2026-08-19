@@ -171,8 +171,8 @@ export const ajouterSession = async (db: PowerSyncDatabase, roulageId: string, t
 /** Le meilleur tour du jour, et l'écart À CIRCUIT CONSTANT avec la dernière
  *  fois. Comparer deux circuits différents ne veut rien dire. */
 export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => {
-  const l = await db.getAll<{ circuit: string; date: string; sessions: number; meilleur: number | null }>(
-    `SELECT r.circuit_nom AS circuit, r.date_jour AS date,
+  const l = await db.getAll<{ id: string; circuit: string; date: string; sessions: number; meilleur: number | null }>(
+    `SELECT r.id, r.circuit_nom AS circuit, r.date_jour AS date,
             (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
                JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur

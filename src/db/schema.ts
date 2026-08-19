@@ -205,6 +205,30 @@ const horloge = new Table({
 // sans redéploiement (AD-10, NFR-14), et jamais affiché comme une constante.
 const coefficient_usure = new Table({ niveau: column.text, coefficient: column.real })
 
+// ÉPIQUE 13 — la checklist de chargement, attachée au roulage comme TRACE.
+// Une ligne de conformité porte sa source et sa date ; une ligne de chargement
+// n'en a pas et n'a pas à en avoir. Aucune colonne ne dit « conforme » :
+// le produit rapporte ce qu'un organisateur a publié, il ne certifie rien.
+const checklist_ligne = new Table({
+  roulage_id: column.text,
+  libelle: column.text,
+  categorie: column.text,
+  cochee: column.integer,
+  source_url: column.text,
+  publie_le: column.text,
+})
+
+// Référentiel : les règles publiées par les organisateurs, récoltées.
+const regle_organisateur = new Table({
+  organisateur_id: column.text,
+  circuit_id: column.text,
+  libelle: column.text,
+  source_url: column.text,
+  publie_le: column.text,
+  recolte_le: column.text,
+  extrait_par_ia: column.integer,
+})
+
 const circuit = new Table({ nom: column.text, pays: column.text, longueur_m: column.integer })
 const organisateur = new Table({ nom: column.text, site_web: column.text })
 
@@ -247,11 +271,13 @@ export const AppSchema = new Schema({
   mesure,
   evenement_vise,
   horloge,
+  checklist_ligne,
   photo,
   geste,
   plan_si_alors,
   generation,
   coefficient_usure,
+  regle_organisateur,
   conseil,
   cap,
   circuit,

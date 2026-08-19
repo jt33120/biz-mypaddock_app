@@ -26,6 +26,7 @@ streams:
       - SELECT * FROM mesure       WHERE pilote_id = auth.user_id()
       - SELECT * FROM evenement_vise WHERE pilote_id = auth.user_id()
       - SELECT * FROM horloge      WHERE pilote_id = auth.user_id()
+      - SELECT * FROM checklist_ligne WHERE pilote_id = auth.user_id()
       - SELECT * FROM plan_si_alors WHERE pilote_id = auth.user_id()
       - SELECT * FROM geste        WHERE pilote_id = auth.user_id()
       - SELECT * FROM photo        WHERE pilote_id = auth.user_id()
@@ -45,5 +46,6 @@ streams:
       - SELECT * FROM organisateur
       - SELECT * FROM roulage_publie
       - SELECT * FROM coefficient_usure
+      - SELECT * FROM regle_organisateur
       - SELECT * FROM conseil
       - SELECT * FROM cap

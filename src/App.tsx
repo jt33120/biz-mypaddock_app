@@ -27,6 +27,7 @@ import { Compte } from './ecrans/Compte'
 import { Garage } from './ecrans/Garage'
 import { Legal } from './ecrans/Legal'
 import { Courbe } from './ecrans/Courbe'
+import { Checklist } from './ecrans/Checklist'
 import { courbeDuCircuit, type Courbe as DonneesCourbe } from './db/courbe'
 import { evenements, viserEvenement, type Evenement } from './db/atelier'
 import {
@@ -238,7 +239,7 @@ export default function App() {
         )}
         {ecran === 'bilan' && bilan && courant && (
           <BilanEcran
-            b={bilan} cout={cout} courbe={courbe}
+            db={db} b={bilan} cout={cout} courbe={courbe}
             onSession={() => setEcran('session')}
             onAccueil={() => setEcran('accueil')}
             onDepense={() => setEcran('depense')}
@@ -817,8 +818,8 @@ function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; on
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ b, cout, courbe, photos, onSession, onAccueil, onDepense, onRecap, onBudget }: {
-  b: NonNullable<Bilan>; cout: CoutRoulage | null; courbe: DonneesCourbe | null
+function BilanEcran({ db, b, cout, courbe, photos, onSession, onAccueil, onDepense, onRecap, onBudget }: {
+  db: Db; b: NonNullable<Bilan>; cout: CoutRoulage | null; courbe: DonneesCourbe | null
   photos: React.ReactNode
   onSession: () => void; onAccueil: () => void; onDepense: () => void; onRecap: () => void
   onBudget: (centimes: number) => Promise<void>
@@ -863,6 +864,12 @@ function BilanEcran({ b, cout, courbe, photos, onSession, onAccueil, onDepense, 
           qui n'existe pas. Rien ne signale son absence, et rien n'annonce ce
           qu'il faudrait faire pour la voir apparaître. */}
       {courbe && <Courbe d={courbe} />}
+
+      {/* FR-49 — la checklist se coche au fur et à mesure du chargement et
+          reste attachée au roulage comme TRACE. Elle ne se vide jamais : c'est
+          ce qui la rend utile l'année suivante, quand on ne se rappelle plus
+          ce qu'on avait pris. */}
+      <Checklist db={db} roulageId={b.id} jour={b.date} />
 
       {photos}
 

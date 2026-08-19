@@ -21,6 +21,7 @@ import { PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
+import { CHARGEMENT_EMBARQUE, MOIS_AVANT_DOUTE, moisDepuis } from '../../src/db/checklist'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
@@ -292,6 +293,26 @@ const essais = [
     // calcul, et le chiffre paraîtrait aussi solide qu'un vrai.
     for (const [r, t] of [[null, null], [null, 4], [2, null], [0, 4], [5, 4], [-1, 3]] as const)
       egal(niveauDuGroupe(r, t), null, `rang ${r} sur ${t}`)
+  }),
+
+  /* ─── LA CONFORMITÉ — FR-50, FR-51 ────────────────────────────────────── */
+  doit("l'âge d'une fiche se compte en mois, sans dépendre du jour", () => {
+    // Un organisateur publie « en mars 2025 » : le jour exact n'existe souvent
+    // pas, et le calculer en millisecondes ferait basculer l'alerte d'un jour à
+    // l'autre selon la longueur des mois traversés.
+    egal(moisDepuis('2025-08-01', '2026-08-19'), 12)
+    egal(moisDepuis('2025-07-31', '2026-08-19'), 13)
+    egal(moisDepuis('2026-08-19', '2026-08-19'), 0)
+    egal(moisDepuis('2027-01-01', '2026-08-19'), 0, 'une date future ne rend pas un âge négatif')
+    egal(MOIS_AVANT_DOUTE, 12)
+  }),
+  doit('le chargement embarqué ne contient AUCUNE règle', () => {
+    // Ce qui vient d'un organisateur porte sa source, ou n'existe pas. Une
+    // ligne de conformité inventée par le produit engagerait sa responsabilité
+    // au contrôle technique, et c'est exactement ce que FR-50 interdit.
+    for (const c of CHARGEMENT_EMBARQUE)
+      vrai(c.categorie !== 'conformite', `« ${c.libelle} » se présente comme une règle`)
+    vrai(CHARGEMENT_EMBARQUE.length > 6, 'chargement trop pauvre pour servir')
   }),
 ]
 
