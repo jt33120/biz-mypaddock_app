@@ -63,52 +63,137 @@ chemin par le lien fonctionne.
 une personne réelle. Ce n'est pas un réglage technique et ce n'est pas à moi de le trancher —
 en particulier, je ne publie pas ton adresse personnelle sans que tu le décides.
 
-**Ce que ça débloque :** la campagne. L'écran « à propos » existe, il est atteignable sans
-compte depuis l'accueil, et il est exact — il nomme les sous-traitants réels, la région des
-données, la base légale et les trois mesures. Tant que les deux variables manquent, il le dit
-honnêtement : *« Aucune adresse de contact n'est encore publiée. Tant qu'elle manque, cette
-application ne devrait être partagée avec personne. »* C'est la seule phrase qui reste entre le
-produit et sa première publicité.
-
-**Ce que ça ne débloque pas :** rien d'autre. Le reste du texte est déjà juste, et il ne
-demande aucune relecture juridique tant que le service reste gratuit et sans traceur.
+**Ce que ça débloque :** la campagne. C'est la seule phrase qui reste entre le produit et sa
+première publicité.
 
 ---
 
-## 5 · Le service de récolte — écrit, jamais déployé
+## 5 · La récolte — DÉPLOYÉE, et volontairement muette
 
-**Ce qui attend :** déployer `recolte/` sur Railway, y poser `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY` et `MISTRAL_API_KEY`, puis remplir la table `source_recolte`
-avec les pages à lire.
+**Fait le 19 août 2026.** Le service tourne sur Railway, projet `mypaddock-recolte`, service
+`recolte`, racine `recolte/`, sonde de santé sur `/sante` :
 
-**Pourquoi je ne l'ai pas fait :** un service déployé qui tourne coûte de l'argent en
-continu, et celui-ci appelle une API d'extraction à chaque tour. Ce n'est pas à moi de
-l'allumer. Il est écrit, testé à vide, et **il refuse tout tant que `MISTRAL_API_KEY` est
-absente** — même interrupteur que la fabrique d'images : déployable sans qu'un euro puisse
-partir.
+    https://recolte-production.up.railway.app/sante
 
-**Ce que ça débloque :** les barèmes constructeur (donc les horloges d'usure avec un vrai
-intervalle au lieu d'un compteur sans échéance) et les calendriers d'organisateurs (donc les
-roulages proposés en brouillon, et les règles de conformité de la checklist).
+**Deux interrupteurs, indépendants, tous les deux fermés — vérifié en ligne :**
+
+| requête | réponse |
+|---|---|
+| `GET /sante` | `{"pret":false,"refus":"base non configurée"}` |
+| `POST /recolter` sans jeton | `401 {"refus":"jeton"}` |
+| `POST /recolter` avec le bon jeton | `503 {"refus":"base non configurée"}` |
+
+**Ce qui attend toi, et rien d'autre :**
+
+1. `SUPABASE_SERVICE_ROLE_KEY` dans les variables Railway du service. Je ne l'ai pas : elle
+   n'est ni dans `.env.local`, ni exposée par le connecteur Supabase, et c'est très bien
+   ainsi — une clé de service qui traîne dans un fichier de développement est une clé qui
+   finit dans un dépôt.
+2. `MISTRAL_API_KEY` — **c'est elle, le premier euro.** Elle est dans ton `.env.local` et je
+   ne l'ai délibérément PAS posée : le service est conçu pour être déployable sans qu'un
+   centime puisse partir, et allumer la dépense est un geste humain. Une seule ligne à coller
+   dans Railway quand tu le décides.
+3. **Activer des sources.** La table `source_recolte` est remplie de cinq candidates,
+   **toutes `actif = false`**. Le service ne lit que les actives : en l'état, un tour de
+   récolte ne lit rien et n'appelle rien.
+
+**Ce que je n'ai pas tranché, et pourquoi :** les conditions d'utilisation de chaque site.
+Lire une page publique n'est pas la même chose que la réextraire par IA et en republier le
+contenu. C'est pour ça qu'**aucune source de barème constructeur n'est proposée** : une
+documentation d'atelier est de la propriété intellectuelle protégée, et proposer de l'extraire
+serait proposer de recopier un manuel. Les trois sources de règles sont des circuits qui
+publient leurs propres règles — la source primaire, celle qui pose le moins de question.
+
+**Le jeton de déclenchement** (`RECOLTE_JETON`) est posé et lisible dans les variables Railway.
+Je l'ai généré, donc je l'ai vu : si tu préfères un secret que je n'aie jamais eu sous les yeux,
+remplace-le d'un clic dans le tableau de bord — rien d'autre n'en dépend.
+
+**Déclencher un tour, une fois les clés posées :**
+
+    curl -X POST -H "Authorization: Bearer <RECOLTE_JETON>" \
+      https://recolte-production.up.railway.app/recolter
 
 **Ce qu'il ne fera jamais :** écraser une correction du pilote. Une ligne marquée
 `corrige_par_pilote` n'est pas réécrite — une extraction par IA est une reconstruction, pas
 une transcription, et c'est le seul endroit du produit où l'erreur touche la sécurité d'une
-machine. Le déclenchement est un appel HTTP, pas une horloge interne : un service qui tourne
-tout seul est un service dont on ne voit pas la dépense.
-
-**Précaution :** il n'y a **aucune source dans la table**. Tant qu'elle est vide, un tour de
-récolte ne lit rien et n'appelle rien. C'est à toi de décider quelles pages sont lisibles et
-si leurs conditions d'utilisation le permettent.
+machine.
 
 ---
 
-## 6 · Ce qui demandera ta relecture, pas ton action
+## 6 · Le système de crédit — ta décision de monétisation à écrire
+
+**Ton idée, du 19 août :** « On va avoir pas mal de fonctionnalités IA : analyse de vidéo,
+génération d'image. Penser à un système de crédit pour ceux qui veulent ces fonctionnalités
+ou pas. Ne pas l'inclure dans un premium qui pourrait déborder, et quand plus de crédit, ça
+s'arrête. À la place ou au-dessus d'un freemium ? »
+
+**Ce que le code fait DÉJÀ, et qui va dans ton sens.** Le mécanisme existe, il n'est
+simplement pas achetable :
+
+- `pilote.quota_sprites` — un solde, par compte, défaut 3.
+- `generation` — un registre : une ligne par appel, avec son coût réel en centimes. **Aucune
+  politique d'insertion** : seule la fonction serveur y écrit. Un compteur que le compté peut
+  écrire ne compte rien.
+- `plafond` — un plafond global sur 24 h, en base et non compilé, plus le prix unitaire.
+- `reserver_generation()` — réserve **avant** d'appeler, sous verrou consultatif, et refuse
+  si le solde ou le plafond est atteint. « Quand plus de crédit, ça s'arrête » est déjà vrai.
+
+**Ce qui manque, et c'est exactement ce que tu décris :**
+
+1. **Un solde générique au lieu d'un quota par fonctionnalité.** `quota_sprites` est nommé
+   d'après une seule fonctionnalité. L'analyse de vidéo arriverait avec `quota_videos`, et on
+   aurait deux portefeuilles là où le pilote en voit un. À renommer en un solde unique, avec
+   un prix en crédits par acte — une génération d'image n'a aucune raison de coûter autant
+   qu'une minute de vidéo analysée.
+2. **De quoi en acheter.** C'est la seule vraie brique manquante, et elle demande un compte
+   marchand.
+3. **Le prix.** Le coût réel est connu et déjà écrit ligne par ligne dans `generation` : c'est
+   la seule base honnête pour fixer un tarif, et elle sera mesurée avant d'être devinée.
+
+**L'argument qui tranche ton « à la place ou au-dessus d'un freemium ? »** — et c'est déjà
+écrit dans le PRD, section monétisation : le produit s'ouvre **onze fois par an**. Facturer au
+mois un produit ouvert onze fois l'an est une machine à résiliation : chaque prélèvement
+tombe un mois où il ne s'est rien passé. Le crédit n'a pas ce défaut — il ne se consomme que
+quand on s'en sert, donc il ne se remarque jamais au mauvais moment. Il est aussi le seul
+modèle qui **facture exactement ce qui coûte**, ce qui est déjà la position retenue pour les
+styles de portrait.
+
+**Ma recommandation, à confirmer par toi :** crédit **au lieu** d'un abonnement pour tout ce
+qui appelle une IA, et le noyau reste gratuit et sans limite. Un pass saison reste possible
+par-dessus pour ce qui ne coûte rien à l'usage — l'import de chrono, le cercle partagé — parce
+que l'unité de compte du produit est déjà la saison. À ne trancher que quand un vrai
+utilisateur aura demandé une de ces fonctionnalités : c'est le seul moment où la réponse coûte
+moins qu'elle ne rapporte.
+
+---
+
+## 7 · Les liens affiliés et les recommandations — pas simulés, délibérément
+
+**Ce que tu as demandé** dans la page d'un poste d'atelier : « des recommandations, liens vers
+des produits affiliés, etc. »
+
+**Ce que j'ai fait :** la page existe, avec la preuve (photos et factures), la recherche du
+manuel et les horloges d'usure. **Les liens affiliés n'y sont pas, et je n'ai pas mis de bloc
+« bientôt ».**
+
+**Pourquoi :** un lien affilié engage un contrat avec un marchand et impose une mention légale
+d'affiliation visible. Le poser sans les deux serait une infraction, pas un raccourci. Et un
+bloc « bientôt » sur un écran est une promesse que l'écran ne tient pas.
+
+**Ce qu'il faut de ta part :** choisir un programme (Amazon Partenaires, Motoblouz, Dafy…),
+et la mention légale suivra dans l'écran « à propos », qui la porte déjà pour les
+sous-traitants. Une recommandation, elle, demande autre chose : soit un avis de pilote assumé
+comme tel, soit rien — le produit énonce, il ne conseille pas d'acheter.
+
+---
+
+## 8 · Ce qui demandera ta relecture, pas ton action
 
 - **Le contenu des conseils** (récit 6.3). Six conseils embarqués tiennent la clause de forme
   — chacun énonce une technique, aucun ne fixe une performance — mais ils sont provisoires et
   attendent ta relecture de pilote.
-- **Les dates de la saison 2026.** Tu as donné les mois (avril, juin, juillet, août, septembre) ;
-  j'ai choisi les jours, des samedis. À corriger d'un mot si l'un est faux.
 - **Le catalogue de caps.** Sept caps embarqués, dont quatre de bravoure. La liste est une
   proposition, pas une décision.
+
+*(Les dates de la saison 2026 sont sorties de cette liste : tu les saisis dans l'application.
+Le bouton « Reprendre la saison 2026 » du garage reste, comme raccourci d'essai.)*
