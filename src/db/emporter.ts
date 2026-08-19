@@ -1,5 +1,5 @@
 import type { PowerSyncDatabase } from '@powersync/web'
-import { lireLocale, nomLocal, type Photo } from './photos'
+import { lireLocale, nomLocal, photoMachine, type Photo } from './photos'
 import { CAPS_EMBARQUES } from './corpus'
 
 /**
@@ -74,11 +74,21 @@ export const peser = async (db: PowerSyncDatabase): Promise<Poids> => {
     lignes += r.n
   }
   const { presentes, absentes } = await photosLocales(db)
+  // Les portraits de machine comptent aussi : annoncer un poids qui les ignore
+  // reviendrait à annoncer un fichier plus léger que celui qu'on livre, et le
+  // pilote décide sur ce chiffre-là, souvent en 4G.
+  const portraits = await db.getAll<{ photo_chemin: string | null }>(
+    `SELECT photo_chemin FROM machine WHERE photo_chemin IS NOT NULL`)
+  let n = 0, octets = 0, sansCopie = 0
+  for (const m of portraits) {
+    const f = await photoMachine(m.photo_chemin)
+    if (f) { n++; octets += f.size } else sansCopie++
+  }
   return {
     lignes,
-    photos: presentes.length,
-    octetsPhotos: presentes.reduce((s, p) => s + p.fichier.size, 0),
-    photosAbsentes: absentes.length,
+    photos: presentes.length + n,
+    octetsPhotos: presentes.reduce((s, p) => s + p.fichier.size, 0) + octets,
+    photosAbsentes: absentes.length + sansCopie,
   }
 }
 
@@ -111,6 +121,21 @@ export const composer = async (
 
   const { presentes, absentes } = await photosLocales(db)
   const manques: string[] = []
+
+  // La photo de MACHINE ne vit pas dans la table `photo` : elle est dans l'OPFS,
+  // désignée par `machine.photo_chemin`. Elle échappait donc entièrement à
+  // l'emport — et l'effacement la détruit juste après l'avoir proposé. Elle est
+  // jointe comme les autres, et nommée quand elle ne l'est pas.
+  const portraits = (await db.getAll<{ id: string; photo_chemin: string | null }>(
+    `SELECT id, photo_chemin FROM machine WHERE photo_chemin IS NOT NULL`))
+  const portraitsLus: { nom: string; fichier: File }[] = []
+  for (const m of portraits) {
+    const f = await photoMachine(m.photo_chemin)
+    if (f) portraitsLus.push({ nom: `machine-${m.id}.${f.name.split('.').pop()}`, fichier: f })
+    else manques.push(`la photo de la machine ${m.id} n'a pas de copie dans ce téléphone`)
+  }
+  if (!avecPhotos && portraitsLus.length)
+    manques.push(`${portraitsLus.length} photo(s) de machine : emport demandé sans les images`)
   if (!avecPhotos && presentes.length)
     manques.push(`${presentes.length} photo(s) : emport demandé sans les images`)
   if (absentes.length)
@@ -129,9 +154,10 @@ export const composer = async (
 
   // Les images EN DERNIER, et c'est délibéré : la partie lisible par un humain
   // reste en tête du fichier, avant des milliers de lignes de base64.
-  if (avecPhotos && presentes.length) {
+  if (avecPhotos && (presentes.length || portraitsLus.length)) {
     const jointes: Record<string, string> = {}
     for (const p of presentes) jointes[nomLocal(p.photo)] = await enDataUri(p.fichier)
+    for (const p of portraitsLus) jointes[p.nom] = await enDataUri(p.fichier)
     contenu.photos_jointes = jointes
   }
 

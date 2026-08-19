@@ -3,7 +3,7 @@ import { PRODUCT_NAME } from './product'
 import { demanderPersistance, ouvrirBase } from './db/powersync'
 import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
-  listerMachines,
+  listerMachines, type Machine,
   circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
   poserBudget, type Propose,
   type CoutRoulage,
@@ -42,6 +42,7 @@ const GROUPES = ['Initiation', 'Intermédiaire', 'Confirmé', 'Expert']
 
 export default function App() {
   const [db, setDb] = useState<Db | null>(null)
+  const [panne, setPanne] = useState<string | null>(null)
   const [ecran, setEcran] = useState<Ecran>('accueil')
   const [liste, setListe] = useState<Liste>([])
   const [courant, setCourant] = useState<string | null>(null)
@@ -73,6 +74,12 @@ export default function App() {
       // il finissait par manquer au suivant — et un marquage manquant ne se
       // signale pas, il fait juste dire à l'instrument que rien n'a été saisi.
       .then(() => setDb(d))
+      // ⚠ LE FILET. Sans lui, un seul échec — OPFS refusé, worker interdit,
+      // stockage plein — laissait l'écran sur « chargement… » POUR TOUJOURS,
+      // sans un mot. C'est le seul défaut du produit qui transforme un clic
+      // publicitaire en écran blanc, et le WebView d'Instagram sur iOS est
+      // exactement le terrain où il se déclenche.
+      .catch((e: unknown) => setPanne((e as Error)?.message ?? 'cause inconnue'))
   }, [])
 
   // L'identité est lue en local et survit hors ligne : traverser un tunnel ne
@@ -119,6 +126,26 @@ export default function App() {
     })
   }, [db, identite, rafraichir])
 
+
+  // La panne se DIT, et elle laisse une sortie. Un écran figé sur « chargement… »
+  // ne se distingue pas d'un téléphone lent, donc personne ne signale rien —
+  // et le pilote conclut que l'application ne marche pas.
+  if (panne) return (
+    <div className="ecran">
+      <p className="libelle">l'application n'a pas pu s'ouvrir</p>
+      <h1 className="titre">Le stockage a refusé</h1>
+      <p className="texte">
+        Ce navigateur n'a pas accordé à MyPaddock l'espace dont il a besoin. C'est fréquent
+        quand l'application s'ouvre à l'intérieur d'une autre — depuis Instagram ou Facebook,
+        par exemple. Ouvrir le lien dans Safari ou Chrome suffit le plus souvent.
+      </p>
+      <p className="note">Détail technique : {panne}</p>
+      <button className="bouton" onClick={() => location.reload()}>Réessayer</button>
+      <a className="bouton secondaire" href={location.href} target="_blank" rel="noreferrer">
+        Ouvrir dans le navigateur
+      </a>
+    </div>
+  )
 
   if (!db) return <div className="ecran"><div className="libelle">chargement…</div></div>
 
@@ -522,6 +549,21 @@ function Nouveau({ db, onValider, onAnnuler }: {
   const [circuit, setCircuit] = useState('')
   const [date, setDate] = useState(aujourdhui())
   const [rang, setRang] = useState<number | null>(null)
+  // ⚠ `machineId` PARTAIT À NULL, EN DUR. Conséquence invisible à la saisie et
+  // définitive au garage : les trois chiffres de la machine — roulages,
+  // meilleur tour, ce qu'elle a coûté — restaient à zéro pour toujours, quel
+  // que soit le nombre de roulages saisis. L'axe machine d'AD-2 existait dans
+  // le schéma et nulle part dans les données.
+  const [machines, setMachines] = useState<Machine[]>([])
+  const [machineId, setMachineId] = useState<string | null>(null)
+  useEffect(() => {
+    void listerMachines(db).then((m) => {
+      setMachines(m)
+      // Une seule machine au garage : c'est forcément elle. Demander laquelle
+      // quand il n'y a pas de choix est une question sans réponse possible.
+      if (m.length === 1) setMachineId(m[0].id)
+    })
+  }, [db])
 
   return (
     <>
@@ -531,6 +573,22 @@ function Nouveau({ db, onValider, onAnnuler }: {
         <div className="libelle">Circuit</div>
         <ChoixCircuit db={db} valeur={circuit} sur={setCircuit} />
       </div>
+
+      {/* Le choix ne s'affiche qu'à partir de DEUX machines. AD-2 : un roulage
+          sans machine reste valide, donc la sélection se dé-sélectionne. */}
+      {machines.length > 1 && (
+        <div className="pile">
+          <div className="libelle">Machine</div>
+          <div className="puces">
+            {machines.map((m) => (
+              <button key={m.id} className="puce" data-actif={machineId === m.id ? '1' : '0'}
+                      onClick={() => setMachineId(machineId === m.id ? null : m.id)}>
+                {m.modele.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="pile">
         <div className="libelle">Date</div>
@@ -553,7 +611,7 @@ function Nouveau({ db, onValider, onAnnuler }: {
               onClick={() => onValider({
                 circuit: circuit.trim(), date,
                 groupeNom: rang ? GROUPES[rang - 1] : null,
-                rang, total: rang ? GROUPES.length : null, machineId: null,
+                rang, total: rang ? GROUPES.length : null, machineId,
               })}>
         Continuer
       </button>

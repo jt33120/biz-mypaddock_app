@@ -56,24 +56,43 @@ Deno.serve(async (req) => {
   // ── ① Les objets. Deux niveaux : <pilote>/<roulage|machine>/<fichier>.
   //    `list` ne descend pas tout seul, et un objet oublié est une photo qui
   //    survit à son propriétaire — exactement ce que l'effacement doit exclure.
+  //
+  // ⚠ CHAQUE `error` EST LIÉE ET TESTÉE. Un `try/catch` ne suffisait pas :
+  // supabase-js RETOURNE ses erreurs de stockage au lieu de les lever, donc le
+  // catch ne se déclenchait jamais et la suppression du compte partait quand
+  // même — les photos survivaient à leur propriétaire, sans un mot. C'est le
+  // genre de défaut qui ne se voit ni à l'essai ni à la lecture rapide, parce
+  // que le chemin nominal, lui, fonctionne.
   let objets = 0
+  const echec = (detail: string) =>
+    repondre({ refus: 'stockage', detail }, 502)
   try {
-    const { data: dossiers } = await admin.storage.from(SEAU).list(pilote, { limit: 1000 })
+    const { data: dossiers, error: eListe } =
+      await admin.storage.from(SEAU).list(pilote, { limit: 1000 })
+    if (eListe) return echec(eListe.message)
+
     const chemins: string[] = []
     for (const d of dossiers ?? []) {
       if (d.id) { chemins.push(`${pilote}/${d.name}`); continue }   // un fichier à la racine
-      const { data: fichiers } = await admin.storage.from(SEAU)
+      const { data: fichiers, error: eSous } = await admin.storage.from(SEAU)
         .list(`${pilote}/${d.name}`, { limit: 1000 })
+      if (eSous) return echec(eSous.message)
       for (const f of fichiers ?? []) chemins.push(`${pilote}/${d.name}/${f.name}`)
     }
     if (chemins.length) {
-      const { data: partis } = await admin.storage.from(SEAU).remove(chemins)
+      const { data: partis, error: eRetrait } =
+        await admin.storage.from(SEAU).remove(chemins)
+      if (eRetrait) return echec(eRetrait.message)
       objets = partis?.length ?? 0
+      // Un retrait partiel est un échec : le compte ne doit pas partir en
+      // laissant derrière lui des objets que plus personne ne peut désigner.
+      if (objets !== chemins.length)
+        return echec(`${objets} objets retirés sur ${chemins.length}`)
     }
   } catch (e) {
     // On NE poursuit PAS : supprimer le compte en laissant ses photos derrière
     // ferait mentir la promesse, et plus rien ne permettrait de les retrouver.
-    return repondre({ refus: 'stockage', detail: (e as Error).message }, 502)
+    return echec((e as Error).message)
   }
 
   // ── ② Le compte, et la cascade avec lui.

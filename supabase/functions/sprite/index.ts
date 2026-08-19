@@ -23,10 +23,11 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { GRILLE, entreePx, modele, prompt, version } from './v6.ts'
 
-/** Prix unitaire DÉRIVÉ du relevé de Julian (≈ 16,98 € pour ~107 images), pas
- *  d'un tarif publié. Il est écrit dans la ligne, jamais recalculé à la lecture :
- *  un tarif change, une facture passée ne doit pas changer avec lui. */
-const COUT_CENTIMES = 16
+/* Le prix unitaire et le plafond global vivent EN BASE (table `plafond`), pas
+   ici : `reserver_generation` les lit, les applique et écrit le coût dans la
+   ligne. Une constante compilée exigerait un redéploiement pour bouger, et
+   surtout elle serait lue au mauvais endroit — le seul qui doive connaître le
+   prix est celui qui décide s'il y a de la place pour lui. */
 
 /** Une photo réduite à 1024 px tient largement là-dedans. Au-delà, ce n'est pas
  *  une photo de moto — et les jetons d'image se paient. */
@@ -56,19 +57,18 @@ Deno.serve(async (req) => {
   if (eAuth || !u.user) return repondre({ refus: 'sans_compte' }, 401)
   const pilote = u.user.id
 
-  // ── Le quota, AVANT tout le reste ────────────────────────────────────────
-  const { data: p } = await admin.from('pilote')
-    .select('quota_sprites').eq('id', pilote).single()
-  const quota = p?.quota_sprites ?? 0
-  const { count } = await admin.from('generation')
-    .select('id', { count: 'exact', head: true }).eq('pilote_id', pilote)
-  const faites = count ?? 0
-  if (faites >= quota)
-    return repondre({ refus: 'quota', quota, faites, reste: 0 }, 429)
-
   // ── L'interrupteur : pas de clé, pas de réservation, pas d'appel ─────────
+  //    Il passe AVANT la réservation pour ne pas brûler un créneau de quota
+  //    quand la fabrique est fermée.
   const cle = Deno.env.get('GEMINI_IMAGE')
-  if (!cle) return repondre({ refus: 'cle_absente', quota, faites, reste: quota - faites }, 503)
+  if (!cle) {
+    const { data: p } = await admin.from('pilote')
+      .select('quota_sprites').eq('id', pilote).single()
+    const { count } = await admin.from('generation')
+      .select('id', { count: 'exact', head: true }).eq('pilote_id', pilote)
+    const quota = p?.quota_sprites ?? 0
+    return repondre({ refus: 'cle_absente', quota, reste: Math.max(0, quota - (count ?? 0)) }, 503)
+  }
 
   let charge: { photo?: string; machineId?: string; piloteEnSelle?: boolean }
   try { charge = await req.json() } catch { return repondre({ refus: 'corps_illisible' }, 400) }
@@ -76,17 +76,30 @@ Deno.serve(async (req) => {
   if (!b64) return repondre({ refus: 'sans_photo' }, 400)
   if (b64.length > CHARGE_MAX) return repondre({ refus: 'photo_trop_lourde' }, 413)
 
-  // ── Réserver AVANT d'appeler ────────────────────────────────────────────
-  // Deux appuis rapprochés ne peuvent pas payer deux fois pour un seul quota.
-  // Et si tout s'arrête entre la réservation et l'appel, la réservation reste :
-  // l'erreur penche du côté qui NE dépense pas.
-  const { data: reserve, error: eRes } = await admin.from('generation')
-    .insert({ pilote_id: pilote, machine_id: charge.machineId ?? null,
-      version, modele, cout_centimes: COUT_CENTIMES })
-    .select('id').single()
-  if (eRes || !reserve) return repondre({ refus: 'reservation', detail: eRes?.message }, 500)
+  // ── RÉSERVER AVANT D'APPELER, ET EN UNE SEULE TRANSACTION ───────────────
+  //
+  // ⚠ CE FUT LE TROU LE PLUS COÛTEUX DE CETTE FONCTION. Le comptage et
+  // l'insertion étaient deux requêtes distinctes : N appels simultanés lisaient
+  // tous « 0 fait » et passaient tous. Le quota vérifiait un état déjà périmé
+  // au moment où il l'utilisait.
+  //
+  // Tout est descendu dans `reserver_generation`, sous verrou consultatif :
+  // elle compte, teste le quota du pilote, teste le PLAFOND GLOBAL sur 24 h —
+  // qui n'existait pas du tout — et insère, atomiquement. Elle est réservée au
+  // rôle de service, et le pilote lui est passé après vérification du jeton.
+  const { data: res, error: eRes } = await admin
+    .rpc('reserver_generation', { p_pilote: pilote, p_machine: charge.machineId ?? null })
+  const reserve = Array.isArray(res) ? res[0] : res
+  if (eRes || !reserve) {
+    // La fonction lève le motif en clair : quota, plafond_global, sans_compte.
+    const motif = (eRes?.message ?? '').match(/quota|plafond_global|sans_compte/)?.[0]
+    return repondre({ refus: motif ?? 'reservation', detail: eRes?.message },
+      motif === 'quota' || motif === 'plafond_global' ? 429 : 500)
+  }
 
-  const annuler = async () => { await admin.from('generation').delete().eq('id', reserve.id) }
+  const annuler = async () => {
+    await admin.from('generation').delete().eq('id', reserve.reservation)
+  }
 
   try {
     const r = await fetch(
@@ -113,13 +126,13 @@ Deno.serve(async (req) => {
       .find((x: { inlineData?: unknown }) => x.inlineData)
     if (!img) { await annuler(); return repondre({ refus: 'aucune_image' }, 502) }
 
-    await admin.from('generation').update({ etat: 'produite' }).eq('id', reserve.id)
+    await admin.from('generation').update({ etat: 'produite' }).eq('id', reserve.reservation)
     return repondre({
       image: `data:image/png;base64,${img.inlineData.data}`,
       // La grille voyage AVEC l'image : c'est ce qui interdit à la
       // spritification de travailler sur une autre grille que le prompt.
       grille: GRILLE, entreePx, version, modele,
-      reste: quota - faites - 1, quota,
+      reste: reserve.reste, quota: reserve.quota,
     })
   } catch (e) {
     await annuler()

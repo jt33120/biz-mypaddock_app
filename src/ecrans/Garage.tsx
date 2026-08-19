@@ -145,13 +145,15 @@ export function Garage({ db, onEcrit }: {
           Le garage est le centre du produit : le roulage s'y rattache, l'entretien s'y rattache,
           l'usure s'y lit. Une machine se crée sans photo — le portrait vient après, s'il vient.
         </p>
-        <button className="bouton" onClick={() => void importerCbr()}>
-          Reprendre la CBR 83
+        {/* ⚠ LE SEUL BOUTON D'ICI CRÉAIT LA HONDA DE JULIAN, EN DUR. Un inconnu
+            n'avait aucun moyen d'entrer sa propre moto : le garage restait vide
+            ou portait une machine qui n'était pas la sienne. Trouvé par une
+            passe adverse sur le parcours d'un premier utilisateur. */}
+        <Declarer onValider={async (m) => { await creerMachine(db, { ...m, sprite: null })
+          await charger(); onEcrit() }} />
+        <button className="lien" onClick={() => void importerCbr()}>
+          Reprendre la CBR 83 de l'essai
         </button>
-        <p className="note">
-          Reprise d'essai : la machine et son portrait sont déjà dans l'application, donc
-          l'import ne déclenche aucune génération et ne coûte rien.
-        </p>
       </section>
     )
   }
@@ -261,5 +263,41 @@ export function Garage({ db, onEcrit }: {
         Reprendre la saison 2026 · Pau-Arnos
       </button>
     </section>
+  )
+}
+
+/**
+ * DÉCLARER SA MACHINE. Trois champs, dont un seul obligatoire.
+ *
+ * L'année est facultative parce qu'elle se cherche — et qu'un pilote au paddock
+ * ne va pas ouvrir sa carte grise pour créer son garage. AD-2 : une machine sans
+ * photo, sans année et sans roulage est une machine valide.
+ */
+function Declarer({ onValider }: {
+  onValider: (m: { marque: string; modele: string; annee: number | null }) => Promise<void>
+}) {
+  const [marque, setMarque] = useState('')
+  const [modele, setModele] = useState('')
+  const [annee, setAnnee] = useState('')
+  const pret = marque.trim().length > 0 && modele.trim().length > 0
+
+  return (
+    <div className="pile">
+      <div className="libelle">Marque</div>
+      <input className="champ" value={marque} onChange={(e) => setMarque(e.target.value)}
+             placeholder="Honda" autoComplete="off" />
+      <div className="libelle">Modèle</div>
+      <input className="champ" value={modele} onChange={(e) => setModele(e.target.value)}
+             placeholder="CBR 1000 RR" autoComplete="off" />
+      <div className="libelle">Année · si tu l'as</div>
+      <input className="champ" value={annee} onChange={(e) => setAnnee(e.target.value)}
+             placeholder="2012" inputMode="numeric" />
+      <button className="bouton" disabled={!pret} onClick={() => void onValider({
+        marque: marque.trim(), modele: modele.trim(),
+        annee: /^\d{4}$/.test(annee.trim()) ? Number(annee.trim()) : null,
+      })}>
+        Déclarer ma machine
+      </button>
+    </div>
   )
 }

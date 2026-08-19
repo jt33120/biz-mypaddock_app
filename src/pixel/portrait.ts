@@ -37,6 +37,8 @@ const MOTS: Record<string, string> = {
     + 'La photo, elle, reste sur ce téléphone et ne dépend de rien.',
   quota: 'Le nombre de portraits inclus est atteint pour ce compte. '
     + 'La photo réelle continue de tenir la scène du garage.',
+  plafond_global: "La fabrique a atteint son plafond de la journée, tous comptes confondus. "
+    + 'Elle rouvrira demain, et rien n\'a été décompté de ton côté.',
   cle_absente: "La fabrique de portraits n'est pas encore ouverte. "
     + 'Rien n\'a été facturé, et la photo reste en place.',
   photo_trop_lourde: "Cette image est trop lourde pour partir. "
