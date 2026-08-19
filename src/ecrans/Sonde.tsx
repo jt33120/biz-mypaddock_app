@@ -81,9 +81,14 @@ export function Sonde({ db }: { db: PowerSyncDatabase }) {
 
   const compter = async () => {
     const db = await ouvrir()
-    const r = await db.getAll<{ n: number; t: number }>(
-      `SELECT (SELECT count(*) FROM tour) AS n, (SELECT count(*) FROM roulage) AS t`)
-    dire(`persisté : ${r[0].n} tours sur ${r[0].t} roulages`)
+    // Le comptage des CIRCUITS est ici pour une raison précise : le référentiel
+    // ne descend que par synchronisation, et AD-12 interdit à la PWA d'y écrire.
+    // Un nombre non nul sans compte, c'est l'application qui a écrit là où elle
+    // n'a que le droit de lire — et rien d'autre ne le rendrait visible.
+    const r = await db.getAll<{ n: number; t: number; c: number }>(
+      `SELECT (SELECT count(*) FROM tour) AS n, (SELECT count(*) FROM roulage) AS t,
+              (SELECT count(*) FROM circuit) AS c`)
+    dire(`persisté : ${r[0].n} tours sur ${r[0].t} roulages, ${r[0].c} circuits en référentiel`)
   }
 
   return (

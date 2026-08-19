@@ -4,7 +4,8 @@ import { demanderPersistance, ouvrirBase } from './db/powersync'
 import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
   listerMachines,
-  enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits, poserBudget,
+  circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
+  poserBudget, type Propose,
   type CoutRoulage,
 } from './db/depot'
 import { Depense } from './ecrans/Depense'
@@ -174,7 +175,7 @@ export default function App() {
         )}
         {ecran === 'roulages' && <Roulages liste={liste} onOuvrir={ouvrirBilan} onNouveau={() => setEcran('nouveau')} />}
         {ecran === 'nouveau' && (
-          <Nouveau onValider={async (r) => {
+          <Nouveau db={db} onValider={async (r) => {
             const id = await creerRoulage(db, r)
             setCourant(id); await rafraichir(db); setEcran('session')
           }} onAnnuler={() => setEcran('accueil')} />
@@ -464,8 +465,57 @@ function Roulages({ liste, onOuvrir, onNouveau }: { liste: Liste; onOuvrir: (id:
   )
 }
 
+/**
+ * LE CHOIX DU CIRCUIT — une liste qui propose, un champ qui décide.
+ *
+ * L'ordre des propositions est celui d'un pilote, pas celui d'un annuaire : ses
+ * circuits d'abord, le plus récent en tête, puis le référentiel. Sur onze
+ * ouvertures par an, la bonne réponse est presque toujours l'un des deux
+ * derniers roulages — et elle s'atteint alors en un seul geste, ganté.
+ *
+ * ⚠ LE CHAMP RESTE LIBRE. Aucune proposition n'est imposée, aucune saisie n'est
+ * refusée parce qu'elle est absente de la liste, et rien n'annonce qu'un circuit
+ * est « inconnu » : le produit énonce, il ne corrige pas (FR-13). Un circuit
+ * privé se saisit exactement comme Pau-Arnos.
+ */
+function ChoixCircuit({ db, valeur, sur }: {
+  db: Db; valeur: string; sur: (nom: string) => void
+}) {
+  const [propositions, setPropositions] = useState<Propose[]>([])
+  useEffect(() => {
+    let vivant = true
+    // AU REPOS, LA LISTE EST COURTE — trois rangs, pas six. La capture de
+    // l'essai l'a montré sans appel : six propositions poussaient la date, le
+    // groupe et « Continuer » hors de l'écran, et le pilote devait faire défiler
+    // une liste qu'il n'avait pas demandée pour atteindre le bouton. Dès qu'il
+    // tape, il cherche : la liste peut alors s'allonger, le clavier occupe de
+    // toute façon le bas de l'écran.
+    void circuitsProposes(db, valeur, valeur.trim() ? 6 : 3)
+      .then((c) => { if (vivant) setPropositions(c) })
+    return () => { vivant = false }
+  }, [db, valeur])
+
+  return (
+    <>
+      <input className="champ" value={valeur} onChange={(e) => sur(e.target.value)}
+             placeholder="Pau-Arnos" autoComplete="off" />
+      {propositions.length > 0 && (
+        <div className="circuits">
+          {propositions.map((c) => (
+            <button key={c.nom} className="circuit" type="button" onClick={() => sur(c.nom)}>
+              <span className="nom">{c.nom}</span>
+              {c.source === 'deja' && <span className="libelle">déjà roulé</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 /* ─── NOUVEAU ROULAGE — sélecteurs plutôt que clavier partout où c'est possible */
-function Nouveau({ onValider, onAnnuler }: {
+function Nouveau({ db, onValider, onAnnuler }: {
+  db: Db
   onValider: (r: { circuit: string; date: string; groupeNom: string | null; rang: number | null; total: number | null; machineId: string | null }) => void
   onAnnuler: () => void
 }) {
@@ -479,8 +529,7 @@ function Nouveau({ onValider, onAnnuler }: {
 
       <div className="pile">
         <div className="libelle">Circuit</div>
-        <input className="champ" value={circuit} onChange={(e) => setCircuit(e.target.value)}
-               placeholder="Pau-Arnos" autoComplete="off" />
+        <ChoixCircuit db={db} valeur={circuit} sur={setCircuit} />
       </div>
 
       <div className="pile">

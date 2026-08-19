@@ -179,6 +179,22 @@ body {
 .champ:focus { outline: none; border-color: var(--filet-vif); box-shadow: 0 0 16px rgba(61,224,255,.15) }
 .champ::placeholder { color: var(--encre-tenue) }
 
+/* Le sélecteur de circuits : des rangs pleine largeur, pas des pastilles.
+   La cible d'un doigt ganté se gagne en HAUTEUR et en largeur constante — une
+   pastille qui se dimensionne sur son texte fait de « Albi » une cible deux
+   fois plus petite que « Croix-en-Ternois », et c'est le nom court qu'on rate. */
+.circuits { display: flex; flex-direction: column; gap: 2px; margin-top: -4px }
+.circuit {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: var(--cible-min); padding: 10px 14px; text-align: left;
+  background: rgba(8,12,28,.45); border: 1px solid var(--filet); border-top: none;
+  color: var(--encre-faible); font-family: var(--face); cursor: pointer;
+}
+.circuit:first-child { border-top: 1px solid var(--filet) }
+.circuit:active { background: rgba(61,224,255,.10); color: var(--encre) }
+.circuit .nom { font-size: 16px }
+.circuit .libelle { color: var(--encre-tenue) }
+
 .puces { display: flex; flex-wrap: wrap; gap: 8px }
 .puce {
   min-height: var(--cible-min); padding: 10px 16px;

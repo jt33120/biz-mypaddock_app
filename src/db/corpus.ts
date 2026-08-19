@@ -39,3 +39,58 @@ export const CAPS_EMBARQUES = [
   { code: 'nuit', libelle: 'Roulage de nuit', categorie: 'discipline' },
   { code: 'pluie', libelle: 'Roulage sous la pluie', categorie: 'discipline' },
 ] as const satisfies readonly { code: string; libelle: string; categorie: 'bravoure' | 'discipline' }[]
+
+/**
+ * LES CIRCUITS EMBARQUÉS — même motif que les conseils, et une raison de plus.
+ *
+ * Le référentiel descend par synchronisation : il est vide tant que rien n'a
+ * synchronisé, c'est-à-dire au premier lancement, et c'est-à-dire AU PADDOCK
+ * SANS RÉSEAU — précisément l'endroit et le moment où on saisit un roulage. Un
+ * sélecteur de circuits qui n'existe qu'en ligne ne sert jamais.
+ *
+ * Cette liste est aussi LA TÊTE ÉDITORIALE du référentiel : son ordre est celui
+ * dans lequel un pilote français cherche, pas l'ordre alphabétique. Les circuits
+ * qui arriveront en base sans figurer ici s'ajoutent à la suite — la liste
+ * embarquée est curée, la base est la part qui grossit.
+ *
+ * `alias` NE S'ÉCRIT JAMAIS. C'est de la matière de recherche : on tape « val de
+ * vienne » et on trouve « Le Vigeant », mais c'est « Le Vigeant » qui part dans
+ * le roulage. Le nom stocké reste unique, donc l'écart à circuit constant
+ * continue de comparer ce qui est comparable.
+ */
+export type CircuitEmbarque = { nom: string; alias?: string }
+
+export const CIRCUITS_EMBARQUES: readonly CircuitEmbarque[] = [
+  { nom: 'Pau-Arnos', alias: 'arnos béarn 64 pyrénées atlantiques' },
+  { nom: 'Nogaro', alias: 'paul armagnac gers 32' },
+  { nom: 'Le Vigeant', alias: 'val de vienne 86' },
+  { nom: 'Lédenon', alias: 'gard 30 nîmes' },
+  { nom: 'Magny-Cours', alias: 'nevers nièvre 58' },
+  { nom: 'Le Castellet', alias: 'paul ricard var 83' },
+  { nom: 'Albi', alias: 'tarn 81' },
+  { nom: 'Dijon-Prenois', alias: 'prenois côte-d’or 21' },
+  { nom: 'Charade', alias: 'clermont-ferrand puy-de-dôme 63' },
+  { nom: 'Croix-en-Ternois', alias: 'saint-pol pas-de-calais 62' },
+  { nom: 'Carole', alias: 'tremblay seine-saint-denis 93 paris' },
+  { nom: 'Bresse', alias: 'frontenaud saône-et-loire 71' },
+  { nom: 'Le Mans', alias: 'bugatti sarthe 72' },
+  { nom: 'Folembray', alias: 'aisne 02' },
+  { nom: 'Le Luc', alias: 'circuit du var 83' },
+  { nom: 'Haute Saintonge', alias: 'la genétouze charente-maritime 17' },
+  { nom: 'Fontenay-le-Comte', alias: 'vendée 85' },
+  { nom: 'Lohéac', alias: 'ille-et-vilaine 35' },
+  { nom: 'Alès', alias: 'pôle mécanique cévennes gard 30' },
+  { nom: 'Issoire', alias: 'puy-de-dôme 63' },
+  { nom: 'Clastres', alias: 'aisne 02' },
+  { nom: 'Mornay', alias: 'cher 18' },
+  { nom: 'Le Grand Sambuc', alias: 'bouches-du-rhône 13 aix' },
+  { nom: 'La Ferté-Gaucher', alias: 'seine-et-marne 77' },
+  { nom: 'Motorland Aragón', alias: 'alcañiz espagne aragon' },
+  { nom: 'Jerez', alias: 'espagne andalousie' },
+  { nom: 'Valence', alias: 'ricardo tormo cheste espagne' },
+  { nom: 'Barcelona-Catalunya', alias: 'montmelo espagne catalogne' },
+  { nom: 'Navarra', alias: 'los arcos espagne' },
+  { nom: 'Portimão', alias: 'algarve portugal' },
+  { nom: 'Mettet', alias: 'belgique' },
+  { nom: 'Spa-Francorchamps', alias: 'belgique spa' },
+]

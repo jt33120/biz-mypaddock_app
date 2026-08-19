@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
+import { CIRCUITS_EMBARQUES } from './corpus'
 
 /** Toutes les lectures et écritures passent ici. Aucun écran n'écrit de SQL. */
 
@@ -81,6 +82,17 @@ export const bilanMachine = async (db: PowerSyncDatabase, machineId: string) => 
   return { roulages: r.roulages ?? 0, meilleurMs: r.meilleur ?? null }
 }
 
+/** Comparaison de saisie : sans accent, sans casse, ET SANS SÉPARATEUR.
+ *
+ *  Le repli des traits d'union n'est pas une coquetterie — il a été trouvé par
+ *  l'essai. « pau arnos » tapé un soir ne trouvait pas « Pau-Arnos », et pire :
+ *  le bilan du lendemain annonçait « premier chrono sur ce circuit » alors que
+ *  le pilote y roulait pour la deuxième fois. Deux noms qui ne diffèrent que par
+ *  leur ponctuation désignent le même circuit ; il n'existe aucun contre-exemple. */
+const aplati = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').trim()
+
 /** Le circuit est stocké EN CLAIR, dans `circuit_nom`. La récolte viendra poser
  *  `circuit_id` par-dessus ; elle n'est pas au noyau. Écrire le nom dans la
  *  référence — ce que faisait la v0 — bloquait toute synchronisation (récit 1.2). */
@@ -138,15 +150,23 @@ export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => 
   const cur = l[0]
   if (!cur) return null
 
-  const prec = await db.getAll<{ meilleur: number }>(
-    `SELECT min(t.temps_ms) AS meilleur
+  // « À circuit constant » se compare SUR LE CIRCUIT, pas sur l'orthographe.
+  // L'égalité SQL stricte faisait de « pau-arnos » tapé un soir et « Pau-Arnos »
+  // choisi le suivant deux circuits distincts : la progression disparaissait
+  // sans rien signaler. Le rapprochement se fait donc à plat — sans accent, sans
+  // casse — côté application, parce que le `lower()` de SQLite ignore les accents.
+  const anterieurs = await db.getAll<{ circuit: string; meilleur: number }>(
+    `SELECT r.circuit_nom AS circuit, min(t.temps_ms) AS meilleur
        FROM tour t
        JOIN session s ON s.id = t.session_id
        JOIN roulage r ON r.id = s.roulage_id
-      WHERE r.circuit_nom = ? AND r.id <> ? AND r.date_jour <= ?`,
-    [cur.circuit, roulageId, cur.date])
+      WHERE r.id <> ? AND r.date_jour <= ?
+      GROUP BY r.circuit_nom`,
+    [roulageId, cur.date])
 
-  const ancien = prec[0]?.meilleur ?? null
+  const cle = aplati(cur.circuit)
+  const ancien = anterieurs.reduce<number | null>(
+    (m, a) => (aplati(a.circuit) === cle && (m == null || a.meilleur < m) ? a.meilleur : m), null)
   return {
     ...cur,
     ecart: ancien != null && cur.meilleur != null ? cur.meilleur - ancien : null,
@@ -333,4 +353,69 @@ export const coutDuRoulage = async (
     : null
 
   return { journeeCentimes, tours: t.n, auTour, consommeCentimes }
+}
+
+/* ─── LES CIRCUITS ─────────────────────────────────────────────────────────
+   Le sélecteur de circuits. Trois règles le gouvernent, et aucune des trois
+   n'est négociable parce que chacune répare un défaut connu :
+
+   ① LE TEXTE LIBRE NE DISPARAÎT JAMAIS. La liste propose, elle ne contraint
+     pas. Un circuit privé, une piste étrangère, une orthographe personnelle :
+     ce qui est tapé est ce qui est écrit. Un sélecteur fermé transformerait un
+     roulage réel en roulage impossible à saisir.
+
+   ② LA PWA N'ÉCRIT RIEN DANS `circuit` (AD-12). Le référentiel se lit. Choisir
+     dans la liste ne crée pas de ligne, et un circuit tapé à la main n'en
+     ajoute pas une non plus.
+
+   ③ `circuit_id` RESTE NUL. La tentation est forte de poser la référence quand
+     le pilote a choisi dans la liste — mais la liste embarquée n'a pas les
+     identifiants du serveur, et fabriquer un uuid côté client produirait une
+     clé étrangère invalide, donc une ligne refusée à l'envoi, donc une file
+     bloquée. C'est exactement l'incident du 19 août. La normalisation se fait
+     côté serveur, où les deux tables sont dans la même base. */
+
+/** `deja` : ce circuit est dans la saison du pilote. `connu` : il vient du
+ *  référentiel. La distinction s'affiche, parce qu'un pilote qui revient au même
+ *  circuit pour la cinquième fois doit le trouver en premier et sans lire. */
+export type Propose = { nom: string; source: 'deja' | 'connu' }
+
+export const circuitsProposes = async (
+  db: PowerSyncDatabase, saisie: string, max = 6,
+): Promise<Propose[]> => {
+  // Les siens d'abord, le plus récent en tête : sur onze ouvertures par an, la
+  // bonne réponse est presque toujours l'une des deux dernières.
+  // Le départage se fait par l'UUID v7 (AD-14) quand deux roulages tombent le
+  // même jour : la date seule les laisse dans un ordre arbitraire, et c'est le
+  // dernier SAISI qu'un pilote s'attend à retrouver en tête.
+  const siens = await db.getAll<{ nom: string }>(
+    `SELECT circuit_nom AS nom, max(date_jour) AS dernier, max(id) AS ecrit
+       FROM roulage WHERE circuit_nom IS NOT NULL AND trim(circuit_nom) <> ''
+      GROUP BY circuit_nom ORDER BY dernier DESC, ecrit DESC`)
+  const enBase = await db.getAll<{ nom: string }>(`SELECT nom FROM circuit ORDER BY nom`)
+
+  const q = aplati(saisie)
+  const tel_quel = saisie.trim()
+  const vus = new Set<string>()
+  const sortie: Propose[] = []
+  const retenir = (nom: string, source: Propose['source'], matiere: string) => {
+    const cle = aplati(nom)
+    if (vus.has(cle)) return
+    vus.add(cle)
+    if (q && !aplati(matiere).includes(q)) return
+    // Une proposition IDENTIQUE À LA LETTRE n'a rien à offrir : c'est déjà ce
+    // qui est écrit, et la liste qui se replie confirme le choix. La comparaison
+    // est stricte à dessein — « ledenon » n'est pas « Lédenon », et proposer
+    // l'orthographe complète est précisément le service rendu.
+    if (nom === tel_quel) return
+    sortie.push({ nom, source })
+  }
+
+  for (const r of siens) retenir(r.nom, 'deja', r.nom)
+  // La tête curée avant la queue qui grossit — et les alias ne servent qu'ici,
+  // à trouver, jamais à écrire.
+  for (const c of CIRCUITS_EMBARQUES) retenir(c.nom, 'connu', `${c.nom} ${c.alias ?? ''}`)
+  for (const c of enBase) retenir(c.nom, 'connu', c.nom)
+
+  return sortie.slice(0, max)
 }
