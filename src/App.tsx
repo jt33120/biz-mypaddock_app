@@ -5,7 +5,7 @@ import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
   listerMachines, type Machine,
   circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
-  poserBudget, type Propose,
+  normaliserEtats, poserBudget, type Propose,
   type CoutRoulage,
 } from './db/depot'
 import { Depense } from './ecrans/Depense'
@@ -77,6 +77,7 @@ export default function App() {
       // stockage que le navigateur peut évincer.
       .then(() => demanderPersistance())
       .then(() => normaliserCircuits(d))
+      .then(() => normaliserEtats(d))
       // Instrument ③ : l'ouverture se compte AVANT toute saisie, et elle naît
       // « n'a rien produit » — l'état attendu, jamais un échec (FR-59).
       .then(() => ouverture(d))

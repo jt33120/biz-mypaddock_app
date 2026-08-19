@@ -65,6 +65,10 @@ const roulage = new Table({
   groupe_rang: column.integer,
   groupe_total: column.integer,
   niveau: column.text,
+  // FR-61 : brouillon = importé d'un calendrier, une inscription ne prouve pas
+  // qu'on a roulé. usage = confirmé. Un roulage saisi à la main naît en usage,
+  // et les quatre mots de la frontière ne remontent JAMAIS à l'écran.
+  etat: column.text,
 })
 
 // ─── Session et tours ─────────────────────────────────────────────────────
@@ -184,6 +188,23 @@ const generation = new Table({
   cree_le: column.text,
 })
 
+// L'horloge d'usure. Elle porte sa PROVENANCE en colonnes obligatoires, et
+// aucun champ qui ressemblerait à un verdict : ce qui n'existe pas dans le
+// schéma ne s'affiche pas par accident (FR-44).
+const horloge = new Table({
+  machine_id: column.text,
+  operation: column.text,
+  intervalle_roulages: column.integer,
+  source_url: column.text,
+  recolte_le: column.text,
+  extrait_par_ia: column.integer,
+  depuis_intervention: column.text,
+})
+
+// Référentiel : le coefficient part à 1 partout, faute de source. Modifiable
+// sans redéploiement (AD-10, NFR-14), et jamais affiché comme une constante.
+const coefficient_usure = new Table({ niveau: column.text, coefficient: column.real })
+
 const circuit = new Table({ nom: column.text, pays: column.text, longueur_m: column.integer })
 const organisateur = new Table({ nom: column.text, site_web: column.text })
 
@@ -225,10 +246,12 @@ export const AppSchema = new Schema({
   intervention,
   mesure,
   evenement_vise,
+  horloge,
   photo,
   geste,
   plan_si_alors,
   generation,
+  coefficient_usure,
   conseil,
   cap,
   circuit,

@@ -125,8 +125,15 @@ export const creerRoulage = async (
 ) => {
   const id = nouvelId()
   await db.execute(
-    `INSERT INTO roulage (id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, circuit_nom)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    // ⚠ `etat` S'ÉCRIT EXPLICITEMENT. Une colonne déclarée au schéma local mais
+    // jamais renseignée part à NULL dans la file d'envoi, et Postgres la porte
+    // en `not null default 'usage'` — la ligne serait refusée et bloquerait la
+    // file derrière elle. C'est l'incident du 19 août, à l'identique. Et côté
+    // lecture, l'horloge d'usure ne compte que les roulages en `usage` : un
+    // NULL les rendait tous invisibles, donc l'horloge annonçait zéro.
+    `INSERT INTO roulage
+       (id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, circuit_nom, etat)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'usage')`,
     [id, r.machineId, r.date, r.groupeNom, r.rang, r.total, r.circuit],
   )
   await marquerSaisie(db)
@@ -307,6 +314,24 @@ export const listerDepenses = (db: PowerSyncDatabase, annee: number) =>
    Une seule passe, idempotente, à l'ouverture : le nom rejoint sa colonne et la
    référence redevient nulle — ce qu'elle aurait toujours dû être tant que la
    récolte n'a rien apparié. */
+/**
+ * Les roulages écrits avant l'épique 12 n'ont pas d'`etat`. Deux conséquences,
+ * et la seconde est bloquante : l'horloge d'usure ne les compte pas, et leur
+ * envoi partirait à NULL sur une colonne `not null` — une ligne refusée bloque
+ * la file derrière elle.
+ *
+ * Ils naissent en `usage` : ils ont été saisis à la main par le pilote, donc
+ * ils sont des journées vécues. Seul un import de calendrier produit un
+ * brouillon, et il n'existe pas encore.
+ */
+export const normaliserEtats = async (db: PowerSyncDatabase): Promise<number> => {
+  const r = await db.get<{ n: number }>(
+    `SELECT count(*) AS n FROM roulage WHERE etat IS NULL OR etat = ''`)
+  if (!r.n) return 0
+  await db.execute(`UPDATE roulage SET etat = 'usage' WHERE etat IS NULL OR etat = ''`)
+  return r.n
+}
+
 export const normaliserCircuits = async (db: PowerSyncDatabase): Promise<number> => {
   const avant = await db.get<{ n: number }>(
     `SELECT count(*) AS n FROM roulage WHERE circuit_nom IS NULL`)

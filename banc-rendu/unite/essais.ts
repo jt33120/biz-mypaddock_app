@@ -20,6 +20,7 @@ import { enFichier } from '../../src/recap/composer'
 import { PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
+import { niveauDuGroupe } from '../../src/db/usure'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
@@ -272,6 +273,25 @@ const essais = [
     // Deux points font TOUJOURS une droite, donc toujours une progression ou
     // toujours une chute. Le pilote y lirait un mouvement qui n'existe pas.
     egal(POINTS_MINIMUM, 3)
+  }),
+
+  /* ─── LE NIVEAU MYPADDOCK — FR-6bis, seule entrée du coefficient d'usure ── */
+  doit('le niveau se projette sur la POSITION, pas sur le rang', () => {
+    // 3ᵉ sur 3 et 3ᵉ sur 5 ne sont pas le même niveau. Le rang seul ne dit
+    // rien, et c'est l'erreur qui rendrait faux le seul calcul du produit qui
+    // touche à la sécurité d'une machine.
+    egal(niveauDuGroupe(1, 4), 'debutant')
+    egal(niveauDuGroupe(4, 4), 'racer')
+    egal(niveauDuGroupe(3, 3), 'racer')
+    egal(niveauDuGroupe(3, 5), 'confirme')
+    egal(niveauDuGroupe(1, 1), 'intermediaire', 'un organisateur à groupe unique')
+  }),
+  doit('un groupe non saisi ne rend PAS un niveau inventé', () => {
+    // `null` propage l'ignorance jusqu'à la complétude, où elle s'affiche.
+    // Inventer « intermédiaire » ferait entrer une valeur fausse dans le
+    // calcul, et le chiffre paraîtrait aussi solide qu'un vrai.
+    for (const [r, t] of [[null, null], [null, 4], [2, null], [0, 4], [5, 4], [-1, 3]] as const)
+      egal(niveauDuGroupe(r, t), null, `rang ${r} sur ${t}`)
   }),
 ]
 

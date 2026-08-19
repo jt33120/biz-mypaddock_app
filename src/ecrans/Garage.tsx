@@ -8,6 +8,7 @@ import { photoMachine, verserPhotoMachine } from '../db/photos'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import { Atelier } from './Atelier'
+import { Usure } from './Usure'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
 
 /**
@@ -258,6 +259,11 @@ export function Garage({ db, onEcrit }: {
           se rafraîchit pas ne se signale jamais. */}
       <Atelier db={db} machineId={machine.id}
                onEcrit={() => { void charger(); onEcrit() }} />
+
+      {/* L'USURE — épique 12. Elle vit sous l'atelier parce qu'elle en est la
+          conséquence : une horloge repart d'un geste consigné, pas d'un bouton
+          « remettre à zéro ». */}
+      <Usure db={db} machineId={machine.id} />
 
       <button className="lien" onClick={() => void importerSaison()}>
         Reprendre la saison 2026 · Pau-Arnos

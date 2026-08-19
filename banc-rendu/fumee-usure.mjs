@@ -1,0 +1,67 @@
+// Épique 12 — l'horloge d'usure et le barème. Le seul endroit du produit où une
+// erreur touche la sécurité d'une machine.
+//
+// Trois clauses, et l'essai les vérifie à l'écran :
+//   ① FR-40 — la complétude accompagne le chiffre PARTOUT, sans interaction
+//   ② FR-44 — aucun verdict : ni « à changer », ni durée de vie restante
+//   ③ FR-61 — un roulage BROUILLON ne fait pas vieillir une machine
+import { chromium } from 'playwright-core'
+
+const nav = await chromium.launch({
+  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+})
+const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
+const erreurs = []
+page.on('console', m => { if (m.type() === 'error') erreurs.push('console: ' + m.text()) })
+page.on('pageerror', e => erreurs.push('pageerror: ' + e.message))
+const pret = () => page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
+
+await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
+await pret()
+
+await page.click('nav.barre .onglet:has-text("GARAGE")')
+await page.fill('.champ[placeholder="Honda"]', 'Honda')
+await page.fill('.champ[placeholder="CBR 1000 RR"]', 'CBR 1000 RR · 83')
+await page.click('text=Déclarer ma machine')
+await page.waitForSelector('.garage .modele', { timeout: 20_000 })
+await page.click('text=Reprendre la saison 2026 · Pau-Arnos')
+await page.waitForTimeout(1500)
+
+// ── Une horloge SANS barème connu : elle compte sans jamais échoir.
+await page.click('text=Suivre un poste d\'usure')
+await page.fill('.champ[placeholder="Plaquettes avant"]', 'Plaquettes avant')
+await page.click('text=Suivre ce poste')
+await page.waitForSelector('.usure', { timeout: 20_000 })
+const sans = (await page.textContent('.usure')).replace(/\s+/g, ' ')
+console.log('① sans barème :', sans)
+console.log('   compte sans échoir, et le dit :', sans.includes('sans échoir') ? 'oui' : 'NON')
+
+// ── ① FR-40 : la complétude est là, sans avoir rien touché.
+console.log('② complétude affichée sans interaction :',
+  /sur \d+ roulages? saisis?/.test(sans) ? 'oui' : 'NON — FR-40 VIOLÉE')
+console.log('   les roulages sans groupe sont signalés :',
+  sans.includes('sans groupe') ? 'oui' : 'NON')
+
+// ── Une horloge AVEC intervalle, dépassée par la saison de Julian.
+await page.click('text=Suivre un poste d\'usure')
+await page.fill('.champ[placeholder="Plaquettes avant"]', 'Vidange')
+await page.fill('.champ[placeholder="6"]', '3')
+await page.click('text=Suivre ce poste')
+await page.waitForTimeout(800)
+const tout = (await page.textContent('.ecran')).replace(/\s+/g, ' ')
+console.log('③ avec intervalle :', /Vidange\s*\d+ \/ 3/.test(tout) ? 'compté sur 3' : tout.slice(0, 90))
+console.log('   dépassement énoncé, jamais jugé :',
+  tout.includes("Au-delà de l'intervalle") ? 'oui' : 'NON')
+
+// ── ② FR-44 : AUCUN VERDICT nulle part.
+const verdicts = ['à changer', 'à remplacer', 'danger', 'usé', 'durée de vie', 'il te reste',
+  'risque', 'critique', 'urgent', 'conforme']
+const trouves = verdicts.filter((v) => tout.toLowerCase().includes(v))
+console.log('④ FR-44 — aucun verdict :', trouves.length ? trouves : 'oui')
+console.log('   le barème se dit transcrit :',
+  tout.includes('transcrit') || !tout.includes('Barème relevé') ? 'oui' : 'NON')
+
+await page.screenshot({ path: process.argv[2] ?? '/tmp/usure.png', fullPage: true })
+console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
+await nav.close()
+process.exit(erreurs.length ? 1 : 0)
