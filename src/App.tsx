@@ -29,6 +29,8 @@ import { Legal } from './ecrans/Legal'
 import { Courbe } from './ecrans/Courbe'
 import { Checklist } from './ecrans/Checklist'
 import { Saison } from './ecrans/Saison'
+import { Cercle } from './ecrans/Cercle'
+import { chronoVisible, rendreVisible } from './db/cercle'
 import { courbeDuCircuit, type Courbe as DonneesCourbe } from './db/courbe'
 import { evenements, viserEvenement, type Evenement } from './db/atelier'
 import {
@@ -240,7 +242,7 @@ export default function App() {
         )}
         {ecran === 'bilan' && bilan && courant && (
           <BilanEcran
-            db={db} b={bilan} cout={cout} courbe={courbe}
+            db={db} b={bilan} cout={cout} courbe={courbe} identite={identite}
             onSession={() => setEcran('session')}
             onAccueil={() => setEcran('accueil')}
             onDepense={() => setEcran('depense')}
@@ -824,8 +826,9 @@ function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; on
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ db, b, cout, courbe, photos, onSession, onAccueil, onDepense, onRecap, onBudget }: {
+function BilanEcran({ db, b, cout, courbe, identite, photos, onSession, onAccueil, onDepense, onRecap, onBudget }: {
   db: Db; b: NonNullable<Bilan>; cout: CoutRoulage | null; courbe: DonneesCourbe | null
+  identite: Identite | null
   photos: React.ReactNode
   onSession: () => void; onAccueil: () => void; onDepense: () => void; onRecap: () => void
   onBudget: (centimes: number) => Promise<void>
@@ -876,6 +879,13 @@ function BilanEcran({ db, b, cout, courbe, photos, onSession, onAccueil, onDepen
           ce qui la rend utile l'année suivante, quand on ne se rappelle plus
           ce qu'on avait pris. */}
       <Checklist db={db} roulageId={b.id} jour={b.date} />
+
+      {/* FR-19 — LA VISIBILITÉ DU CHRONO EST UN INTERRUPTEUR, ROULAGE PAR
+          ROULAGE, masqué par défaut. Il vit à côté du cercle parce que c'est le
+          seul endroit où il a une conséquence : ailleurs, le chrono est à toi
+          et personne ne le regarde. */}
+      <Visibilite db={db} roulageId={b.id} />
+      <Cercle identite={identite} circuit={b.circuit} />
 
       {photos}
 
@@ -962,5 +972,26 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
 
       <button className="lien" onClick={onDepense}>Ajouter une dépense</button>
     </div>
+  )
+}
+
+/**
+ * FR-19 — L'INTERRUPTEUR DE VISIBILITÉ, roulage par roulage.
+ *
+ * Masqué par défaut sur tout roulage neuf, et le défaut est celui qui protège :
+ * « une comparaison imposée fait cesser la saisie de celui qui en a le plus
+ * besoin ». Il ne se règle jamais globalement — un réglage d'un coup pour toute
+ * la saison ferait exactement ce que la clause évite.
+ */
+function Visibilite({ db, roulageId }: { db: Db; roulageId: string }) {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => { void chronoVisible(db, roulageId).then(setVisible) }, [db, roulageId])
+  return (
+    <button className="lien discret"
+            onClick={() => void rendreVisible(db, roulageId, !visible).then(() => setVisible(!visible))}>
+      {visible
+        ? 'ton chrono de ce jour est visible par ton cercle · le masquer'
+        : 'ton chrono de ce jour est masqué · le montrer à ton cercle'}
+    </button>
   )
 }

@@ -65,6 +65,10 @@ const roulage = new Table({
   groupe_rang: column.integer,
   groupe_total: column.integer,
   niveau: column.text,
+  // FR-19 : masqué par défaut, roulage par roulage. Une comparaison imposée
+  // fait cesser la saisie de celui qui en aurait le plus besoin — le défaut
+  // est donc celui qui protège, et il ne se règle jamais globalement.
+  chrono_visible: column.integer,
   // FR-61 : brouillon = importé d'un calendrier, une inscription ne prouve pas
   // qu'on a roulé. usage = confirmé. Un roulage saisi à la main naît en usage,
   // et les quatre mots de la frontière ne remontent JAMAIS à l'écran.
@@ -162,6 +166,11 @@ const photo = new Table({
 const geste = new Table({
   roulage_id: column.text,
   cap_code: column.text,
+  // FR-39bis : faux par défaut, toujours. La présence de pairs augmente la
+  // prise de risque en augmentant la sensibilité à la récompense du choix
+  // risqué — le danger n'est ni dans le catalogue ni dans le cercle pris
+  // seuls, il est dans leur conjonction.
+  partage: column.integer,
 })
 
 // Le plan si-alors du pilote — la donnée la plus intime du produit, et la seule

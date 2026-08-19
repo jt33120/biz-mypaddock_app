@@ -22,6 +22,7 @@ import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
 import { CHARGEMENT_EMBARQUE, MOIS_AVANT_DOUTE, moisDepuis } from '../../src/db/checklist'
+import { nouveauCode } from '../../src/db/cercle'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
@@ -313,6 +314,19 @@ const essais = [
     for (const c of CHARGEMENT_EMBARQUE)
       vrai(c.categorie !== 'conformite', `« ${c.libelle} » se présente comme une règle`)
     vrai(CHARGEMENT_EMBARQUE.length > 6, 'chargement trop pauvre pour servir')
+  }),
+
+  /* ─── LE CODE DE CERCLE — il se donne DE VIVE VOIX ────────────────────── */
+  doit("un code de cercle n'a aucun caractère qu'on confonde à l'oral", () => {
+    // Il se dicte au paddock, casque à la main, dans le bruit. 0 et O, 1 et I
+    // et L se confondent : ils sont exclus de l'alphabet, pas corrigés après.
+    for (let i = 0; i < 200; i++) {
+      const c = nouveauCode()
+      egal(c.length, 8)
+      vrai(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]+$/.test(c), `« ${c} » contient un caractère ambigu`)
+    }
+    // Et deux codes tirés coup sur coup ne se ressemblent pas.
+    vrai(new Set([...Array(50)].map(() => nouveauCode())).size === 50, 'des codes se répètent')
   }),
 ]
 
