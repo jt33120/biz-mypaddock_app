@@ -1452,6 +1452,7 @@ sont des cellules d'essai, et aucune conversion ni aucun paiement n'a été obse
 | Pass saison | 29–39 € | Aligné sur Apex Lines, MotoVault, LookOver. Aucune conversion observée. |
 | Partage revente | 9–19 € ponctuels | Plage arbitraire ; seul repère observé, MotoStack à 9,99 $. |
 | Loueur / école | À découvrir | Substituts publiés de 9 à 199 €/mois. Aucune volonté de payer observée. |
+| **Catalogue de styles** *(19 août)* | **À fixer** | **La cellule la mieux fondée de la grille, et la seule dont le coût est mesuré.** Voir ci-dessous. |
 
 **Et un raisonnement que le brief avait commencé sans le finir — puis que Julian a corrigé.**
 Ce document affirmait que la cadence d'environ onze usages par an rendait l'abonnement mal ajusté,
@@ -1493,6 +1494,40 @@ l'autre.
 > première cellule du tableau.
 
 ---
+
+#### Le premier coût marginal réel du produit — et le modèle qu'il suggère
+
+**Établi le 19 août 2026, par la dépense et non par l'hypothèse.** Le rendu de la machine passe
+par une génération d'image, et c'est **le premier poste du produit dont chaque usage coûte de
+l'argent**. Tout le reste — base locale, synchronisation, composition d'image, partage — est à
+coût marginal nul ou négligeable.
+
+**Ordre de grandeur : environ 0,16 € par image.** Ce chiffre est **dérivé du relevé de Julian**
+(≈ 16,98 € pour 107 images) et non d'un tarif publié : il est à vérifier avant tout usage
+économique, et le journal de dépense conserve les jetons réels pour qu'un tarif exact puisse être
+réappliqué après coup.
+
+> **L'exposition, nommée plutôt que découverte.** L'acquisition passe par des campagnes Meta
+> payantes, donc par des inconnus dès le premier jour. **Mille curieux qui essaient trois photos
+> chacun coûtent environ 480 € pour zéro revenu.** Ce n'est pas un risque théorique : c'est
+> l'issue par défaut d'un palier gratuit sans quota. Un garde-fou local existe déjà côté banc —
+> plafond, confirmation chiffrée, journal — mais il ne protège pas la production : **il faudra un
+> quota par compte, côté serveur, avant la première campagne.** À joindre aux préconditions de
+> QO-11.
+
+**Et le coût suggère son propre modèle, ce qui est rare.** Six directions artistiques ont été
+produites et comparées ; Julian en retient **une seule pour la v1, le pixel 16 bits**, et
+envisage d'en proposer d'autres plus tard, éventuellement payantes.
+
+> **Le catalogue de styles est le candidat de monétisation le mieux fondé du dossier**, pour une
+> raison qui n'est pas commerciale mais structurelle : **le style est le seul axe où le pilote a
+> une envie personnelle, et c'est aussi le seul poste à coût marginal réel.** Il facture donc
+> exactement ce qui coûte — là où un abonnement facture du temps sur un produit dont l'unité de
+> compte est la saison, et là où le pass saison reste, lui, adossé à rien de mesuré.
+>
+> **Ce qui ne se construit pas en v1 :** aucun sélecteur de styles, un seul style livré. La
+> cellule entre dans la grille comme **candidat observé, non tranché** — au même titre que les
+> autres, et sous la même règle : *monétisation à tester, pas à prévoir*.
 
 ## 10. Noyau de premier roulage et séquencement
 
