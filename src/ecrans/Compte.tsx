@@ -4,7 +4,7 @@ import { supabaseConfigure } from '../db/supabase'
 import {
   confirmerParCode, seConnecter, seDeconnecter, sInscrire, type Identite, type Issue,
 } from '../db/compte'
-import { adopter, estAdopte, etatLocal, type BilanEnvoi } from '../db/sauvegarde'
+import { adopter, estAdopte, etatLocal, type BilanEnvoi, type Refus } from '../db/sauvegarde'
 import { powersyncConfigure } from '../db/connecteur'
 import { accepterMesures, mesuresAcceptees } from '../db/mesures'
 
@@ -192,6 +192,7 @@ function Repris({ etat }: { etat: BilanEnvoi }) {
 
 function Connecte({ db, identite }: { db: PowerSyncDatabase; identite: Identite }) {
   const [bilan, setBilan] = useState<BilanEnvoi | null>(null)
+  const [refus, setRefus] = useState<Refus[]>([])
   const [erreur, setErreur] = useState<string | null>(null)
   const [occupe, setOccupe] = useState(false)
   const [enAttente, setEnAttente] = useState<number | null>(null)
@@ -208,11 +209,14 @@ function Connecte({ db, identite }: { db: PowerSyncDatabase; identite: Identite 
   useEffect(() => { void compterAttente() }, [compterAttente])
 
   const envoyer = async () => {
-    setOccupe(true); setErreur(null)
+    setOccupe(true); setErreur(null); setRefus([])
     try {
-      const { bilan: b } = await adopter(db, identite.id)
+      const { bilan: b, refus: r } = await adopter(db, identite.id)
       setBilan(b)
-      setAdopte(true)
+      setRefus(r)
+      // Une adoption incomplète n'allume pas la synchronisation continue : le
+      // serveur ne porte pas encore tout, et le journal local est conservé.
+      setAdopte(r.length === 0)
       await compterAttente()
     } catch (e) {
       setErreur((e as Error).message)
@@ -258,6 +262,25 @@ function Connecte({ db, identite }: { db: PowerSyncDatabase; identite: Identite 
       </button>
 
       {erreur && <p className="mot-erreur">{erreur}</p>}
+
+      {refus.length > 0 && (
+        <div className="bloc pile">
+          {/* Une erreur dit CE QUI S'EST PASSÉ, CE QUI EST CONSERVÉ, et CE QUI
+              VA SE PASSER. Le reste est parti ; rien n'est perdu ; on peut
+              relancer. Aucune excuse, aucun code nu tout seul. */}
+          <div className="libelle alerte">
+            {refus.length} ligne{refus.length > 1 ? 's' : ''} refusée{refus.length > 1 ? 's' : ''}
+          </div>
+          <p className="texte">
+            Tout le reste est bien parti, et ces lignes-là sont toujours dans le téléphone —
+            rien n'est perdu. La sauvegarde peut être relancée.
+          </p>
+          {refus.slice(0, 4).map((r) => (
+            <p className="note" key={r.ligne}><b>{r.table}</b> · {r.motif}</p>
+          ))}
+          {refus.length > 4 && <p className="note">et {refus.length - 4} de plus, même motif.</p>}
+        </div>
+      )}
 
       {bilan && !erreur && (
         <div className="bloc pile">

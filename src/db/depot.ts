@@ -266,11 +266,22 @@ export const listerDepenses = (db: PowerSyncDatabase, annee: number) =>
    récolte n'a rien apparié. */
 export const normaliserCircuits = async (db: PowerSyncDatabase): Promise<number> => {
   const avant = await db.get<{ n: number }>(
-    `SELECT count(*) AS n FROM roulage WHERE circuit_nom IS NULL AND circuit_id IS NOT NULL`)
+    `SELECT count(*) AS n FROM roulage WHERE circuit_nom IS NULL`)
   if (!avant.n) return 0
+
+  // ① Le nom rangé dans la référence : il rejoint sa colonne.
   await db.execute(
     `UPDATE roulage SET circuit_nom = circuit_id, circuit_id = NULL
       WHERE circuit_nom IS NULL AND circuit_id IS NOT NULL`)
+
+  // ② Un roulage SANS AUCUN circuit. Ce n'est pas une saisie du pilote — le
+  //    formulaire refuse un circuit vide — c'est la sonde d'écriture, qui
+  //    insérait « SONDE » dans la référence et parfois rien du tout. Le serveur
+  //    les refuse, et une seule d'entre elles bloquait toute la file d'envoi.
+  //    Les nommer n'invente rien : c'est le seul écrivain qui ait pu les créer.
+  await db.execute(
+    `UPDATE roulage SET circuit_nom = 'Sonde' WHERE circuit_nom IS NULL AND circuit_id IS NULL`)
+
   return avant.n
 }
 

@@ -23,6 +23,8 @@ import { supabase } from './supabase'
  */
 
 export type BilanEnvoi = Record<string, number>
+export type Refus = { table: string; ligne: string; motif: string }
+export type Resultat = { bilan: BilanEnvoi; refus: Refus[] }
 
 /** L'ordre est celui des dépendances, et il ne se négocie pas : une session sans
  *  son roulage est refusée par la clé étrangère, pas par une convention. */
@@ -46,10 +48,38 @@ export const etatLocal = async (db: PowerSyncDatabase): Promise<BilanEnvoi> => {
   return etat
 }
 
+/**
+ * ⚠ UNE LIGNE REFUSÉE NE BLOQUE PLUS LES AUTRES, et c'est le correctif le plus
+ * important de ce fichier.
+ *
+ * La première version envoyait chaque table en un bloc et s'arrêtait à la
+ * première erreur. Sur un vrai téléphone, UNE ligne malformée — un roulage écrit
+ * par la sonde, sans circuit — a bloqué quatre-vingt-cinq changements et rendu
+ * la sauvegarde impossible sans qu'on puisse dire lequel fautait.
+ *
+ * Le bloc reste le chemin normal, parce qu'il est cent fois moins bavard. Mais
+ * s'il échoue, on repasse LIGNE PAR LIGNE : ce qui peut partir part, ce qui est
+ * refusé est nommé. Une saison ne se perd pas à cause d'une ligne.
+ */
+const envoyer = async (
+  table: string, charge: Record<string, unknown>[], refus: Refus[],
+): Promise<number> => {
+  const { error } = await supabase!.from(table).upsert(charge)
+  if (!error) return charge.length
+
+  let passees = 0
+  for (const ligne of charge) {
+    const { error: e } = await supabase!.from(table).upsert(ligne)
+    if (e) refus.push({ table, ligne: String(ligne.id), motif: e.message })
+    else passees++
+  }
+  return passees
+}
+
 export const sauvegarder = async (
   db: PowerSyncDatabase,
   piloteId: string,
-): Promise<BilanEnvoi> => {
+): Promise<Resultat> => {
   if (!supabase) throw new Error("Le compte n'est pas configuré.")
 
   // La ligne du pilote est normalement posée par le déclencheur sur auth.users.
@@ -59,6 +89,7 @@ export const sauvegarder = async (
   if (ePilote) throw new Error('pilote : ' + ePilote.message)
 
   const bilan: BilanEnvoi = {}
+  const refus: Refus[] = []
   for (const table of ORDRE) {
     const lignes = await db.getAll<Record<string, unknown>>(`SELECT * FROM ${table}`)
     if (!lignes.length) { bilan[table] = 0; continue }
@@ -69,11 +100,9 @@ export const sauvegarder = async (
     // `upsert` et non `insert` : l'adoption doit pouvoir être relancée sans
     // dupliquer quoi que ce soit. Les identifiants sont des UUID v7 posés par le
     // client (AD-14), donc la même ligne retrouve toujours sa place.
-    const { error } = await supabase.from(table).upsert(charge)
-    if (error) throw new Error(`${table} : ${error.message}`)
-    bilan[table] = charge.length
+    bilan[table] = await envoyer(table, charge, refus)
   }
-  return bilan
+  return { bilan, refus }
 }
 
 /**
@@ -112,14 +141,22 @@ const marquerAdopte = (piloteId: string) => {
   try { localStorage.setItem(CLE_ADOPTE + piloteId, '1') } catch { /* rien à faire */ }
 }
 
-/** L'adoption complète : poser l'état, écarter le journal d'avant, ouvrir la
- *  voie à la synchronisation continue. Les trois vont ensemble ou pas du tout. */
+/**
+ * L'adoption complète : poser l'état, écarter le journal d'avant, ouvrir la voie
+ * à la synchronisation continue.
+ *
+ * ⚠ LE JOURNAL N'EST ÉCARTÉ QUE SI TOUT EST PASSÉ. S'il reste un refus, le
+ * serveur ne porte pas encore l'état complet : jeter le journal reviendrait à
+ * perdre ce qui n'est pas monté. On garde tout, on nomme ce qui coince, et la
+ * synchronisation continue reste éteinte jusqu'à ce que ce soit réglé.
+ */
 export const adopter = async (
   db: PowerSyncDatabase,
   piloteId: string,
-): Promise<{ bilan: BilanEnvoi; ecartes: number }> => {
-  const bilan = await sauvegarder(db, piloteId)
+): Promise<{ bilan: BilanEnvoi; refus: Refus[]; ecartes: number }> => {
+  const { bilan, refus } = await sauvegarder(db, piloteId)
+  if (refus.length) return { bilan, refus, ecartes: 0 }
   const ecartes = await ecarterJournal(db)
   marquerAdopte(piloteId)
-  return { bilan, ecartes }
+  return { bilan, refus, ecartes }
 }

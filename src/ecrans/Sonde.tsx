@@ -60,7 +60,12 @@ export function Sonde({ db }: { db: PowerSyncDatabase }) {
       const db = await ouvrir()
       const t = performance.now()
       const r = nouvelId(), s = nouvelId()
-      await db.execute(`INSERT INTO roulage (id, pilote_id, date_jour, circuit_id) VALUES (?, 'sonde', ?, 'SONDE')`,
+      // ⚠ CETTE LIGNE A BLOQUÉ UNE SAUVEGARDE RÉELLE. Elle écrivait
+      // `pilote_id` — colonne retirée du schéma local au récit 1.2 — et rangeait
+      // « SONDE » dans `circuit_id`, une référence au référentiel. Résultat : des
+      // roulages sans circuit, que la contrainte serveur refuse, et une file
+      // d'envoi bloquée derrière eux. La sonde écrit maintenant comme le produit.
+      await db.execute(`INSERT INTO roulage (id, date_jour, circuit_nom) VALUES (?, ?, 'Sonde')`,
         [r, new Date().toISOString().slice(0, 10)])
       await db.execute(`INSERT INTO session (id, roulage_id, ordre) VALUES (?, ?, 1)`, [s, r])
       for (let i = 0; i < 40; i++) {
