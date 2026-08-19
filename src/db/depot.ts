@@ -41,8 +41,8 @@ export const formaterEcart = (ms: number): string => {
 export const creerMachine = async (db: PowerSyncDatabase, m: Omit<Machine, 'id'>) => {
   const id = nouvelId()
   await db.execute(
-    `INSERT INTO machine (id, pilote_id, marque, modele, annee, sprite) VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, 'local', m.marque, m.modele, m.annee, m.sprite],
+    `INSERT INTO machine (id, marque, modele, annee, sprite) VALUES (?, ?, ?, ?, ?)`,
+    [id, m.marque, m.modele, m.annee, m.sprite],
   )
   return id
 }
@@ -79,24 +79,25 @@ export const bilanMachine = async (db: PowerSyncDatabase, machineId: string) => 
   return { roulages: r.roulages ?? 0, meilleurMs: r.meilleur ?? null }
 }
 
-/** Le circuit est stocké en clair sur le roulage tant que le référentiel n'est
- *  pas récolté. La récolte viendra le normaliser ; elle n'est pas au noyau. */
+/** Le circuit est stocké EN CLAIR, dans `circuit_nom`. La récolte viendra poser
+ *  `circuit_id` par-dessus ; elle n'est pas au noyau. Écrire le nom dans la
+ *  référence — ce que faisait la v0 — bloquait toute synchronisation (récit 1.2). */
 export const creerRoulage = async (
   db: PowerSyncDatabase,
   r: { circuit: string; date: string; groupeNom: string | null; rang: number | null; total: number | null; machineId: string | null },
 ) => {
   const id = nouvelId()
   await db.execute(
-    `INSERT INTO roulage (id, pilote_id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, circuit_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, 'local', r.machineId, r.date, r.groupeNom, r.rang, r.total, r.circuit],
+    `INSERT INTO roulage (id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, circuit_nom)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, r.machineId, r.date, r.groupeNom, r.rang, r.total, r.circuit],
   )
   return id
 }
 
 export const listerRoulages = (db: PowerSyncDatabase) =>
   db.getAll<Roulage & { sessions: number; meilleur: number | null }>(
-    `SELECT r.id, r.circuit_id AS circuit_nom, r.date_jour, r.groupe_nom, r.groupe_rang,
+    `SELECT r.id, r.circuit_nom, r.date_jour, r.groupe_nom, r.groupe_rang,
             r.groupe_total, r.machine_id,
             (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
@@ -125,7 +126,7 @@ export const ajouterSession = async (db: PowerSyncDatabase, roulageId: string, t
  *  fois. Comparer deux circuits différents ne veut rien dire. */
 export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => {
   const l = await db.getAll<{ circuit: string; date: string; sessions: number; meilleur: number | null }>(
-    `SELECT r.circuit_id AS circuit, r.date_jour AS date,
+    `SELECT r.circuit_nom AS circuit, r.date_jour AS date,
             (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
                JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur
@@ -138,7 +139,7 @@ export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => 
        FROM tour t
        JOIN session s ON s.id = t.session_id
        JOIN roulage r ON r.id = s.roulage_id
-      WHERE r.circuit_id = ? AND r.id <> ? AND r.date_jour <= ?`,
+      WHERE r.circuit_nom = ? AND r.id <> ? AND r.date_jour <= ?`,
     [cur.circuit, roulageId, cur.date])
 
   const ancien = prec[0]?.meilleur ?? null
@@ -169,8 +170,8 @@ export const creerDepense = async (
 ) => {
   const id = nouvelId()
   await db.execute(
-    `INSERT INTO depense (id, pilote_id, cible, roulage_id, machine_id, saison_annee, montant_centimes, libelle)
-     VALUES (?, 'local', ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO depense (id, cible, roulage_id, machine_id, saison_annee, montant_centimes, libelle)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, d.cible, d.roulageId, d.machineId, anneeSaison(d.date), d.centimes, d.libelle || null],
   )
   return id
@@ -198,3 +199,21 @@ export const listerDepenses = (db: PowerSyncDatabase, annee: number) =>
   db.getAll<{ id: string; cible: Cible; libelle: string | null; montant_centimes: number; roulage_id: string | null }>(
     `SELECT id, cible, libelle, montant_centimes, roulage_id
        FROM depense WHERE saison_annee = ? ORDER BY id DESC`, [annee])
+
+/* ─── REPRISE D'UNE BASE ÉCRITE AVANT LE RÉCIT 1.2 ─────────────────────────
+   La v0 rangeait le NOM du circuit dans `circuit_id`, une référence au
+   référentiel. Les bases déjà posées sur un téléphone portent donc leurs
+   roulages au mauvais endroit, et aucun d'eux ne pourrait partir.
+
+   Une seule passe, idempotente, à l'ouverture : le nom rejoint sa colonne et la
+   référence redevient nulle — ce qu'elle aurait toujours dû être tant que la
+   récolte n'a rien apparié. */
+export const normaliserCircuits = async (db: PowerSyncDatabase): Promise<number> => {
+  const avant = await db.get<{ n: number }>(
+    `SELECT count(*) AS n FROM roulage WHERE circuit_nom IS NULL AND circuit_id IS NOT NULL`)
+  if (!avant.n) return 0
+  await db.execute(
+    `UPDATE roulage SET circuit_nom = circuit_id, circuit_id = NULL
+      WHERE circuit_nom IS NULL AND circuit_id IS NOT NULL`)
+  return avant.n
+}

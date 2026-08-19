@@ -9,6 +9,10 @@
          nom est tranché et les préconditions de QO-11 levées. -->
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#070B14" />
+    <!-- Déclarées explicitement : sans elles le navigateur réclame /favicon.ico,
+         qui n'existe pas, et l'onglet arbore une page blanche. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- Remplacé au build par le plugin `titre-depuis-la-constante` (vite.config.ts),

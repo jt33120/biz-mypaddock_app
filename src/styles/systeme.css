@@ -275,3 +275,33 @@ body {
   background: none; margin-bottom: -1px; min-height: var(--cible-min);
 }
 .garage .onglets .onglet.actif { color: var(--encre); border-bottom-color: var(--miami); }
+
+/* ─── LE COMPTE ────────────────────────────────────────────────────────────
+   Le seul écran du produit qui parle de continuité plutôt que de vitesse. Il
+   reprend la peau du garage — même densité, mêmes filets — parce qu'un écran
+   de compte qui ressemble à un formulaire d'inscription ressemble à une
+   corvée, et une corvée s'abandonne. */
+.compte { display: flex; flex-direction: column; gap: 14px; }
+.compte .titre { line-height: 1.15; }
+.compte .texte { color: var(--encre-faible); font-size: 15px; }
+.compte .texte b { color: var(--encre); font-weight: 600; }
+.compte .note { color: var(--encre-tenue); font-size: 13px; }
+.compte label.libelle { display: block; }
+
+/* L'erreur porte son mot, jamais seulement sa couleur — la même règle que
+   l'écart chronométrique, pour la même raison. */
+.compte .mot-erreur {
+  color: var(--alerte); font-size: 14px; font-weight: 500;
+  border-left: 2px solid var(--alerte); padding-left: 10px;
+}
+.compte .lien {
+  background: none; border: 0; color: var(--encre-tenue); font: inherit; font-size: 13px;
+  text-decoration: underline; align-self: flex-start; padding: 6px 0; cursor: pointer;
+  min-height: var(--cible-min);
+}
+.compte .repris { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; }
+.compte .repris .detail { font-size: 15px; color: var(--encre-faible); }
+.compte .repris .detail b {
+  color: var(--miami); font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.compte .repris .sep { color: var(--encre-tenue); }

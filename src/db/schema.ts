@@ -24,8 +24,13 @@ import { column, Schema, Table } from '@powersync/web'
 
 // ─── RACINE 1 : la machine ────────────────────────────────────────────────
 // AD-2 : une machine sans aucun roulage est un état valide.
+//
+// ⚠ LE PROPRIÉTAIRE N'EST PAS UNE DONNÉE LOCALE — récit 1.2. Ni ici, ni sur le
+// roulage, ni sur la dépense. C'est une CONSÉQUENCE du compte, apposée à l'envoi
+// par le connecteur. Le tenir en local obligeait à inventer une valeur avant
+// qu'un compte existe — c'était la chaîne `local`, qui n'est pas un uuid, et que
+// Postgres aurait refusée sur la toute première ligne envoyée.
 const machine = new Table({
-  pilote_id: column.text,
   marque: column.text,
   modele: column.text,
   annee: column.integer,
@@ -40,8 +45,12 @@ const machine = new Table({
 // AD-2 : `machine_id` est NULLABLE — un roulage sans machine est un état valide.
 // C'est l'invariant qui rend l'axe atelier atteignable sans migration.
 const roulage = new Table({
-  pilote_id: column.text,
   machine_id: column.text,
+  // Le circuit SE SAISIT. `circuit_nom` fait foi ; la référence au référentiel
+  // est la normalisation que la récolte posera plus tard, et reste nulle jusque-là.
+  // Écrire le nom dans la référence — ce que faisait la v0 — rendait toute
+  // synchronisation impossible : côté serveur c'est un uuid à clé étrangère.
+  circuit_nom: column.text,
   circuit_id: column.text,
   organisateur_id: column.text,
   date_jour: column.text,
@@ -74,7 +83,6 @@ const tour = new Table({
 // AD-7 : trois cibles exclusives. AD-18 : `saison_annee` est un entier et non
 // une référence — la saison est dérivée et n'a aucune ligne à pointer.
 const depense = new Table({
-  pilote_id: column.text,
   cible: column.text,
   roulage_id: column.text,
   machine_id: column.text,

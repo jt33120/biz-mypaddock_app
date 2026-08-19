@@ -3,13 +3,18 @@ import { PRODUCT_NAME } from './product'
 import { ouvrirBase } from './db/powersync'
 import {
   ajouterSession, bilanRoulage, creerRoulage, formaterChrono, formaterEcart, listerRoulages,
+  normaliserCircuits,
 } from './db/depot'
+import { surCompte, type Identite } from './db/compte'
+import { creerConnecteur, powersyncConfigure } from './db/connecteur'
+import { estAdopte } from './db/sauvegarde'
+import { Compte } from './ecrans/Compte'
 import { Garage } from './ecrans/Garage'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 
 type Db = ReturnType<typeof ouvrirBase>
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'sonde'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'compte' | 'sonde'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -26,11 +31,31 @@ export default function App() {
   const [liste, setListe] = useState<Liste>([])
   const [courant, setCourant] = useState<string | null>(null)
   const [bilan, setBilan] = useState<Bilan>(null)
+  const [identite, setIdentite] = useState<Identite | null>(null)
 
   useEffect(() => {
     const d = ouvrirBase()
-    d.init().then(() => setDb(d))
+    // La reprise des circuits tourne AVANT que quoi que ce soit puisse partir :
+    // une base écrite par la v0 range le nom du circuit dans la référence, et
+    // aucune de ses lignes ne franchirait la clé étrangère (récit 1.2).
+    d.init().then(() => normaliserCircuits(d)).then(() => setDb(d))
   }, [])
+
+  // L'identité est lue en local et survit hors ligne : traverser un tunnel ne
+  // déconnecte personne, ça suspend seulement la synchronisation.
+  useEffect(() => surCompte(setIdentite), [])
+
+  // La synchronisation continue ne s'allume qu'à TROIS conditions : un compte,
+  // une instance à qui parler, et une base déjà adoptée une fois. La troisième
+  // n'est pas une précaution de confort — sans elle, le journal d'avant le
+  // compte serait rejoué, et c'est précisément ce que l'adoption évite.
+  useEffect(() => {
+    if (!db) return
+    if (!identite || !powersyncConfigure || !estAdopte(identite.id)) { void db.disconnect(); return }
+    void db.connect(creerConnecteur(identite.id, (i) =>
+      console.warn('[synchro] ligne écartée', i)))
+    return () => { void db.disconnect() }
+  }, [db, identite])
 
   const rafraichir = useCallback(async (base: Db) => setListe(await listerRoulages(base)), [])
   useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
@@ -63,6 +88,7 @@ export default function App() {
           <BilanEcran b={bilan} onSession={() => setEcran('session')} onAccueil={() => setEcran('accueil')} />
         )}
         {ecran === 'garage' && <Garage db={db} />}
+        {ecran === 'compte' && <Compte db={db} identite={identite} />}
         {ecran === 'sonde' && <Sonde />}
       </div>
 
@@ -73,6 +99,7 @@ export default function App() {
         <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
         <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => setEcran('garage')}>GARAGE</button>
         <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => setEcran('roulages')}>ROULAGES</button>
+        <button className="onglet" data-actif={ecran === 'compte' ? '1' : '0'} onClick={() => setEcran('compte')}>COMPTE</button>
         <button className="onglet" data-actif={ecran === 'sonde' ? '1' : '0'} onClick={() => setEcran('sonde')}>SONDE</button>
       </nav>
     </>
