@@ -586,3 +586,11 @@ label.bouton { cursor: pointer; }
 
 /* Le sommaire d'atelier est devenu un bouton pleine largeur : il ouvre une page. */
 button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-items: center; }
+
+/* Le contexte d'un chiffre de l'accueil — le circuit d'un meilleur tour, la
+   saison d'un montant. Même règle qu'au garage : un chrono sans son circuit
+   n'est pas imprécis, il est faux. */
+.chiffres-saison .ou {
+  font-size: 10px; letter-spacing: .04em; color: var(--encre-tenue); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}

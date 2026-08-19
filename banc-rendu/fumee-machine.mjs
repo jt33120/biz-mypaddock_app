@@ -65,7 +65,12 @@ await enregistrerSession()
 
 // ── ③ LE DÉFAUT DÉFINITIF : les chiffres de la machine.
 await page.click('nav.barre .onglet:has-text("GARAGE")')
-await page.waitForSelector('.garage .chiffres', { timeout: 20_000 })
+// ⚠ ON ATTEND QUE LES CHIFFRES SOIENT SUS, pas qu'ils soient à l'écran. La
+// grille apparaît avec le composant ; ses valeurs arrivent d'une requête. Lire
+// entre les deux donnait « roulages 0 » une fois sur deux — un faux échec qui
+// cachait un vrai défaut d'affichage, corrigé du même coup : le garage écrivait
+// `0` pendant le chargement au lieu de dire qu'il ne savait pas encore.
+await page.waitForSelector('.garage .chiffres[data-charge="1"]', { timeout: 20_000 })
 const chiffres = (await page.textContent('.garage .chiffres')).replace(/\s+/g, ' ')
 console.log('③ chiffres de la machine :', chiffres)
 

@@ -255,14 +255,28 @@ export function Garage({ db, onEcrit }: {
           qu'elle y fait, combien de fois. L'argent, lui, se lit poste par poste
           à l'atelier, où chaque somme porte le geste qui l'a produite. Un total
           en tête d'écran ne se rattache à rien et ne se corrige nulle part. */}
-      <div className="chiffres">
+      {/* ⚠ « PAS ENCORE SU » N'EST PAS « ZÉRO », et la version précédente écrivait
+          `bilan?.roulages ?? 0`. Tant que la requête n'était pas revenue, le
+          garage affichait « roulages 0 · meilleur tour — » : un chiffre FAUX,
+          impossible à distinguer d'un vrai zéro. Sur un téléphone, où SQLite
+          passe par un worker OPFS, cette fraction de seconde est une seconde
+          pleine — c'est-à-dire le temps qu'on regarde l'écran en l'ouvrant.
+
+          Trouvé parce que mon propre essai s'y est laissé prendre une fois sur
+          deux : il lisait les chiffres avant qu'ils arrivent et concluait « axe
+          machine vide ». Un défaut d'affichage qui trompe un automate trompe un
+          humain de la même manière, et l'humain, lui, n'a pas de seconde chance.
+
+          Les trois cases attendent donc ensemble : `…` dit qu'on ne sait pas
+          encore, là où `—` dit qu'il n'y a rien à savoir. */}
+      <div className="chiffres" data-charge={bilan ? '1' : '0'}>
         <div>
           <p className="et">roulages</p>
-          <p className="va">{bilan?.roulages ?? 0}</p>
+          <p className="va">{bilan ? bilan.roulages : '…'}</p>
         </div>
         <div>
           <p className="et">meilleur tour</p>
-          {bilan?.meilleur ? (
+          {!bilan ? <p className="va">…</p> : bilan.meilleur ? (
             <>
               <p className="va avec-trophee"><Trophee taille={15} />{formaterChrono(bilan.meilleur.ms)}</p>
               <p className="ou">à {bilan.meilleur.circuit}</p>
@@ -271,7 +285,7 @@ export function Garage({ db, onEcrit }: {
         </div>
         <div>
           <p className="et">circuit favori</p>
-          {bilan?.favori ? (
+          {!bilan ? <p className="va">…</p> : bilan.favori ? (
             <>
               <p className="va" style={{ fontSize: 16 }}>{bilan.favori.nom}</p>
               <p className="ou">{bilan.favori.roulages} journée{bilan.favori.roulages > 1 ? 's' : ''}</p>

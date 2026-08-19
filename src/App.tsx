@@ -32,7 +32,7 @@ import { courbeDuCircuit, type Courbe as DonneesCourbe } from './db/courbe'
 import { evenements, viserEvenement, type Evenement } from './db/atelier'
 import {
   chiffresChoisis, ETIQUETTES as ETIQUETTES_CHIFFRES, MAX as MAX_CHIFFRES,
-  poserChiffres, valeurs as valeursChiffres, type Cle,
+  poserChiffres, valeurs as valeursChiffres, type Cle, type Valeur as ValeurChiffre,
 } from './db/chiffres'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
@@ -591,7 +591,7 @@ function Evenements({ db, onEcrit }: { db: Db; onEcrit: () => void }) {
  */
 function ZoneChiffres({ db }: { db: Db }) {
   const [choisis, setChoisis] = useState<Cle[]>(chiffresChoisis)
-  const [vals, setVals] = useState<Record<Cle, string> | null>(null)
+  const [vals, setVals] = useState<Record<Cle, ValeurChiffre> | null>(null)
   const [regler, setRegler] = useState(false)
   useEffect(() => { void valeursChiffres(db).then(setVals) }, [db])
   if (!vals) return null
@@ -607,11 +607,17 @@ function ZoneChiffres({ db }: { db: Db }) {
 
   return (
     <>
+      {/* ⚠ LE MEILLEUR TOUR PORTE SON CIRCUIT ICI AUSSI. Julian l'a relevé sur le
+          garage — « ça n'a pas de sens sinon au global comme ça » — et le même
+          chiffre était faux sur l'accueil, à l'identique : 1'38 à Pau-Arnos et
+          1'38 à Nogaro ne se comparent pas. Le contexte descend donc dans la
+          valeur, pour les seuls chiffres qui en ont un. */}
       <div className="chiffres-saison">
         {choisis.map((c) => (
           <div key={c}>
             <p className="et">{ETIQUETTES_CHIFFRES[c]}</p>
-            <p className="va">{vals[c]}</p>
+            <p className="va">{vals[c].valeur}</p>
+            {vals[c].ou && <p className="ou">{vals[c].ou}</p>}
           </div>
         ))}
       </div>

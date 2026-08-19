@@ -28,6 +28,20 @@ export type Cle =
 
 export type Chiffre = { cle: Cle; etiquette: string; valeur: string }
 
+/**
+ * ⚠ LE MEILLEUR TOUR PORTE SON CIRCUIT, ici comme au garage.
+ *
+ * « Meilleur tour : préciser le circuit, ça n'a pas de sens sinon au global
+ * comme ça » — Julian. Il l'a dit du garage ; le même chiffre était faux ICI de
+ * la même manière, et pour la même raison : 1'38 à Pau-Arnos et 1'38 à Nogaro ne
+ * se comparent pas. Un chrono sans circuit n'est pas une donnée imprécise, c'est
+ * une donnée FAUSSE — elle laisse croire à une comparaison qui n'existe pas.
+ *
+ * Le contexte voyage donc à côté de la valeur, pour ce seul chiffre. Les autres
+ * n'en ont pas besoin : « 5 roulages » ne dépend d'aucun lieu.
+ */
+export type Valeur = { valeur: string; ou?: string }
+
 /** Trois par défaut, et ce sont ceux qui parlent dès le premier roulage. */
 export const DEFAUT: Cle[] = ['roulages', 'circuits', 'meilleur']
 
@@ -72,12 +86,11 @@ export const poserChiffres = (l: Cle[]) => {
  * chiffre qui descend quand on roule plus — la même perversité que FR-21 traite
  * pour le coût au tour, et elle n'a pas plus sa place ici que là-bas.
  */
-export const valeurs = async (db: PowerSyncDatabase): Promise<Record<Cle, string>> => {
+export const valeurs = async (db: PowerSyncDatabase): Promise<Record<Cle, Valeur>> => {
   const annee = new Date().getFullYear()
   const r = await db.get<Record<string, number | null>>(
     `SELECT (SELECT count(*) FROM roulage) AS roulages,
             (SELECT count(DISTINCT circuit_nom) FROM roulage WHERE circuit_nom IS NOT NULL) AS circuits,
-            (SELECT min(temps_ms) FROM tour) AS meilleur,
             (SELECT count(*) FROM session) AS sessions,
             (SELECT count(*) FROM tour) AS tours,
             (SELECT sum(montant_centimes) FROM depense WHERE saison_annee = ?) AS depense_saison,
@@ -85,16 +98,31 @@ export const valeurs = async (db: PowerSyncDatabase): Promise<Record<Cle, string
             (SELECT count(*) FROM intervention WHERE etat = 'faite') AS interventions`,
     [annee])
 
-  const n = (v: number | null) => String(v ?? 0)
+  // Le meilleur tour se cherche AVEC sa journée, donc avec son circuit. Un
+  // `min()` global rendait le chrono sans savoir où il avait été fait.
+  const m = await db.getAll<{ ms: number; circuit: string }>(
+    `SELECT t.temps_ms AS ms, r.circuit_nom AS circuit
+       FROM tour t
+       JOIN session s ON s.id = t.session_id
+       JOIN roulage r ON r.id = s.roulage_id
+      WHERE r.circuit_nom IS NOT NULL
+      ORDER BY t.temps_ms ASC LIMIT 1`)
+
+  const n = (v: number | null): Valeur => ({ valeur: String(v ?? 0) })
   return {
     roulages: n(r.roulages),
     circuits: n(r.circuits),
     // Le tiret dit « rien de mesuré », jamais zéro : un meilleur tour de zéro
     // milliseconde serait un chiffre, et il serait faux.
-    meilleur: r.meilleur != null ? formaterChrono(r.meilleur) : '—',
+    meilleur: m[0]
+      ? { valeur: formaterChrono(m[0].ms), ou: `à ${m[0].circuit}` }
+      : { valeur: '—' },
     sessions: n(r.sessions),
     tours: n(r.tours),
-    depense_saison: r.depense_saison != null ? formaterEuros(r.depense_saison) : '—',
+    depense_saison: {
+      valeur: r.depense_saison != null ? formaterEuros(r.depense_saison) : '—',
+      ou: r.depense_saison != null ? `saison ${annee}` : undefined,
+    },
     machines: n(r.machines),
     interventions: n(r.interventions),
   }
