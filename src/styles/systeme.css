@@ -375,3 +375,19 @@ body {
 .tete { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .tete .reglages { display: flex; gap: 14px; }
 .tete .reglages .lien { min-height: auto; padding: 2px 0; }
+
+/* Les photos du roulage. Une bande qui défile plutôt qu'une grille : au paddock
+   on en verse une ou deux, pas vingt, et une grille à trous fait vide. */
+.bande { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.bande::-webkit-scrollbar { display: none }
+.vignette {
+  height: 96px; width: auto; flex: 0 0 auto; object-fit: cover;
+  border: 1px solid var(--filet); background: rgba(8,12,28,.6);
+}
+/* Un fait ÉNONCÉ. Pas un badge : ni pastille arrondie, ni couleur de médaille,
+   ni icône, ni compteur. Le produit dit « genou gauche posé » et s'arrête là. */
+.fait {
+  font-size: 13px; color: var(--encre); padding: 8px 12px;
+  background: rgba(8,12,28,.5); border-left: 2px solid var(--record);
+}
+label.bouton { cursor: pointer; }

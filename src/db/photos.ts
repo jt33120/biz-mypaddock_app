@@ -1,0 +1,197 @@
+import type { PowerSyncDatabase } from '@powersync/web'
+import { nouvelId } from './ids'
+import { supabase } from './supabase'
+import { marquerSaisie } from './mesures'
+
+/**
+ * LA PHOTO — récit 3.1.
+ *
+ * ⚠ LEVÉE D'AMBIGUÏTÉ. NFR-5 interdit « les Storage Buckets ». Le motif cité —
+ * « absent de tous les Safari » — ne peut viser qu'une API DE NAVIGATEUR :
+ * `navigator.storageBuckets`. Il ne vise PAS Supabase Storage, que l'épine
+ * nomme trois fois comme le lieu de vie des photos. Lire NFR-5 comme une
+ * interdiction du stockage objet ferait refaire toute cette couche pour rien.
+ *
+ * DEUX CHEMINS D'ÉCRITURE, distincts et assumés :
+ *   · la LIGNE part en SQLite local puis PowerSync, comme tout le reste (AD-4)
+ *   · les OCTETS partent en HTTP direct vers le stockage, hors synchronisation
+ *
+ * Ils sont désynchronisables par nature. C'est pour ça que la photo s'affiche
+ * TOUJOURS depuis sa copie locale : une photo « en attente d'envoi » ne peut
+ * pas être une photo absente à l'écran (FR-10, NFR-7).
+ */
+
+/** Le côté long après réduction. 1600 px suffit à un fond de récapitulatif et
+ *  garde la surface du canevas à 2,6 Mpx — six fois sous le plafond de Safari. */
+export const COTE_LONG = 1600
+
+/**
+ * LES DIMENSIONS SE LISENT DANS L'EN-TÊTE, sans décoder.
+ *
+ * C'est la clé de la sûreté iOS. Une photo d'iPhone récent fait 48 Mpx ; la
+ * décoder pour connaître sa taille fait exploser la mémoire du process
+ * WebContent avant même qu'on ait pu la réduire. On lit donc le marqueur SOF du
+ * JPEG ou l'IHDR du PNG sur les premiers kilo-octets, et on ne décode qu'une
+ * fois, déjà réduit.
+ */
+export const dimensions = async (blob: Blob): Promise<{ w: number; h: number } | null> => {
+  const t = new Uint8Array(await blob.slice(0, 128 * 1024).arrayBuffer())
+  const u16 = (i: number) => (t[i] << 8) | t[i + 1]
+  const u32 = (i: number) => (t[i] << 24) | (t[i + 1] << 16) | (t[i + 2] << 8) | t[i + 3]
+  if (t[0] === 0x89 && t[1] === 0x50) return { w: u32(16), h: u32(20) }
+  if (t[0] === 0xff && t[1] === 0xd8) {
+    let i = 2
+    while (i < t.length - 9) {
+      if (t[i] !== 0xff) { i++; continue }
+      const m = t[i + 1]
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc)
+        return { w: u16(i + 7), h: u16(i + 5) }
+      if (m === 0xd8 || (m >= 0xd0 && m <= 0xd9)) { i += 2; continue }
+      i += 2 + u16(i + 2)
+    }
+  }
+  return null
+}
+
+export type Reduite = { blob: Blob; largeur: number; hauteur: number; extension: string }
+
+/**
+ * Réduire AVANT tout `drawImage`. Au-delà de 16 777 216 px de surface, Safari
+ * refuse le canevas et L'ONGLET MEURT — sans erreur rattrapable. Une photo de
+ * 48 Mpx est le cas normal, pas le cas limite.
+ *
+ * `imageOrientation: 'from-image'` applique l'EXIF au décodage : sans lui, les
+ * photos portrait d'iPhone arrivent couchées.
+ */
+export const reduire = async (fichier: Blob): Promise<Reduite> => {
+  const d = await dimensions(fichier)
+  const ech = d ? Math.min(1, COTE_LONG / Math.max(d.w, d.h)) : 1
+  const w = d ? Math.max(1, Math.round(d.w * ech)) : COTE_LONG
+  const h = d ? Math.max(1, Math.round(d.h * ech)) : COTE_LONG
+
+  const bitmap = await createImageBitmap(fichier, {
+    resizeWidth: w, resizeHeight: h, resizeQuality: 'high', imageOrientation: 'from-image',
+  })
+  const c = document.createElement('canvas')
+  c.width = bitmap.width; c.height = bitmap.height
+  c.getContext('2d')!.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/webp', 0.82))
+  if (!blob) throw new Error("L'image n'a pas pu être encodée.")
+  // AD-13 : `blob.type` SE VÉRIFIE APRÈS COUP. Le format demandé peut être
+  // ignoré en silence, et on se retrouverait à écrire du PNG sous un nom .webp.
+  const extension = blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : 'jpg'
+  return { blob, largeur: c.width, hauteur: c.height, extension }
+}
+
+/* ─── LA COPIE LOCALE — dans l'OPFS, protégé par persist() ─────────────────
+   §5.1 : les photos de la journée sont ce que le produit ne peut pas se
+   permettre de perdre entre le paddock et le retour du réseau. Elles ne peuvent
+   donc pas vivre en mémoire, ni dans une URL d'objet sur un `File` volatil, ni
+   dans une file de requêtes de Service Worker — AD-4 l'interdit explicitement. */
+
+const dossierPhotos = async () => {
+  const racine = await navigator.storage.getDirectory()
+  return racine.getDirectoryHandle('photos', { create: true })
+}
+
+export const ecrireLocale = async (nom: string, blob: Blob) => {
+  const dossier = await dossierPhotos()
+  const h = await dossier.getFileHandle(nom, { create: true })
+  const w = await h.createWritable()
+  await w.write(blob)
+  await w.close()
+}
+
+export const lireLocale = async (nom: string): Promise<File | null> => {
+  try {
+    const dossier = await dossierPhotos()
+    return await (await dossier.getFileHandle(nom)).getFile()
+  } catch { return null }
+}
+
+export const effacerLocale = async (nom: string) => {
+  try { (await dossierPhotos()).removeEntry(nom) } catch { /* déjà partie */ }
+}
+
+/* ─── LE MODÈLE ────────────────────────────────────────────────────────────── */
+
+export type Photo = {
+  id: string
+  roulage_id: string
+  geste_id: string | null
+  chemin_objet: string
+  largeur: number | null
+  hauteur: number | null
+  etat: 'locale' | 'montee'
+}
+
+/** Le nom du fichier local se dérive de l'identifiant, donc il est connu avant
+ *  tout réseau — le téléversement différé est idempotent et rejouable (AD-14). */
+export const nomLocal = (p: Pick<Photo, 'id' | 'chemin_objet'>) =>
+  `${p.id}.${p.chemin_objet.split('.').pop()}`
+
+export const verserPhoto = async (
+  db: PowerSyncDatabase, roulageId: string, fichier: Blob,
+): Promise<Photo> => {
+  const r = await reduire(fichier)
+  const id = nouvelId()
+  // Le chemin porte le pilote en PREMIER SEGMENT : c'est ce que la politique du
+  // bucket compare à auth.uid(). Il est posé à `local` tant qu'aucun compte
+  // n'existe, et réécrit au moment du téléversement — comme le propriétaire
+  // d'une ligne, qui est une conséquence du compte et non une donnée locale.
+  const chemin = `local/${roulageId}/${id}.${r.extension}`
+  await ecrireLocale(`${id}.${r.extension}`, r.blob)
+  await db.execute(
+    `INSERT INTO photo (id, roulage_id, chemin_objet, largeur, hauteur, etat)
+     VALUES (?, ?, ?, ?, ?, 'locale')`,
+    [id, roulageId, chemin, r.largeur, r.hauteur])
+  await marquerSaisie(db)
+  return { id, roulage_id: roulageId, geste_id: null, chemin_objet: chemin, largeur: r.largeur, hauteur: r.hauteur, etat: 'locale' }
+}
+
+export const photosDuRoulage = (db: PowerSyncDatabase, roulageId: string) =>
+  db.getAll<Photo>(
+    `SELECT id, roulage_id, geste_id, chemin_objet, largeur, hauteur, etat
+       FROM photo WHERE roulage_id = ? ORDER BY id`, [roulageId])
+
+/* ─── LE TÉLÉVERSEMENT DIFFÉRÉ ─────────────────────────────────────────────
+   AD-6 : DEUX DÉCLENCHEURS EXACTEMENT — le retour au premier plan et le retour
+   de connectivité. Rien d'autre : sur iOS rien ne s'exécute pendant que
+   l'application est fermée, WebKit a refusé Background Sync et n'a jamais
+   implémenté Background Fetch. Un téléversement interrompu reprend à la
+   prochaine ouverture, pas avant. */
+
+export const televerserEnAttente = async (
+  db: PowerSyncDatabase, piloteId: string,
+): Promise<number> => {
+  if (!supabase || !navigator.onLine) return 0
+  const l = await db.getAll<Photo>(
+    `SELECT id, roulage_id, geste_id, chemin_objet, largeur, hauteur, etat
+       FROM photo WHERE etat = 'locale'`)
+  let montees = 0
+  for (const p of l) {
+    const f = await lireLocale(nomLocal(p))
+    if (!f) continue
+    const chemin = `${piloteId}/${p.roulage_id}/${nomLocal(p)}`
+    const { error } = await supabase.storage.from('photos')
+      .upload(chemin, f, { upsert: true, contentType: f.type || 'image/webp' })
+    if (error) continue      // on retentera : ce n'est pas une perte, c'est un report
+    await db.execute(`UPDATE photo SET etat = 'montee', chemin_objet = ? WHERE id = ?`,
+      [chemin, p.id])
+    montees++
+  }
+  return montees
+}
+
+/** Les deux seuls déclencheurs, posés une fois. Rend de quoi les retirer. */
+export const surRetourDeReseau = (relancer: () => void): (() => void) => {
+  const visible = () => { if (document.visibilityState === 'visible') relancer() }
+  document.addEventListener('visibilitychange', visible)
+  window.addEventListener('online', relancer)
+  return () => {
+    document.removeEventListener('visibilitychange', visible)
+    window.removeEventListener('online', relancer)
+  }
+}

@@ -26,3 +26,16 @@ export const CONSEILS_EMBARQUES: readonly string[] = [
   "Les bras restent souples. Un guidon tenu ferme empêche la moto de se corriger toute seule sur un revêtement irrégulier.",
   "Le point de corde tardif ouvre la sortie. Tourner tôt oblige à rouvrir l'angle au moment où on voudrait accélérer.",
 ]
+
+/** Le catalogue de caps embarqué, même motif et même raison que les conseils :
+ *  on déclare son premier genou posé au paddock, hors ligne, avant toute
+ *  synchronisation. `categorie` est portante — FR-39bis en dépend. */
+export const CAPS_EMBARQUES = [
+  { code: 'genou_gauche', libelle: 'Genou gauche posé', categorie: 'bravoure' },
+  { code: 'genou_droit', libelle: 'Genou droit posé', categorie: 'bravoure' },
+  { code: 'coude_gauche', libelle: 'Coude gauche posé', categorie: 'bravoure' },
+  { code: 'coude_droit', libelle: 'Coude droit posé', categorie: 'bravoure' },
+  { code: 'premier_circuit', libelle: 'Premier roulage sur ce circuit', categorie: 'discipline' },
+  { code: 'nuit', libelle: 'Roulage de nuit', categorie: 'discipline' },
+  { code: 'pluie', libelle: 'Roulage sous la pluie', categorie: 'discipline' },
+] as const satisfies readonly { code: string; libelle: string; categorie: 'bravoure' | 'discipline' }[]

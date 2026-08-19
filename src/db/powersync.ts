@@ -77,3 +77,21 @@ export const opfsDisponible = async (): Promise<string> => {
     return 'erreur: ' + (e as Error).message.slice(0, 34)
   }
 }
+
+/**
+ * AD-5 / NFR-1 — `persist()` SE DEMANDE À CHAQUE DÉMARRAGE, et son état se lit.
+ *
+ * L'exemption liée à l'installation n'est documentée nulle part : c'est le mode
+ * persistant qui protège, pas l'icône sur l'écran d'accueil. Et ce n'est pas une
+ * formalité — tant que `persisted()` est faux, tout ce qui n'est pas encore
+ * parti au serveur, photos de la journée comprises, vit dans un stockage que le
+ * navigateur peut évincer. Si c'est refusé, le produit ne le cache pas : la
+ * promesse de continuité n'est pas tenue et ça se dit.
+ */
+export const demanderPersistance = async (): Promise<boolean> => {
+  if (!navigator.storage?.persist) return false
+  try {
+    if (await navigator.storage.persisted?.()) return true
+    return await navigator.storage.persist()
+  } catch { return false }
+}

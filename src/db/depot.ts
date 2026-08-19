@@ -289,11 +289,18 @@ export type CoutRoulage = {
   /** La constatation. Toujours disponible, même à zéro. */
   journeeCentimes: number
   tours: number
-  /** Le rapport. `null` tant qu'aucun budget n'est déclaré — et alors il ne
-   *  s'affiche pas du tout, il ne s'affiche pas « vide ». */
-  auTourCentimes: number | null
-  /** Ce qui doit accompagner le rapport DANS LE MÊME BLOC (FR-21). */
-  budgetCentimes: number | null
+  /**
+   * LE RAPPORT ET SON BUDGET SONT UN SEUL OBJET, et c'est délibéré.
+   *
+   * Exposés en trois champs indépendants, rien n'empêchait un futur écran — ou
+   * le compositeur du récapitulatif — de rendre le coût au tour sans le budget
+   * consommé : la clause n'était plus tenue que par un ternaire de rendu.
+   * FR-35 exige qu'AUCUN CHEMIN ne puisse le contourner, donc l'invariant
+   * descend dans le TYPE : on ne peut pas déstructurer la moitié de ce couple.
+   * `null` = pas de budget = pas de rapport, ni zéro ni tiret.
+   */
+  auTour: { centimes: number; budgetCentimes: number; consommeCentimes: number } | null
+  /** Le consommé de la saison, disponible seul — il n'a rien de pervers. */
   consommeCentimes: number
 }
 
@@ -310,8 +317,9 @@ export const coutDuRoulage = async (
 
   // La condition porte sur le BUDGET, pas sur le calcul : le rapport est
   // calculable sans lui, et c'est précisément pour ça qu'il faut le retenir.
-  const auTourCentimes =
-    budgetCentimes != null && t.n > 0 ? Math.round(journeeCentimes / t.n) : null
+  const auTour = budgetCentimes != null && t.n > 0
+    ? { centimes: Math.round(journeeCentimes / t.n), budgetCentimes, consommeCentimes }
+    : null
 
-  return { journeeCentimes, tours: t.n, auTourCentimes, budgetCentimes, consommeCentimes }
+  return { journeeCentimes, tours: t.n, auTour, consommeCentimes }
 }

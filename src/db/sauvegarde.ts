@@ -26,7 +26,7 @@ export type BilanEnvoi = Record<string, number>
 
 /** L'ordre est celui des dépendances, et il ne se négocie pas : une session sans
  *  son roulage est refusée par la clé étrangère, pas par une convention. */
-const ORDRE = ['machine', 'roulage', 'session', 'tour', 'depense', 'budget_saison', 'intervention', 'mesure', 'plan_si_alors'] as const
+const ORDRE = ['machine', 'roulage', 'session', 'tour', 'depense', 'budget_saison', 'intervention', 'mesure', 'plan_si_alors', 'geste', 'photo'] as const
 
 /** TOUTES les tables de pilote portent leur propriétaire côté serveur, feuilles
  *  comprises, pour que le flux descendant s'écrive à plat et que l'envoi n'ait

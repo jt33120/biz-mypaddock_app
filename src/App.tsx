@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { PRODUCT_NAME } from './product'
-import { ouvrirBase } from './db/powersync'
+import { demanderPersistance, ouvrirBase } from './db/powersync'
 import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
   enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits, poserBudget,
@@ -11,6 +11,8 @@ import { surCompte, type Identite } from './db/compte'
 import { creerConnecteur, powersyncConfigure } from './db/connecteur'
 import { estAdopte } from './db/sauvegarde'
 import { ouverture } from './db/mesures'
+import { surRetourDeReseau, televerserEnAttente } from './db/photos'
+import { Photos } from './ecrans/Photos'
 import {
   conseilDuJour, direAVenir, direPasse, ecarterInvite, etatPlan, poserPlan, sourceAccueil,
   type EtatPlan, type Source,
@@ -50,6 +52,11 @@ export default function App() {
     // une base écrite par la v0 range le nom du circuit dans la référence, et
     // aucune de ses lignes ne franchirait la clé étrangère (récit 1.2).
     d.init()
+      // AD-5 / NFR-1 : la persistance SE DEMANDE À CHAQUE DÉMARRAGE. Ce n'est
+      // pas une formalité — tant qu'elle est refusée, tout ce qui n'est pas
+      // encore parti au serveur, photos de la journée comprises, vit dans un
+      // stockage que le navigateur peut évincer.
+      .then(() => demanderPersistance())
       .then(() => normaliserCircuits(d))
       // Instrument ③ : l'ouverture se compte AVANT toute saisie, et elle naît
       // « n'a rien produit » — l'état attendu, jamais un échec (FR-59).
@@ -88,6 +95,24 @@ export default function App() {
   }, [])
   useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
 
+  /* AD-6 — LES DEUX SEULS DÉCLENCHEURS, et il n'y en aura jamais d'autres :
+     le retour au premier plan et le retour de connectivité. Sur iOS rien ne
+     s'exécute pendant que l'application est fermée — WebKit a refusé Background
+     Sync et n'a jamais implémenté Background Fetch. Toute file de requêtes de
+     Service Worker est par ailleurs interdite par AD-4.
+
+     Ils portent DEUX choses : le téléversement différé des photos, et le
+     recalcul de l'accueil — une application laissée ouverte au premier plan ne
+     changeait pas de jour. */
+  useEffect(() => {
+    if (!db) return
+    return surRetourDeReseau(() => {
+      void rafraichir(db)
+      if (identite) void televerserEnAttente(db, identite.id)
+    })
+  }, [db, identite, rafraichir])
+
+
   if (!db) return <div className="ecran"><div className="libelle">chargement…</div></div>
 
   const ouvrirBilan = async (id: string) => {
@@ -125,12 +150,13 @@ export default function App() {
             await ouvrirBilan(courant)
           }} onAnnuler={() => void ouvrirBilan(courant)} />
         )}
-        {ecran === 'bilan' && bilan && (
+        {ecran === 'bilan' && bilan && courant && (
           <BilanEcran
             b={bilan} cout={cout}
             onSession={() => setEcran('session')}
             onAccueil={() => setEcran('accueil')}
             onDepense={() => setEcran('depense')}
+            photos={<Photos db={db} roulageId={courant} />}
             onBudget={async (centimes) => {
               await poserBudget(db, anneeSaison(bilan.date), centimes)
               if (courant) setCout(await coutDuRoulage(db, courant, anneeSaison(bilan.date)))
@@ -458,8 +484,8 @@ function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; on
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ b, cout, onSession, onAccueil, onDepense, onBudget }: {
-  b: NonNullable<Bilan>; cout: CoutRoulage | null
+function BilanEcran({ b, cout, photos, onSession, onAccueil, onDepense, onBudget }: {
+  b: NonNullable<Bilan>; cout: CoutRoulage | null; photos: React.ReactNode
   onSession: () => void; onAccueil: () => void; onDepense: () => void
   onBudget: (centimes: number) => Promise<void>
 }) {
@@ -496,6 +522,8 @@ function BilanEcran({ b, cout, onSession, onAccueil, onDepense, onBudget }: {
           <span className="chiffre hud-24">{b.sessions}</span>
         </div>
       </div>
+
+      {photos}
 
       {cout && <BlocCout c={cout} annee={anneeSaison(b.date)} onDepense={onDepense} onBudget={onBudget} />}
 
@@ -538,22 +566,23 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
         <span className="chiffre hud-40">{formaterEuros(c.journeeCentimes)}</span>
       </div>
 
-      {c.auTourCentimes != null && c.budgetCentimes != null ? (
+      {c.auTour ? (
         <>
           <div className="rang">
             <span className="libelle">Au tour · {c.tours} tour{c.tours > 1 ? 's' : ''}</span>
-            <span className="chiffre hud-24 miami">{formaterEuros(c.auTourCentimes)}</span>
+            <span className="chiffre hud-24 miami">{formaterEuros(c.auTour.centimes)}</span>
           </div>
-          {/* Jamais séparable du chiffre ci-dessus. */}
+          {/* Jamais séparable du chiffre ci-dessus — et ce n'est plus ce rendu
+              qui tient la clause, c'est le type : `auTour` porte son budget. */}
           <div className="rang">
             <span className="libelle">Saison {annee} · consommé</span>
             <span className="chiffre hud-16">
-              {formaterEuros(c.consommeCentimes)} <span className="faible">sur {formaterEuros(c.budgetCentimes)}</span>
+              {formaterEuros(c.auTour.consommeCentimes)} <span className="faible">sur {formaterEuros(c.auTour.budgetCentimes)}</span>
             </span>
           </div>
           <div className="jauge" role="img"
-               aria-label={`${formaterEuros(c.consommeCentimes)} consommés sur ${formaterEuros(c.budgetCentimes)}`}>
-            <span style={{ width: `${Math.min(100, (c.consommeCentimes / c.budgetCentimes) * 100)}%` }} />
+               aria-label={`${formaterEuros(c.auTour.consommeCentimes)} consommés sur ${formaterEuros(c.auTour.budgetCentimes)}`}>
+            <span style={{ width: `${Math.min(100, (c.auTour.consommeCentimes / c.auTour.budgetCentimes) * 100)}%` }} />
           </div>
         </>
       ) : (

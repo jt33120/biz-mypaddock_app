@@ -106,8 +106,10 @@ export function Depense({ db, roulageId, dateRoulage, onFini, onAnnuler }: Props
             </div>
           ) : (
             <p className="texte">
-              Aucune moto au garage. Déclare-la d'abord — une dépense de moto sans moto
-              ne se rattacherait à rien.
+              {/* FR-13 vaut pour TOUT le produit, pas seulement l'accueil : un libellé
+                  énonce un fait, jamais une injonction. « Déclare-la d'abord » était un
+                  impératif — il posait un ordre là où il suffisait de poser le chemin. */}
+              Aucune moto au garage. Une dépense de moto se rattache à une moto.
             </p>
           )}
         </div>

@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { CONSEILS_EMBARQUES } from './corpus'
+import { marquerSaisie } from './mesures'
 
 /**
  * L'ACCUEIL TEMPOREL — récit 6.1.
@@ -178,5 +179,6 @@ export const poserPlan = async (db: PowerSyncDatabase, texte: string) => {
   if (!t) return null
   const id = nouvelId()
   await db.execute(`INSERT INTO plan_si_alors (id, texte) VALUES (?, ?)`, [id, t])
+  await marquerSaisie(db)
   return id
 }
