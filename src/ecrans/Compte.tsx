@@ -6,6 +6,7 @@ import {
 } from '../db/compte'
 import { adopter, estAdopte, etatLocal, type BilanEnvoi } from '../db/sauvegarde'
 import { powersyncConfigure } from '../db/connecteur'
+import { accepterMesures, mesuresAcceptees } from '../db/mesures'
 
 /**
  * L'ÉCRAN DU COMPTE — récit 1.2.
@@ -38,7 +39,15 @@ export function Compte({ db, identite }: { db: PowerSyncDatabase; identite: Iden
       </section>
     )
   }
-  return identite ? <Connecte db={db} identite={identite} /> : <Anonyme db={db} />
+  return (
+    <>
+      {identite ? <Connecte db={db} identite={identite} /> : <Anonyme db={db} />}
+      {/* Hors des deux branches, et c'est le point : la mesure démarre à la
+          première ouverture, donc le refus doit être atteignable sans compte.
+          Un consentement qu'il faut mériter par une inscription n'en est pas un. */}
+      <section className="compte"><Mesures /></section>
+    </>
+  )
 }
 
 /* ─── SANS COMPTE ────────────────────────────────────────────────────────── */
@@ -270,5 +279,38 @@ function Connecte({ db, identite }: { db: PowerSyncDatabase; identite: Identite 
         La déconnexion ne touche que cet appareil, et n'efface rien de ce qui est saisi ici.
       </p>
     </section>
+  )
+}
+
+/* ─── LA REMONTÉE, ANNONCÉE ET REFUSABLE ───────────────────────────────────
+   AD-16 : trois mesures, exactement, et le pilote peut s'y opposer SANS PERDRE
+   AUCUNE FONCTION. Elles sont donc nommées une par une — un « données d'usage »
+   vague serait un consentement qui n'en est pas un.
+
+   Et le refus n'écrit RIEN, pas même en local (AD-20). C'est la différence entre
+   « on ne le regardera pas » et « ça n'existe pas ». */
+function Mesures() {
+  const [oui, setOui] = useState(mesuresAcceptees())
+  const basculer = () => { const v = !oui; accepterMesures(v); setOui(v) }
+
+  return (
+    <div className="plat repris">
+      <div className="rang">
+        <span className="libelle">Mesures sur le produit</span>
+        <button className="puce" data-actif={oui ? '1' : '0'} onClick={basculer}>
+          {oui ? 'ACTIVES' : 'REFUSÉES'}
+        </button>
+      </div>
+      <p className="note">
+        Trois choses, et rien d'autre : le délai entre un roulage et sa saisie, le nombre de
+        récapitulatifs produits puis réellement partagés, et le nombre d'ouvertures qui ne
+        saisissent rien. Aucune ne porte sur ton pilotage.
+      </p>
+      <p className="note">
+        {oui
+          ? "Elles voyagent avec tes données, par le même chemin. Aucun traceur, aucun service tiers."
+          : "Rien n'est écrit — pas même dans le téléphone. L'application fonctionne à l'identique."}
+      </p>
+    </div>
   )
 }

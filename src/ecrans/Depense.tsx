@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
-import { anneeSaison, creerDepense, listerMachines, type Cible, type Machine } from '../db/depot'
+import {
+  anneeSaison, creerDepense, enCentimes, listerMachines, type Cible, type Machine,
+} from '../db/depot'
 
 /**
  * SAISIR UNE DÉPENSE — récit 5.1.
@@ -14,14 +16,6 @@ import { anneeSaison, creerDepense, listerMachines, type Cible, type Machine } f
  * de la monnaie : 0,1 + 0,2 ne fait pas 0,3, et une saison entière d'additions
  * finit par le montrer.
  */
-
-/** « 245,50 » comme « 245.5 » comme « 245 » → 24550. Rien d'autre ne passe. */
-export const enCentimes = (saisie: string): number | null => {
-  const t = saisie.trim().replace(',', '.')
-  if (!/^\d{1,6}(\.\d{0,2})?$/.test(t)) return null
-  const [e, d = ''] = t.split('.')
-  return Number(e) * 100 + Number(d.padEnd(2, '0'))
-}
 
 type Props = {
   db: PowerSyncDatabase

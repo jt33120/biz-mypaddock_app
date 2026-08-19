@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from '../db/ids'
 import { NOM_BASE, VFS_DEMANDE, opfsDisponible, ouvrirBase, vfsReel } from '../db/powersync'
+import { SEUIL_H, tableauDeBord, type Tableau } from '../db/mesures'
 
 type Etat = { cle: string; val: string; ton?: 'oui' | 'non' | 'attente' }
 
 /** La sonde du récit 0.1, conservée comme instrument. Elle a déjà rendu son
  *  verdict — OPFS confirmé, persist() accordé sur PWA installée — mais elle
  *  reste le seul endroit où l'on voit ce que l'appareil fait réellement. */
-export function Sonde() {
+export function Sonde({ db }: { db: PowerSyncDatabase }) {
   const [etats, setEtats] = useState<Etat[]>([])
   const [journal, setJournal] = useState<string[]>([])
   const [occupe, setOccupe] = useState(false)
@@ -81,6 +83,8 @@ export function Sonde() {
 
   return (
     <>
+      <Instruments db={db} />
+
       <div className="libelle">Sonde 0.1 — instrument</div>
       <div className="bloc">
         {etats.map((e) => (
@@ -103,6 +107,57 @@ export function Sonde() {
           {journal.map((m, i) => <div key={i} className="libelle" style={{ fontSize: 12, textTransform: 'none' }}>{m}</div>)}
         </div>
       )}
+    </>
+  )
+}
+
+/* ─── LES TROIS INSTRUMENTS DE BORD — récit 7.1 ────────────────────────────
+   Ils mesurent LE PROJET, pas le pilote. Ils sont ici parce qu'ils doivent être
+   LISIBLES : une mesure qu'on ne regarde jamais ne corrige aucune saison.
+
+   Le seuil de 48 h se franchit dès qu'UN SEUL roulage le dépasse. Pas une
+   moyenne : un souvenir perdu ne revient pas, et une moyenne le noierait. */
+function Instruments({ db }: { db: PowerSyncDatabase }) {
+  const [t, setT] = useState<Tableau | null>(null)
+  useEffect(() => { void tableauDeBord(db).then(setT).catch(() => setT(null)) }, [db])
+  if (!t) return null
+
+  const h = (v: number | null) => (v == null ? '—' : v < 1 ? "< 1 h" : Math.round(v) + ' h')
+
+  return (
+    <>
+      <div className="libelle">Instruments de bord — le projet, pas le pilote</div>
+      <div className="bloc pile">
+        <div className="rang">
+          <span className="libelle">① Délai roulage → saisie</span>
+          <span className={'chiffre hud-24 ' + (t.delai.seuilFranchi ? 'plus-lent' : 'mieux')}>
+            {h(t.delai.medianeH)}
+          </span>
+        </div>
+        <div className="rang">
+          <span className="libelle" style={{ fontSize: 11 }}>
+            pire cas {h(t.delai.maxH)} · seuil {SEUIL_H} h · {t.delai.roulages} roulage{t.delai.roulages > 1 ? 's' : ''}
+          </span>
+          <span className={'hud-12 ' + (t.delai.seuilFranchi ? 'plus-lent' : 'faible')}>
+            {t.delai.seuilFranchi ? 'SEUIL FRANCHI' : 'sous le seuil'}
+          </span>
+        </div>
+
+        <div className="rang">
+          <span className="libelle">② Récaps produits → postés</span>
+          <span className="chiffre hud-24">{t.recapsGeneres} → {t.recapsPostes}</span>
+        </div>
+
+        <div className="rang">
+          <span className="libelle">③ Ouvertures sans saisie</span>
+          <span className="chiffre hud-24 miami">{t.ouverturesSansSaisie} / {t.ouvertures}</span>
+        </div>
+        {/* Dit ici plutôt que laissé à l'interprétation : ce chiffre doit MONTER. */}
+        <p className="libelle" style={{ fontSize: 11, textTransform: 'none' }}>
+          ③ n'est pas un échec à réduire : c'est exactement ce que l'accueil temporel cherche à
+          provoquer. Une ouverture qui ne saisit rien est une ouverture quand même.
+        </p>
+      </div>
     </>
   )
 }

@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
+import { marquerSaisie } from './mesures'
 
 /** Toutes les lectures et écritures passent ici. Aucun écran n'écrit de SQL. */
 
@@ -44,6 +45,7 @@ export const creerMachine = async (db: PowerSyncDatabase, m: Omit<Machine, 'id'>
     `INSERT INTO machine (id, marque, modele, annee, sprite) VALUES (?, ?, ?, ?, ?)`,
     [id, m.marque, m.modele, m.annee, m.sprite],
   )
+  await marquerSaisie(db)
   return id
 }
 
@@ -92,6 +94,7 @@ export const creerRoulage = async (
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, r.machineId, r.date, r.groupeNom, r.rang, r.total, r.circuit],
   )
+  await marquerSaisie(db)
   return id
 }
 
@@ -119,6 +122,7 @@ export const ajouterSession = async (db: PowerSyncDatabase, roulageId: string, t
     `INSERT INTO tour (id, session_id, temps_ms, provenance) VALUES (?, ?, ?, ?)`,
     [nouvelId(), sessionId, tempsMs, 'saisie_manuelle'],
   )
+  await marquerSaisie(db)
   return ordre
 }
 
@@ -181,7 +185,18 @@ export const creerDepense = async (
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, d.cible, d.roulageId, d.machineId, anneeSaison(d.date), d.centimes, d.libelle || null],
   )
+  await marquerSaisie(db)
   return id
+}
+
+/** « 245,50 » comme « 245.5 » comme « 245 » → 24550. Rien d'autre ne passe —
+ *  et surtout pas un flottant : 0,1 + 0,2 ne fait pas 0,3, et une saison entière
+ *  d'additions finit par le montrer. */
+export const enCentimes = (saisie: string): number | null => {
+  const t = saisie.trim().replace(',', '.')
+  if (!/^\d{1,6}(\.\d{0,2})?$/.test(t)) return null
+  const [e, dec = ''] = t.split('.')
+  return Number(e) * 100 + Number(dec.padEnd(2, '0'))
 }
 
 /** Un montant rond s'écrit sans décimales, un montant à centimes en porte DEUX.
@@ -219,12 +234,14 @@ export const poserBudget = async (db: PowerSyncDatabase, annee: number, centimes
   if (exist[0]) {
     await db.execute(`UPDATE budget_saison SET montant_centimes = ? WHERE id = ?`,
       [centimes, exist[0].id])
+    await marquerSaisie(db)
     return exist[0].id
   }
   const id = nouvelId()
   await db.execute(
     `INSERT INTO budget_saison (id, annee, montant_centimes) VALUES (?, ?, ?)`,
     [id, annee, centimes])
+  await marquerSaisie(db)
   return id
 }
 

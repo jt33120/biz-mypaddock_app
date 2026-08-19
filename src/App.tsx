@@ -3,13 +3,14 @@ import { PRODUCT_NAME } from './product'
 import { ouvrirBase } from './db/powersync'
 import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
-  formaterEcart, formaterEuros, listerRoulages, normaliserCircuits, poserBudget,
+  enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits, poserBudget,
   type CoutRoulage,
 } from './db/depot'
-import { Depense, enCentimes } from './ecrans/Depense'
+import { Depense } from './ecrans/Depense'
 import { surCompte, type Identite } from './db/compte'
 import { creerConnecteur, powersyncConfigure } from './db/connecteur'
 import { estAdopte } from './db/sauvegarde'
+import { ouverture } from './db/mesures'
 import { Compte } from './ecrans/Compte'
 import { Garage } from './ecrans/Garage'
 import { Molettes } from './ecrans/Molettes'
@@ -41,7 +42,16 @@ export default function App() {
     // La reprise des circuits tourne AVANT que quoi que ce soit puisse partir :
     // une base écrite par la v0 range le nom du circuit dans la référence, et
     // aucune de ses lignes ne franchirait la clé étrangère (récit 1.2).
-    d.init().then(() => normaliserCircuits(d)).then(() => setDb(d))
+    d.init()
+      .then(() => normaliserCircuits(d))
+      // Instrument ③ : l'ouverture se compte AVANT toute saisie, et elle naît
+      // « n'a rien produit » — l'état attendu, jamais un échec (FR-59).
+      .then(() => ouverture(d))
+      // Le marquage « cette ouverture a produit une saisie » n'est PAS ici :
+      // il vit dans le dépôt, sur le chemin d'écriture. Posé écran par écran,
+      // il finissait par manquer au suivant — et un marquage manquant ne se
+      // signale pas, il fait juste dire à l'instrument que rien n'a été saisi.
+      .then(() => setDb(d))
   }, [])
 
   // L'identité est lue en local et survit hors ligne : traverser un tunnel ne
@@ -113,7 +123,7 @@ export default function App() {
         )}
         {ecran === 'garage' && <Garage db={db} />}
         {ecran === 'compte' && <Compte db={db} identite={identite} />}
-        {ecran === 'sonde' && <Sonde />}
+        {ecran === 'sonde' && <Sonde db={db} />}
       </div>
 
       <nav className="barre">

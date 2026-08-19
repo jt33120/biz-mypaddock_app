@@ -107,6 +107,16 @@ const intervention = new Table({
   cout_centimes: column.integer,
 })
 
+// ─── Instruments de bord (AD-16, AD-20) ───────────────────────────────────
+// Une mesure est une donnée de pilote COMME UNE AUTRE : même base, même file
+// d'envoi, même RLS. C'est ce qui interdit le second canal — et ce qui rend la
+// mesure juste hors ligne, là où elle se joue précisément.
+const mesure = new Table({
+  genre: column.text,
+  valeur: column.integer,
+  jour: column.text,
+})
+
 // ─── Référentiel — lu, jamais écrit par la PWA (AD-12) ────────────────────
 const circuit = new Table({ nom: column.text, pays: column.text, longueur_m: column.integer })
 const organisateur = new Table({ nom: column.text, site_web: column.text })
@@ -147,6 +157,7 @@ export const AppSchema = new Schema({
   depense,
   budget_saison,
   intervention,
+  mesure,
   circuit,
   organisateur,
   roulage_publie,
