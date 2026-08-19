@@ -88,3 +88,54 @@ exigent toujours la cohérence avec le parent — la dénormalisation ne peut pa
 diverger de l'ascendance. Ce n'est plus une nécessité, c'est une simplification
 assumée. Le modèle strictement normalisé reste atteignable, au prix d'une
 migration ; dis-le si tu le préfères.
+
+---
+
+## 4 · La fabrique de portraits — un seul geste, et il est à toi
+
+La fonction serveur `sprite` est **déployée et active** (`verify_jwt` à faux, avec
+l'authentification faite dans le corps de la fonction pour pouvoir distinguer
+« sans compte » de « quota atteint » et le dire au pilote). Elle refuse
+aujourd'hui tout ce qu'on lui envoie, et c'est **volontaire** :
+
+```
+$ curl -X POST .../functions/v1/sprite            → {"refus":"sans_compte"}
+```
+
+**Il lui manque exactement une chose : le secret `GEMINI_IMAGE`.** Sans lui, la
+fonction répond `cle_absente` — *avant* d'avoir réservé quoi que ce soit et
+*avant* d'avoir appelé le modèle. Tant que tu ne l'as pas posé, **il est
+littéralement impossible qu'un euro parte**, même en cliquant partout.
+
+Pour ouvrir la fabrique :
+
+> Supabase → Project Settings → Edge Functions → **Secrets** → ajouter
+> `GEMINI_IMAGE` avec la clé qui est déjà dans ton `.env` local.
+
+### Ce que ça coûte, avant que tu décides
+
+- **≈ 0,16 € par portrait**, prix dérivé de ton relevé (≈ 16,98 € pour ~107
+  images), pas d'un tarif publié.
+- **Quota de 3 par compte**, soit ≈ 0,48 € pour quelqu'un qui va au bout. C'est
+  le chiffre qui empêche mille curieux à trois essais de coûter 480 € sans une
+  recette. Il vit dans `pilote.quota_sprites`, donc il se relève pour quelqu'un
+  **sans redéployer** :
+  ```sql
+  update pilote set quota_sprites = 10 where id = '<ton uuid>';
+  ```
+- Le compteur est la table `generation`, **écrite par le serveur seul** — elle
+  n'a aucune politique d'insertion, et c'est ce qui le rend crédible. Chaque
+  ligne porte le coût **écrit**, jamais recalculé : un tarif change, une facture
+  passée ne doit pas changer avec lui.
+- Une réservation est posée **avant** l'appel et effacée si l'appel échoue :
+  deux appuis rapprochés ne peuvent pas payer deux fois, et une coupure au
+  mauvais moment laisse une réservation perdue plutôt qu'un euro perdu.
+
+### Ce qui n'a pas encore tourné
+
+`v6-pixel-production.js` **n'a jamais été exécuté** — il a été composé puis bloqué
+par l'épuisement des crédits du 19 août. Le premier portrait produit par
+l'application sera donc aussi le premier essai du prompt de production. Ce qu'il
+faut regarder dans cet ordre : la livrée est-elle la vraie · l'orientation est-elle
+le profil du bon flanc · reste-t-il des lettres inventées · le fond vert se
+détache-t-il sans frange.

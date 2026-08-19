@@ -20,6 +20,9 @@ export type Machine = {
   /** Portrait pixel en data URI. `null` est un état valide : le garage montre alors une
    *  silhouette. AD-2 fait de la machine une racine, pas un objet conditionnel à un média. */
   sprite: string | null
+  /** La photo RÉELLE, indépendante du sprite — c'est elle qui reprend la scène
+   *  quand un portrait de jeu est refusé ou retiré (récit 3bis.3). */
+  photo_chemin: string | null
 }
 
 /** Le chrono vit en MILLISECONDES ENTIÈRES. Jamais de flottant sur un temps. */
@@ -40,7 +43,9 @@ export const formaterEcart = (ms: number): string => {
   return `${signe}${s}"${d}`
 }
 
-export const creerMachine = async (db: PowerSyncDatabase, m: Omit<Machine, 'id'>) => {
+export const creerMachine = async (
+  db: PowerSyncDatabase, m: Omit<Machine, 'id' | 'photo_chemin'>,
+) => {
   const id = nouvelId()
   await db.execute(
     `INSERT INTO machine (id, marque, modele, annee, sprite) VALUES (?, ?, ?, ?, ?)`,
@@ -51,7 +56,8 @@ export const creerMachine = async (db: PowerSyncDatabase, m: Omit<Machine, 'id'>
 }
 
 export const listerMachines = (db: PowerSyncDatabase) =>
-  db.getAll<Machine>(`SELECT id, marque, modele, annee, sprite FROM machine ORDER BY id DESC`)
+  db.getAll<Machine>(
+    `SELECT id, marque, modele, annee, sprite, photo_chemin FROM machine ORDER BY id DESC`)
 
 /** Le sprite se pose et se retire sans toucher au reste de la machine : c'est une
  *  reconstruction, pas une donnée d'identité. Le pilote doit pouvoir le refuser. */

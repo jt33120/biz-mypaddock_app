@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
   ajouterSession, bilanMachine, coutMachine, creerMachine, creerRoulage, formaterChrono,
   formaterEuros, listerMachines, poserSprite, type Machine,
 } from '../db/depot'
+import { photoMachine, verserPhotoMachine } from '../db/photos'
+import { genererPortrait } from '../pixel/portrait'
+import type { Sprite } from '../pixel/spritifier'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
 
 /**
@@ -27,6 +30,14 @@ export function Garage({ db, onEcrit }: {
   const [actif, setActif] = useState(0)
   const [bilan, setBilan] = useState<{ roulages: number; meilleurMs: number | null } | null>(null)
   const [cout, setCout] = useState(0)
+  // Le portrait de jeu — récit 3bis.3. Le CANDIDAT n'est rien tant qu'il n'est
+  // pas gardé : c'est ce qui rend « le pixel est une présentation, jamais un
+  // remplacement destructif » vrai dans le code et pas seulement dans le texte.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [candidat, setCandidat] = useState<Sprite | null>(null)
+  const [enCours, setEnCours] = useState(false)
+  const [souci, setSouci] = useState<string | null>(null)
+  const fichier = useRef<HTMLInputElement>(null)
 
   const charger = useCallback(async () => {
     const m = await listerMachines(db)
@@ -41,6 +52,45 @@ export function Garage({ db, onEcrit }: {
     void bilanMachine(db, machine.id).then(setBilan)
     void coutMachine(db, machine.id).then(setCout)
   }, [db, machine])
+
+  // La photo se sert TOUJOURS depuis la copie locale : une photo « en attente
+  // d'envoi » ne peut pas être une photo absente à l'écran (FR-10, NFR-7).
+  useEffect(() => {
+    setCandidat(null); setSouci(null)
+    let vivant = true
+    void photoMachine(machine?.photo_chemin ?? null).then((f) => {
+      if (!vivant) return
+      setPhotoUrl((a) => { if (a) URL.revokeObjectURL(a); return f ? URL.createObjectURL(f) : null })
+    })
+    return () => { vivant = false }
+  }, [machine])
+
+  const verser = async (f: File) => {
+    if (!machine) return
+    setSouci(null)
+    await verserPhotoMachine(db, machine.id, f)
+    await charger(); onEcrit()
+  }
+
+  const fabriquer = async () => {
+    if (!machine) return
+    const f = await photoMachine(machine.photo_chemin)
+    if (!f) return
+    setEnCours(true); setSouci(null); setCandidat(null)
+    const issue = await genererPortrait(db, machine.id, f)
+    setEnCours(false)
+    if (issue.ok) setCandidat(issue.sprite)
+    else setSouci(issue.message)
+  }
+
+  const garder = async () => {
+    if (!machine || !candidat) return
+    // « Calculé une fois et CONSERVÉ » : il passe par le chemin d'écriture
+    // normal, local d'abord, et le garage ne le recalculera jamais.
+    await poserSprite(db, machine.id, candidat.dataUri)
+    setCandidat(null)
+    await charger(); onEcrit()
+  }
 
   // Reprise explicite, jamais silencieuse : le pilote voit ce qu'il importe et pourquoi.
   const importerCbr = async () => {
@@ -128,10 +178,16 @@ export function Garage({ db, onEcrit }: {
         <h1 className="modele">{machine.modele}</h1>
       </div>
 
+      {/* TROIS ÉTATS, dans cet ordre de préséance : le portrait de jeu s'il a
+          été gardé, la photo réelle sinon, la silhouette en dernier. Une machine
+          sans média reste pleinement une machine (AD-2) — le garage n'exige
+          jamais une image pour fonctionner. */}
       <div className="scene">
         {machine.sprite
           ? <img className="sprite" src={machine.sprite} alt={`${machine.marque} ${machine.modele}`} />
-          : <div className="silhouette" aria-label="machine sans portrait" />}
+          : photoUrl
+            ? <img className="photo-machine" src={photoUrl} alt={`${machine.marque} ${machine.modele}`} />
+            : <div className="silhouette" aria-label="machine sans portrait" />}
       </div>
 
       <div className="chiffres">
@@ -149,15 +205,50 @@ export function Garage({ db, onEcrit }: {
         </div>
       </div>
 
+      {/* ─── LE PORTRAIT DE JEU — récit 3bis.3 ─────────────────────────── */}
+      <input ref={fichier} type="file" accept="image/*" hidden
+             onChange={(e) => { const f = e.target.files?.[0]; if (f) void verser(f) }} />
+
+      {candidat ? (
+        <div className="bloc pile">
+          <div className="libelle">sa forme de jeu</div>
+          <div className="scene">
+            <img className="sprite" src={candidat.dataUri}
+                 alt={`${machine.modele} en pixel`} />
+          </div>
+          <p className="note">
+            {candidat.largeur} × {candidat.hauteur} cellules · {candidat.couleurs} couleurs.
+            Tant qu'il n'est pas gardé, rien n'a changé dans le garage.
+          </p>
+          <button className="bouton" onClick={() => void garder()}>Garder cette forme</button>
+          {/* Le quatrième critère du récit, et il n'a rien de cosmétique : le
+              refus ne détruit rien, la photo réelle était toujours là. */}
+          <button className="bouton secondaire" onClick={() => setCandidat(null)}>
+            Revenir à la photo
+          </button>
+        </div>
+      ) : (
+        <>
+          <button className="lien" onClick={() => fichier.current?.click()}>
+            {machine.photo_chemin ? 'Changer sa photo' : 'Ajouter sa photo'}
+          </button>
+          {machine.photo_chemin && !machine.sprite && (
+            <button className="bouton secondaire" disabled={enCours} onClick={() => void fabriquer()}>
+              {enCours ? 'fabrication…' : 'Lui donner sa forme de jeu'}
+            </button>
+          )}
+          {machine.sprite && (
+            <button className="lien" onClick={() => void poserSprite(db, machine.id, null).then(charger)}>
+              Retirer sa forme de jeu
+            </button>
+          )}
+        </>
+      )}
+      {souci && <p className="mot-erreur">{souci}</p>}
+
       <button className="lien" onClick={() => void importerSaison()}>
         Reprendre la saison 2026 · Pau-Arnos
       </button>
-
-      {machine.sprite && (
-        <button className="lien" onClick={() => void poserSprite(db, machine.id, null).then(charger)}>
-          Retirer le portrait
-        </button>
-      )}
     </section>
   )
 }

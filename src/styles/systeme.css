@@ -207,6 +207,14 @@ body {
   background: linear-gradient(96deg, var(--miami), #9FD8FF);
 }
 
+/* La photo réelle de la machine. Elle tient la MÊME scène que le sprite, à la
+   même place et à la même taille : passer de l'un à l'autre ne doit pas faire
+   sauter la page, sinon le refus d'un portrait ressemble à une casse. */
+.photo-machine {
+  max-width: 100%; max-height: 100%; object-fit: contain;
+  image-rendering: auto;
+}
+
 /* ─── SÉMANTIQUE — le signe porte le sens, jamais la couleur seule ────────── */
 .mieux { color: var(--mieux) } .plus-lent { color: var(--plus-lent) }
 .record { color: var(--record) } .record-texte { color: var(--record-clair) }
@@ -315,8 +323,13 @@ body {
 .compte label.libelle { display: block; }
 
 /* L'erreur porte son mot, jamais seulement sa couleur — la même règle que
-   l'écart chronométrique, pour la même raison. */
-.compte .mot-erreur {
+   l'écart chronométrique, pour la même raison.
+
+   ⚠ NON PORTÉE PAR L'ÉCRAN COMPTE. Elle l'était, et le refus de la fabrique de
+   portraits s'affichait alors dans le garage comme du texte courant : même
+   phrase, mais rien pour dire que c'en était une. Une classe dont le sens
+   dépend de l'endroit où elle tombe n'en est pas une. */
+.mot-erreur {
   color: var(--alerte); font-size: 14px; font-weight: 500;
   border-left: 2px solid var(--alerte); padding-left: 10px;
 }

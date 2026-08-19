@@ -39,6 +39,10 @@ const machine = new Table({
   // fonctionner. Produit une seule fois puis CONSERVÉ : c'est le seul champ du produit dont le
   // calcul coûte de l'argent.
   sprite: column.text,
+  // La photo RÉELLE de la machine, distincte du sprite. C'est elle qui rend
+  // vraie la clause « un rendu refusé, la photo reprend sa place » : sans elle
+  // il n'y aurait rien à quoi revenir, et retirer un sprite laisserait un vide.
+  photo_chemin: column.text,
 })
 
 // ─── RACINE 2 : le roulage ────────────────────────────────────────────────
@@ -150,6 +154,19 @@ const conseil = new Table({ texte: column.text, actif: column.integer })
 const cap = new Table({
   code: column.text, libelle: column.text, categorie: column.text, actif: column.integer,
 })
+// Le compteur de générations d'image. Table de PILOTE mais EN LECTURE SEULE :
+// elle descend par la synchronisation et l'application n'y écrit jamais — elle
+// n'est donc pas dans l'ordre d'envoi de `sauvegarde.ts`. Un quota que le
+// compté peut écrire ne compte rien, et c'est le serveur qui l'écrit.
+const generation = new Table({
+  machine_id: column.text,
+  version: column.text,
+  modele: column.text,
+  cout_centimes: column.integer,
+  etat: column.text,
+  cree_le: column.text,
+})
+
 const circuit = new Table({ nom: column.text, pays: column.text, longueur_m: column.integer })
 const organisateur = new Table({ nom: column.text, site_web: column.text })
 
@@ -193,6 +210,7 @@ export const AppSchema = new Schema({
   photo,
   geste,
   plan_si_alors,
+  generation,
   conseil,
   cap,
   circuit,

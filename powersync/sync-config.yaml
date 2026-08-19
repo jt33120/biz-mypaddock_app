@@ -27,6 +27,10 @@ streams:
       - SELECT * FROM plan_si_alors WHERE pilote_id = auth.user_id()
       - SELECT * FROM geste        WHERE pilote_id = auth.user_id()
       - SELECT * FROM photo        WHERE pilote_id = auth.user_id()
+      # Le compteur de quota DESCEND mais ne remonte jamais : il n'est pas dans
+      # l'ordre d'envoi. C'est le serveur qui l'écrit, et c'est ce qui le rend
+      # crédible — un compteur écrit par le compté ne compte rien.
+      - SELECT * FROM generation   WHERE pilote_id = auth.user_id()
 
   # ─── Le référentiel — lu par tous, écrit par personne (AD-12) ───────────
   # Le BARÈME CONSTRUCTEUR EST VOLONTAIREMENT ABSENT. Un flux global le ferait

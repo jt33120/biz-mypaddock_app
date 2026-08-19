@@ -63,11 +63,11 @@ export type Reduite = { blob: Blob; largeur: number; hauteur: number; extension:
  * `imageOrientation: 'from-image'` applique l'EXIF au décodage : sans lui, les
  * photos portrait d'iPhone arrivent couchées.
  */
-export const reduire = async (fichier: Blob): Promise<Reduite> => {
+export const reduire = async (fichier: Blob, cote = COTE_LONG): Promise<Reduite> => {
   const d = await dimensions(fichier)
-  const ech = d ? Math.min(1, COTE_LONG / Math.max(d.w, d.h)) : 1
-  const w = d ? Math.max(1, Math.round(d.w * ech)) : COTE_LONG
-  const h = d ? Math.max(1, Math.round(d.h * ech)) : COTE_LONG
+  const ech = d ? Math.min(1, cote / Math.max(d.w, d.h)) : 1
+  const w = d ? Math.max(1, Math.round(d.w * ech)) : cote
+  const h = d ? Math.max(1, Math.round(d.h * ech)) : cote
 
   const bitmap = await createImageBitmap(fichier, {
     resizeWidth: w, resizeHeight: h, resizeQuality: 'high', imageOrientation: 'from-image',
@@ -149,6 +149,43 @@ export const verserPhoto = async (
     [id, roulageId, chemin, r.largeur, r.hauteur])
   await marquerSaisie(db)
   return { id, roulage_id: roulageId, geste_id: null, chemin_objet: chemin, largeur: r.largeur, hauteur: r.hauteur, etat: 'locale' }
+}
+
+/**
+ * LA PHOTO DE LA MACHINE — récit 3bis.3.
+ *
+ * Elle suit exactement le chemin de la photo de roulage : réduite, écrite en
+ * local d'abord, référencée ensuite. Ce qui change est où elle se range — sur la
+ * machine, parce que c'est la machine qui a un portrait, pas la journée.
+ *
+ * Elle EXISTE INDÉPENDAMMENT DU SPRITE, et c'est tout l'objet : le pixel est une
+ * présentation. Refuser un rendu retire le sprite et ne touche pas à la photo.
+ */
+export const nomLocalMachine = (machineId: string, extension: string) =>
+  `machine-${machineId}.${extension}`
+
+export const verserPhotoMachine = async (
+  db: PowerSyncDatabase, machineId: string, fichier: Blob,
+): Promise<string> => {
+  const r = await reduire(fichier)
+  const nom = nomLocalMachine(machineId, r.extension)
+  await ecrireLocale(nom, r.blob)
+  // Le chemin porte le pilote en premier segment, comme toute photo : c'est ce
+  // que la politique du stockage compare à auth.uid(). Il est posé à `local`
+  // tant qu'aucun compte n'existe, et réécrit au téléversement.
+  const chemin = `local/machine/${machineId}.${r.extension}`
+  await db.execute(`UPDATE machine SET photo_chemin = ? WHERE id = ?`, [chemin, machineId])
+  await marquerSaisie(db)
+  return chemin
+}
+
+/** La photo de machine telle qu'elle est sur ce téléphone. `null` est un état
+ *  valide — la machine existe sans portrait (AD-2), et le garage montre alors
+ *  sa silhouette plutôt que d'exiger un média. */
+export const photoMachine = async (chemin: string | null): Promise<File | null> => {
+  if (!chemin) return null
+  const m = chemin.match(/machine\/([^/]+)\.(\w+)$/)
+  return m ? lireLocale(nomLocalMachine(m[1], m[2])) : null
 }
 
 export const photosDuRoulage = (db: PowerSyncDatabase, roulageId: string) =>

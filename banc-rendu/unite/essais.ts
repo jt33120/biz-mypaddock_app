@@ -18,6 +18,8 @@ import { formaterPoids } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
 import { PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
+import { spritifier } from '../../src/pixel/spritifier'
+import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
 
 type Resultat = { titre: string; ok: boolean; detail: string }
@@ -209,6 +211,39 @@ const essais = [
       vrai(!/\d/.test(c), `« ${c.slice(0, 40)}… » contient un chiffre à battre`)
       vrai(!c.includes('!'), 'un conseil porte un point d\'exclamation')
     }
+  }),
+
+  /* ─── LA SPRITIFICATION — la moitié GRATUITE du pipeline ───────────────── */
+  doit('le fond vert est détaché, et le sprite recadré dessus', async () => {
+    // Une scène synthétique aux mesures exactes du prompt : fond #00E000 plat,
+    // machine cernée d'un contour sombre fermé. Aucune génération, aucun euro.
+    const c = document.createElement('canvas')
+    c.width = 512; c.height = 512
+    const x = c.getContext('2d')!
+    x.fillStyle = '#00E000'; x.fillRect(0, 0, 512, 512)
+    x.fillStyle = '#1A0A2E'; x.fillRect(148, 198, 204, 104)   // le contour
+    x.fillStyle = '#D81E2C'; x.fillRect(152, 202, 196, 96)    // la carrosserie
+    const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), 'image/png'))
+
+    const s = await spritifier(blob, 128)
+    // bloc = 512 / 128 = 4 px. Le rectangle cerné couvre 51 × 26 cellules.
+    vrai(Math.abs(s.largeur - 51) <= 2, `largeur ${s.largeur}, attendue ≈ 51`)
+    vrai(Math.abs(s.hauteur - 26) <= 2, `hauteur ${s.hauteur}, attendue ≈ 26`)
+    vrai(s.couleurs <= COULEURS_MAX, `${s.couleurs} couleurs, plafond ${COULEURS_MAX}`)
+    vrai(s.opaques > 0 && s.opaques < 128 * 128, `${s.opaques} cellules opaques`)
+    vrai(s.dataUri.startsWith('data:image/png;base64,'), 'la sortie n\'est pas un PNG')
+  }),
+  doit('une image entièrement fond ne rend pas un sprite vide, elle refuse', async () => {
+    // Le silence serait pire : le garage garderait un sprite de zéro pixel et
+    // le pilote croirait avoir dépensé pour rien sans savoir pourquoi.
+    const c = document.createElement('canvas')
+    c.width = 256; c.height = 256
+    const x = c.getContext('2d')!
+    x.fillStyle = '#00E000'; x.fillRect(0, 0, 256, 256)
+    const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), 'image/png'))
+    let leve = false
+    try { await spritifier(blob, 64) } catch { leve = true }
+    vrai(leve, 'aucune erreur levée sur une image sans machine')
   }),
 ]
 
