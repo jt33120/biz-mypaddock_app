@@ -101,6 +101,38 @@ const depense = new Table({
   saison_annee: column.integer,
   montant_centimes: column.integer,
   libelle: column.text,
+  // LE POSTE dit DE QUOI il s'agit ; la cible dit À QUOI c'est rattaché. Les
+  // deux sont orthogonaux et AD-7 n'est pas touché : 90 € d'essence sont un
+  // poste « essence » ET une cible « saison ». Nullable pour toujours — les
+  // dépenses saisies avant cette colonne n'en ont pas, et leur en inventer un
+  // fabriquerait une donnée que personne n'a donnée.
+  poste: column.text,
+})
+
+// ─── RACINE 3 : l'équipement ──────────────────────────────────────────────
+// « Dans le garage, il y a toujours une machine mais aussi un espace équipement :
+// combi, tente, gants, accessoire, chaise, tout ce qui est nécessaire à une
+// journée circuit mais sans être spécifique à une machine. » — Julian.
+//
+// C'est bien une RACINE et non une feuille de `machine` : la combinaison existe
+// sans moto et survit à la vente de la moto. La rattacher obligerait à choisir
+// une machine pour déclarer une paire de gants.
+//
+// ⚠ AUCUN CHAMP D'ÉCHÉANCE, et c'est une clause de sécurité. Un casque a une
+// durée de vie, une dorsale a une norme datée — et un compteur à rebours sur du
+// matériel de protection fabrique une pression qui produit du report, pas du
+// remplacement (FR-48, contre-mesure C1). Le produit consigne un fait, la date
+// d'achat, et n'en dérive aucun verdict. Ce qui n'est pas au schéma ne peut pas
+// s'afficher par accident.
+const equipement = new Table({
+  nom: column.text,
+  categorie: column.text,
+  /** Un MOIS, `AAAA-MM`. Personne ne se souvient du jour où il a acheté ses
+   *  gants ; exiger une date exacte transforme dix secondes de saisie en
+   *  recherche de facture, donc en saisie qu'on ne fait pas. */
+  achete_le: column.text,
+  cout_centimes: column.integer,
+  note: column.text,
 })
 
 // Ce que le pilote S'ÉTAIT FIXÉ — la seule grandeur du coût qui ne se dérive pas.
@@ -279,6 +311,7 @@ export const AppSchema = new Schema({
   tour,
   depense,
   budget_saison,
+  equipement,
   intervention,
   mesure,
   evenement_vise,

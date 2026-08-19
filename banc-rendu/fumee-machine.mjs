@@ -39,10 +39,16 @@ await page.click('nav.barre .onglet:has-text("GARAGE")')
 await page.waitForSelector('.garage.vide')
 await page.fill('.champ[placeholder="Honda"]', 'Yamaha')
 await page.fill('.champ[placeholder="CBR 1000 RR"]', 'R6')
-await page.fill('.champ[placeholder="2012"]', '2019')
+// Le gabarit de l'année est passé de 2012 à 2010 en même temps que la CBR de
+// l'essai, dont l'année était fausse — et invérifiable, puisqu'elle n'apparaissait
+// nulle part à l'écran.
+await page.fill('.champ[placeholder="2010"]', '2019')
 await page.click('text=Déclarer ma machine')
 await page.waitForSelector('.garage .modele', { timeout: 20_000 })
-console.log('① machine déclarée :', (await page.textContent('.garage-titre')).replace(/\s+/g, ' '))
+const titre = (await page.textContent('.garage-titre')).replace(/\s+/g, ' ')
+console.log('① machine déclarée :', titre)
+console.log('   l\'année est visible dans le garage :',
+  titre.includes('2019') ? 'oui' : 'NON — SAISIE MAIS JAMAIS MONTRÉE')
 console.log('   sans photo, la scène existe quand même :',
   await page.isVisible('.silhouette') ? 'silhouette' : 'NON')
 
@@ -62,10 +68,34 @@ await page.click('nav.barre .onglet:has-text("GARAGE")')
 await page.waitForSelector('.garage .chiffres', { timeout: 20_000 })
 const chiffres = (await page.textContent('.garage .chiffres')).replace(/\s+/g, ' ')
 console.log('③ chiffres de la machine :', chiffres)
-console.log('   le roulage s\'y est rattaché :', /roulages\s*1/.test(chiffres) ? 'oui' : 'NON — AXE MACHINE VIDE')
-console.log('   le meilleur tour remonte :', /\d'\d\d"\d/.test(chiffres) ? 'oui' : 'NON')
+
+/* ⚠ CES TROIS VÉRIFICATIONS SORTENT EN ÉCHEC, elles ne se contentent plus de
+   s'imprimer. L'essai a affiché « NON — AXE MACHINE VIDE » en rendant un code
+   de sortie vert : c'est exactement le défaut qu'il existe pour attraper, et il
+   est passé.
+
+   Le rattachement se joue sur une COURSE : le formulaire listait les machines
+   dans un `useEffect` et posait la sélection au retour, alors que « Continuer »
+   était tapable depuis le premier rendu. La fenêtre est invisible sur une
+   machine de bureau et large sur un téléphone, où SQLite passe par un worker
+   OPFS. L'essai clique donc sans attendre — comme un pilote pressé — et la
+   règle a été descendue au niveau de l'écriture, où aucune course ne l'atteint. */
+const manques = []
+const verifier = (titre, vrai, detail = '') => {
+  console.log(`${vrai ? '  ok ' : '  ÉCHEC '} ${titre}${detail ? ' — ' + detail : ''}`)
+  if (!vrai) manques.push(titre)
+}
+verifier('le roulage s\'est rattaché à la seule machine du garage',
+  /roulages\s*1/.test(chiffres), chiffres)
+verifier('le meilleur tour remonte', /\d'\d\d"\d/.test(chiffres))
+verifier('et il nomme son circuit', /Nogaro/.test(chiffres))
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/machine.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
+verifier('aucune erreur de console', erreurs.length === 0, erreurs.join(' | '))
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+
+if (manques.length) {
+  console.error(`\n✗ ${manques.length} vérification(s) en échec :\n  · ${manques.join('\n  · ')}`)
+  process.exit(1)
+}
+console.log('\n✓ l\'axe machine reçoit ses roulages')

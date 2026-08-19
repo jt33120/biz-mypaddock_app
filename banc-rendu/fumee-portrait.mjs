@@ -31,27 +31,32 @@ await pret()
 await onglet('GARAGE')
 await page.click('text=Reprendre la CBR 83')
 await page.waitForSelector('.garage .sprite', { timeout: 20_000 })
-console.log('① au départ, la forme de jeu tient la scène :', await page.isVisible('.garage .sprite'))
+console.log('① au départ, le portrait pixel tient la scène :', await page.isVisible('.garage .sprite'))
 console.log('   la photo n\'est pas encore là :', await page.isVisible('.photo-machine') ? 'NON' : 'oui')
 
 // ── La photo réelle, versée hors ligne comme toute photo du produit.
 await page.context().setOffline(true)
 await page.setInputFiles('.garage input[type=file]', PHOTO)
-await page.waitForFunction(() => document.body.textContent.includes('Changer sa photo'), null, { timeout: 60_000 })
+// Les libellés ont été réécrits sur retour de Julian : « ajouter sa photo —
+// laquelle, la pixélise ? mais si elle existe déjà, ce bouton devrait
+// disparaître ? ». Deux objets distincts — la photo et le portrait pixel —
+// portaient un seul mot.
+await page.waitForFunction(
+  () => document.body.textContent.includes('Remplacer la photo de la moto'), null, { timeout: 60_000 })
 console.log('② photo versée hors ligne · le sprite garde la scène :',
   await page.isVisible('.garage .sprite') ? 'oui' : 'NON')
 
 // ── ① Retirer la forme de jeu : la photo REPREND SA PLACE. C'est le quatrième
 //    critère du récit, et il n'est vrai que parce que la photo existe à part.
-await page.click('text=Retirer sa forme de jeu')
+await page.click('text=Retirer le portrait pixel')
 await page.waitForSelector('.photo-machine', { timeout: 20_000 })
-console.log('③ forme retirée → la photo réelle reprend la scène :', await page.isVisible('.photo-machine'))
+console.log('③ portrait retiré → la photo réelle reprend la scène :', await page.isVisible('.photo-machine'))
 console.log('   rien n\'a été détruit, la machine est intacte :',
   (await page.textContent('.garage .modele')).trim())
 
 // ── ② et ③ : la fabrique, sans compte.
 await page.context().setOffline(false)
-await page.click('text=Lui donner sa forme de jeu')
+await page.click('text=En faire un portrait pixel')
 await page.waitForSelector('.mot-erreur', { timeout: 30_000 })
 console.log('④ refus énoncé :', (await page.textContent('.mot-erreur')).replace(/\s+/g, ' '))
 console.log('   requêtes parties vers la fabrique :', appels.length,

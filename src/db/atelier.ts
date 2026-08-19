@@ -35,10 +35,35 @@ export type Intervention = {
   photo_id: string | null
 }
 
+/**
+ * ⚠ « ÇA PEUT ATTENDRE » EST DEVENU « BRICOLES », sur retour de Julian :
+ * « c'est quoi l'intérêt ? ah, les maintenances mineures — je choisirais un nom
+ * comme Cerise sur le gâteau ou Extra ».
+ *
+ * Sa question révélait le vrai défaut, qui n'était pas le mot mais la SÉRIE :
+ * deux catégories se nommaient par leur NATURE — entretien, amélioration — et la
+ * troisième par sa PRIORITÉ. Une liste dont un élément change d'axe ne se lit
+ * pas, et c'est exactement ce qui a produit « je n'ai pas compris ».
+ *
+ * Je n'ai pas retenu ses deux propositions, et pour une raison précise : « Cerise
+ * sur le gâteau » et « Extra » désignent un bonus — c'est-à-dire AMÉLIORATION,
+ * la catégorie d'à côté. Les adopter aurait donné deux noms pour la même idée et
+ * laissé le levier tordu sans nom du tout. « Bricoles » nomme ce qu'il y a
+ * dedans : ce qui a cassé sans être grave.
+ */
 export const NOM_CATEGORIE: Record<Categorie, string> = {
   entretien: 'Entretien',
   amelioration: 'Amélioration',
-  reparation_non_vitale: 'Ça peut attendre',
+  reparation_non_vitale: 'Bricoles',
+}
+
+/** Une ligne sous chaque titre. Trois catégories dont on doit deviner la
+ *  différence sont trois catégories qu'on remplit au hasard — et FR-46 n'est
+ *  une clause de sécurité que si le rangement est évident au premier coup d'œil. */
+export const SOUS_TITRE: Record<Categorie, string> = {
+  entretien: 'ce qui garde la moto en état',
+  amelioration: 'ce qui la rend meilleure',
+  reparation_non_vitale: "ce qui a cassé sans être grave",
 }
 
 /** Ce que chaque liste dit d'elle-même quand elle est vide. Jamais un vide

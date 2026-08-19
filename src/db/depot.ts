@@ -92,18 +92,82 @@ export const coutMachine = async (db: PowerSyncDatabase, machineId: string) => {
   return r.total ?? 0
 }
 
-/** Roulages et meilleur tour de CETTE machine. Une machine sans roulage rend des zéros
- *  et un meilleur tour nul — c'est un état valide, pas une absence de données (AD-2). */
-export const bilanMachine = async (db: PowerSyncDatabase, machineId: string) => {
-  const r = await db.get<{ roulages: number; meilleur: number | null }>(
-    `SELECT COUNT(DISTINCT r.id) AS roulages, MIN(t.temps_ms) AS meilleur
-       FROM roulage r
-       LEFT JOIN session s ON s.roulage_id = r.id
-       LEFT JOIN tour t ON t.session_id = s.id
-      WHERE r.machine_id = ?`,
-    [machineId],
-  )
-  return { roulages: r.roulages ?? 0, meilleurMs: r.meilleur ?? null }
+/** Corriger ce qu'on a déclaré. Une machine se saisit au paddock, souvent de
+ *  mémoire — la CBR de Julian est entrée en 2012 alors qu'elle est de 2010. Une
+ *  donnée d'identité qu'on ne peut pas corriger est une donnée qu'on n'ose plus
+ *  saisir. */
+export const modifierMachine = async (
+  db: PowerSyncDatabase,
+  machineId: string,
+  m: { marque: string; modele: string; annee: number | null },
+) => {
+  await db.execute(
+    `UPDATE machine SET marque = ?, modele = ?, annee = ? WHERE id = ?`,
+    [m.marque.trim(), m.modele.trim(), m.annee, machineId])
+  await marquerSaisie(db)
+}
+
+export type BilanMachine = {
+  roulages: number
+  /** ⚠ LE MEILLEUR TOUR VOYAGE AVEC SON CIRCUIT, et le type l'y oblige.
+   *
+   *  « Meilleur tour : préciser le circuit, ça n'a pas de sens sinon au global
+   *  comme ça » — Julian, et il a raison au sens fort : un chrono sans circuit
+   *  n'est pas une information imprécise, c'est une information FAUSSE. 1'38 à
+   *  Pau-Arnos et 1'38 à Nogaro ne se comparent pas, et le garage les mettait
+   *  dans la même case. Les deux champs sont donc un seul objet, comme le coût
+   *  au tour et son budget : on ne peut pas déstructurer la moitié du couple. */
+  meilleur: { ms: number; circuit: string } | null
+  /** Le circuit le plus roulé PAR CETTE MACHINE. `null` tant qu'aucun roulage
+   *  ne la désigne — pas « — », pas zéro : l'absence est une absence. */
+  favori: { nom: string; roulages: number } | null
+}
+
+/** Une machine sans roulage rend des zéros et des nuls — c'est un état valide,
+ *  pas une absence de données (AD-2). */
+export const bilanMachine = async (
+  db: PowerSyncDatabase, machineId: string,
+): Promise<BilanMachine> => {
+  const r = await db.get<{ roulages: number }>(
+    `SELECT COUNT(*) AS roulages FROM roulage WHERE machine_id = ?`, [machineId])
+
+  // Le meilleur tour se cherche AVEC sa journée, donc avec son circuit. Un
+  // `min()` global aurait rendu le chrono sans savoir où il a été fait.
+  const m = await db.getAll<{ ms: number; circuit: string }>(
+    `SELECT t.temps_ms AS ms, r.circuit_nom AS circuit
+       FROM tour t
+       JOIN session s ON s.id = t.session_id
+       JOIN roulage r ON r.id = s.roulage_id
+      WHERE r.machine_id = ? AND r.circuit_nom IS NOT NULL
+      ORDER BY t.temps_ms ASC LIMIT 1`, [machineId])
+
+  // Le favori se compte à plat : deux orthographes du même circuit ne font pas
+  // deux circuits, et c'est exactement le genre d'endroit où l'égalité stricte
+  // couperait un favori en deux. Le départage se fait par la date la plus
+  // récente — à égalité de visites, le favori est celui d'aujourd'hui.
+  const l = await db.getAll<{ nom: string; n: number; dernier: string }>(
+    `SELECT circuit_nom AS nom, count(*) AS n, max(date_jour) AS dernier
+       FROM roulage
+      WHERE machine_id = ? AND circuit_nom IS NOT NULL AND trim(circuit_nom) <> ''
+      GROUP BY circuit_nom`, [machineId])
+  const groupes = new Map<string, { nom: string; n: number; dernier: string }>()
+  for (const x of l) {
+    const cle = aplati(x.nom)
+    const d = groupes.get(cle)
+    if (!d) { groupes.set(cle, { ...x }); continue }
+    d.n += x.n
+    // Le NOM retenu est celui de la visite la plus récente : c'est la dernière
+    // orthographe que le pilote a choisie, donc celle qu'il reconnaît.
+    if (x.dernier > d.dernier) { d.nom = x.nom; d.dernier = x.dernier }
+  }
+  const favori = [...groupes.values()]
+    .sort((a, b) => b.n - a.n || (a.dernier < b.dernier ? 1 : -1))[0]
+
+  return {
+    roulages: r.roulages ?? 0,
+    meilleur: m[0] ? { ms: m[0].ms, circuit: m[0].circuit } : null,
+    favori: favori ? { nom: favori.nom, roulages: favori.n } : null,
+  }
 }
 
 /** Comparaison de saisie : sans accent, sans casse, ET SANS SÉPARATEUR.
@@ -125,6 +189,32 @@ export const creerRoulage = async (
   r: { circuit: string; date: string; groupeNom: string | null; rang: number | null; total: number | null; machineId: string | null },
 ) => {
   const id = nouvelId()
+
+  // ⚠ « UNE SEULE MACHINE AU GARAGE, C'EST FORCÉMENT ELLE » SE DÉCIDE ICI, À
+  // L'ÉCRITURE, ET PLUS AU RENDU.
+  //
+  // La règle existait déjà, mais dans un `useEffect` du formulaire : il listait
+  // les machines, et posait la sélection quand la liste revenait. Entre le
+  // moment où l'écran s'affiche et celui où cette liste arrive, « Continuer »
+  // est déjà tapable — et un tap dans cette fenêtre écrivait un roulage sans
+  // machine, définitivement. La fenêtre est invisible sur une machine de bureau
+  // et large sur un téléphone, où SQLite passe par un worker OPFS.
+  //
+  // La conséquence était celle qu'on connaît déjà par cœur sur ce produit : les
+  // trois chiffres du garage restent à zéro pour toujours, sans que rien ne le
+  // signale. Le même défaut a déjà été corrigé une fois (`machineId` était en
+  // dur à `null`) ; il revenait par une autre porte.
+  //
+  // AD-2 n'est pas entamé : un roulage sans machine reste un état valide, et
+  // c'est exactement ce qui est écrit quand le garage est vide ou quand il
+  // contient plusieurs machines dont aucune n'a été choisie. La règle ne
+  // s'applique qu'au cas où la question n'a qu'une réponse possible.
+  let machineId = r.machineId
+  if (!machineId) {
+    const m = await db.getAll<{ id: string }>(`SELECT id FROM machine LIMIT 2`)
+    if (m.length === 1) machineId = m[0].id
+  }
+
   await db.execute(
     // ⚠ `etat` S'ÉCRIT EXPLICITEMENT. Une colonne déclarée au schéma local mais
     // jamais renseignée part à NULL dans la file d'envoi, et Postgres la porte
@@ -135,7 +225,7 @@ export const creerRoulage = async (
     `INSERT INTO roulage
        (id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, circuit_nom, etat)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'usage')`,
-    [id, r.machineId, r.date, r.groupeNom, r.rang, r.total, r.circuit],
+    [id, machineId, r.date, r.groupeNom, r.rang, r.total, r.circuit],
   )
   await marquerSaisie(db)
   return id

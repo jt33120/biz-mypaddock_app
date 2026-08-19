@@ -37,7 +37,11 @@ export type Resultat = { bilan: BilanEnvoi; refus: Refus[] }
  *  et le défaut se rejouait à chaque tentative. Trouvé par une passe adverse.
  *
  *  La chaîne réelle : geste → photo → intervention → horloge. */
-const ORDRE = ['machine', 'roulage', 'session', 'tour', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'photo', 'intervention', 'evenement_vise', 'horloge', 'checklist_ligne'] as const
+// ⚠ L'ORDRE EST CELUI DES DÉPENDANCES, des racines vers les feuilles. Une ligne
+// qui part avant celle qu'elle référence est refusée en 23503, écartée
+// définitivement, et arrête toute la file derrière elle. `equipement` est une
+// racine — elle ne référence rien — donc elle peut se placer près des autres.
+const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'photo', 'intervention', 'evenement_vise', 'horloge', 'checklist_ligne'] as const
 
 /** TOUTES les tables de pilote portent leur propriétaire côté serveur, feuilles
  *  comprises, pour que le flux descendant s'écrive à plat et que l'envoi n'ait

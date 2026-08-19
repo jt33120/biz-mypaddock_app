@@ -223,6 +223,13 @@ body {
 .atelier.entretien { border-left-color: var(--miami); }
 .atelier.amelioration { border-left-color: var(--encre-tenue); }
 .atelier.reparation_non_vitale { border-left-color: var(--magenta); }
+/* Les deux modules ajoutés au garage. Ils reprennent la peau de l'atelier —
+   même filet à gauche, même tête repliable — parce qu'ils se lisent au même
+   niveau : ce sont des postes du garage, pas des écrans annexes. Leur couleur
+   les distingue sans les séparer. */
+.atelier.budget { border-left-color: var(--plus-lent); }
+.atelier.equipement { border-left-color: var(--chaud); }
+.atelier-tete .pile { align-items: flex-start; text-align: left; }
 .atelier-tete {
   background: none; border: none; padding: 0; width: 100%; cursor: pointer;
   font-family: var(--face); text-align: left; min-height: 32px;
@@ -493,3 +500,50 @@ label.bouton { cursor: pointer; }
    chiffres, sinon il flotte au-dessus d'un chrono de 40 px. */
 .avec-trophee { display: inline-flex; align-items: baseline; gap: 8px; }
 .trophee { flex: 0 0 auto; align-self: center; opacity: .85; }
+
+/* Le sous-titre d'un chiffre — le circuit d'un meilleur tour, le nombre de
+   journées d'un circuit favori. Il n'existe QUE pour empêcher un chiffre de
+   flotter sans son contexte : « 1'38 » seul est faux, « 1'38 à Pau-Arnos » est
+   vrai. Même famille de règle que le coût au tour et son budget. */
+.garage .ou {
+  font-size: 11px; letter-spacing: .04em; color: var(--encre-tenue); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.garage .va.avec-trophee { gap: 6px; }
+
+/* La ligne d'un poste de budget est UNE CIBLE ENTIÈRE. La version précédente
+   n'offrait qu'un « + » de vingt pixels : le code respectait `--cible-min`, le
+   doigt ganté non. Vu sur la capture d'écran, jamais à la relecture. */
+.ligne-atelier.poste {
+  width: 100%; min-height: var(--cible-min);
+  background: none; border: 0; padding: 4px 0; cursor: pointer;
+  font-family: var(--face); color: inherit; text-align: left;
+}
+.ligne-atelier.poste .signe {
+  font-size: 20px; line-height: 1; color: var(--encre-tenue);
+  width: 24px; text-align: center;
+}
+.ligne-atelier.poste[aria-expanded='true'] .signe { color: var(--miami) }
+
+/* La tête d'un module ne se casse plus en deux. Le titre peut s'allonger, le
+   chiffre de droite ne le suit pas : `min-width: 0` autorise le titre à se
+   réduire, `nowrap` empêche « 1 pièce · 540 € » de se plier en escalier. */
+.atelier-tete > .pile { min-width: 0; flex: 1 1 auto; }
+.atelier-tete > .libelle, .atelier-tete > .chiffre { flex: 0 0 auto; white-space: nowrap; }
+
+/* Une pièce d'équipement : le nom sur sa ligne, ses faits en dessous. Le nom est
+   libre — il peut être long, et la mise en page le suppose au lieu de l'espérer
+   court. */
+.materiel { gap: 2px; padding: 6px 0; }
+.materiel .texte { font-size: 15px; }
+.materiel .rang { align-items: center; }
+.materiel .lien { flex: 0 0 auto; min-height: 40px; }
+
+/* UN SOUS-TITRE EST UNE PHRASE, pas une étiquette. Les `.libelle` sont en
+   capitales avec de l'interlettrage — parfait pour « ROULAGES », désastreux
+   pour « ce qui sert une journée circuit sans appartenir à une moto », qui
+   tenait sur trois lignes. La casse et l'interlettrage tombent, la taille reste. */
+.sous-titre {
+  font-size: 11px; line-height: 1.35; color: var(--encre-tenue);
+  text-transform: none; letter-spacing: 0;
+}

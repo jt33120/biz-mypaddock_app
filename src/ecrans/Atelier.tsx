@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
-  cestFait, consigner, coutAtelier, interventions, NOM_CATEGORIE, VIDE, viser,
+  cestFait, consigner, coutAtelier, interventions, NOM_CATEGORIE, SOUS_TITRE, VIDE, viser,
   type Categorie, type Intervention,
 } from '../db/atelier'
 import { enCentimes, formaterEuros } from '../db/depot'
@@ -73,7 +73,15 @@ function Bloc({ db, machineId, categorie, ouverte, onOuvrir, onEcrit }: {
   return (
     <div className={`bloc pile atelier ${categorie}`}>
       <button className="rang atelier-tete" onClick={onOuvrir}>
-        <span className="libelle">{NOM_CATEGORIE[categorie]}</span>
+        {/* ⚠ CHAQUE CATÉGORIE PORTE SA DÉFINITION. « Je n'ai pas compris, pas
+            clair ce que fait ce bouton » — et le défaut n'était pas le mot mais
+            l'absence de définition : trois titres nus obligent à deviner, et ce
+            qu'on devine mal on le range mal. FR-46 n'est une clause de sécurité
+            que si le rangement est évident au premier coup d'œil. */}
+        <span className="pile" style={{ gap: 1 }}>
+          <span className="libelle">{NOM_CATEGORIE[categorie]}</span>
+          <span className="sous-titre">{SOUS_TITRE[categorie]}</span>
+        </span>
         <span className="libelle faible">
           {/* Le tiret ne dit « rien ici » que lorsqu'il n'y a VRAIMENT rien.
               « 1 en attente · — » se lisait comme un manque là où il y avait
