@@ -4,11 +4,12 @@ import { ouvrirBase } from './db/powersync'
 import {
   ajouterSession, bilanRoulage, creerRoulage, formaterChrono, formaterEcart, listerRoulages,
 } from './db/depot'
+import { Garage } from './ecrans/Garage'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 
 type Db = ReturnType<typeof ouvrirBase>
-type Ecran = 'accueil' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'sonde'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'sonde'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -61,13 +62,16 @@ export default function App() {
         {ecran === 'bilan' && bilan && (
           <BilanEcran b={bilan} onSession={() => setEcran('session')} onAccueil={() => setEcran('accueil')} />
         )}
+        {ecran === 'garage' && <Garage db={db} />}
         {ecran === 'sonde' && <Sonde />}
       </div>
 
       <nav className="barre">
-        {/* Deux onglets au noyau. Machine, Saison et Cercle sont vides :
-            un onglet vide ne sous-délivre pas, il signale l'abandon. */}
+        {/* Le garage rejoint le noyau le 19 août : il est le centre du produit depuis la
+            réorientation. Saison et Cercle restent absents — un onglet vide ne sous-délivre
+            pas, il signale l'abandon. */}
         <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
+        <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => setEcran('garage')}>GARAGE</button>
         <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => setEcran('roulages')}>ROULAGES</button>
         <button className="onglet" data-actif={ecran === 'sonde' ? '1' : '0'} onClick={() => setEcran('sonde')}>SONDE</button>
       </nav>

@@ -27,8 +27,11 @@ page.on('pageerror', e => console.log('  pageerror:', e.message))
 
 const vues = []
 for (const [fichier, label, detourer] of COLONNES) {
-  if (!fs.existsSync(path.join(gem, fichier))) { console.log(`  ${fichier} absent, ignoré`); continue }
-  const q = new URLSearchParams({ img: `./sorties/gemini/${fichier}`, ...FICHE })
+  // Une entrée peut désigner un chemin relatif au banc (sorties/sprites/…) ou un simple nom
+  // de fichier dans sorties/gemini/. Sans ça, un sprite déjà détouré serait introuvable.
+  const rel = fichier.includes('/') ? fichier : `sorties/gemini/${fichier}`
+  if (!fs.existsSync(path.join(ici, rel))) { console.log(`  ${rel} absent, ignoré`); continue }
+  const q = new URLSearchParams({ img: `./${rel}`, ...FICHE })
   if (!detourer) q.set('brut', '1')
   await page.goto(`file://${ici}/garage.html?${q}`)
   await page.waitForFunction('window.__pret === true')

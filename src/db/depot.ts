@@ -13,7 +13,12 @@ export type Roulage = {
   machine_id: string | null
 }
 
-export type Machine = { id: string; marque: string; modele: string; annee: number | null }
+export type Machine = {
+  id: string; marque: string; modele: string; annee: number | null
+  /** Portrait pixel en data URI. `null` est un état valide : le garage montre alors une
+   *  silhouette. AD-2 fait de la machine une racine, pas un objet conditionnel à un média. */
+  sprite: string | null
+}
 
 /** Le chrono vit en MILLISECONDES ENTIÈRES. Jamais de flottant sur un temps. */
 export const formaterChrono = (ms: number): string => {
@@ -36,14 +41,43 @@ export const formaterEcart = (ms: number): string => {
 export const creerMachine = async (db: PowerSyncDatabase, m: Omit<Machine, 'id'>) => {
   const id = nouvelId()
   await db.execute(
-    `INSERT INTO machine (id, pilote_id, marque, modele, annee) VALUES (?, ?, ?, ?, ?)`,
-    [id, 'local', m.marque, m.modele, m.annee],
+    `INSERT INTO machine (id, pilote_id, marque, modele, annee, sprite) VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, 'local', m.marque, m.modele, m.annee, m.sprite],
   )
   return id
 }
 
 export const listerMachines = (db: PowerSyncDatabase) =>
-  db.getAll<Machine>(`SELECT id, marque, modele, annee FROM machine ORDER BY id DESC`)
+  db.getAll<Machine>(`SELECT id, marque, modele, annee, sprite FROM machine ORDER BY id DESC`)
+
+/** Le sprite se pose et se retire sans toucher au reste de la machine : c'est une
+ *  reconstruction, pas une donnée d'identité. Le pilote doit pouvoir le refuser. */
+export const poserSprite = (db: PowerSyncDatabase, machineId: string, sprite: string | null) =>
+  db.execute(`UPDATE machine SET sprite = ? WHERE id = ?`, [sprite, machineId])
+
+/** Ce que la machine a coûté : EXCLUSIVEMENT les dépenses dont la cible est cette machine.
+ *  Jamais une jointure implicite par les roulages (AD-17). */
+export const coutMachine = async (db: PowerSyncDatabase, machineId: string) => {
+  const r = await db.get<{ total: number | null }>(
+    `SELECT SUM(montant_centimes) AS total FROM depense WHERE cible = 'machine' AND machine_id = ?`,
+    [machineId],
+  )
+  return r.total ?? 0
+}
+
+/** Roulages et meilleur tour de CETTE machine. Une machine sans roulage rend des zéros
+ *  et un meilleur tour nul — c'est un état valide, pas une absence de données (AD-2). */
+export const bilanMachine = async (db: PowerSyncDatabase, machineId: string) => {
+  const r = await db.get<{ roulages: number; meilleur: number | null }>(
+    `SELECT COUNT(DISTINCT r.id) AS roulages, MIN(t.temps_ms) AS meilleur
+       FROM roulage r
+       LEFT JOIN session s ON s.roulage_id = r.id
+       LEFT JOIN tour t ON t.session_id = s.id
+      WHERE r.machine_id = ?`,
+    [machineId],
+  )
+  return { roulages: r.roulages ?? 0, meilleurMs: r.meilleur ?? null }
+}
 
 /** Le circuit est stocké en clair sur le roulage tant que le référentiel n'est
  *  pas récolté. La récolte viendra le normaliser ; elle n'est pas au noyau. */

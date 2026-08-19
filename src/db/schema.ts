@@ -29,6 +29,11 @@ const machine = new Table({
   marque: column.text,
   modele: column.text,
   annee: column.integer,
+  // Portrait pixel détouré, PNG en data URI. Nullable : une machine sans sprite est un état
+  // valide (AD-2) et le garage affiche alors sa silhouette — il n'exige jamais une photo pour
+  // fonctionner. Produit une seule fois puis CONSERVÉ : c'est le seul champ du produit dont le
+  // calcul coûte de l'argent.
+  sprite: column.text,
 })
 
 // ─── RACINE 2 : le roulage ────────────────────────────────────────────────
