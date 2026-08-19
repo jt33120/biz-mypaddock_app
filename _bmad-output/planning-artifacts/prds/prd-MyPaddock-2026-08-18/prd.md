@@ -1372,6 +1372,48 @@ utilisateurs.
 mains, plein soleil, sans réseau — et reste le geste le plus hostile du produit. Toutes les
 contraintes d'interface qui en découlent tiennent. Ne tombe que ce qu'on déduisait du rythme global.
 
+### Le premier coût variable — mesuré le 19 août 2026
+
+**Jusqu'ici le produit n'avait que des coûts fixes quasi nuls** : paliers gratuits de Supabase, de
+Vercel, de Railway. La génération du portrait de machine change cela. **C'est le premier poste de
+dépense qui croît avec le nombre d'utilisateurs**, et il est apparu le jour même où il a fait
+franchir un plafond.
+
+| | |
+|---|---|
+| **Coût observé** | ≈ **0,16 € par portrait de machine** |
+| **D'où vient ce chiffre** | Dérivé du relevé de Julian — ≈ 16,98 € pour 107 images. **Pas d'un tarif publié.** |
+| **Ce qu'il faut faire avant de s'en servir** | Le confronter au tarif officiel du modèle. Le journal du banc enregistre les jetons réels de chaque appel, précisément pour pouvoir réappliquer un tarif exact après coup sans redemander une facture. |
+
+**L'exposition, chiffrée.** L'acquisition passe par des campagnes Meta payantes : il y aura des
+inconnus dès la première campagne. **Mille curieux qui essaient trois fois coûtent environ 480 €
+pour zéro revenu**, et le plafond publicitaire de QO-11 ne couvre pas ce poste — il compte la
+publicité, pas le service rendu aux gens qu'elle amène.
+
+**Trois conséquences qui ne sont pas négociables.**
+
+1. **Aucune génération sans compte.** Le coût est nominatif ou il est subi.
+2. **Un quota par machine et par compte**, avec un nombre d'essais fini et annoncé. Un pilote qui
+   n'aime pas son rendu doit pouvoir recommencer — deux ou trois fois, pas indéfiniment.
+3. **Le résultat est conservé, jamais recalculé.** Une image produite ne se repaie pas : ni à
+   l'ouverture du garage, ni à la reconnexion, ni au changement d'appareil.
+
+> **Ce que cela apporte à la grille de monétisation, et c'est le premier apport chiffré qu'elle
+> reçoit.** Le brief proposait un « accès premium sur les paliers coûteux » sans savoir lesquels
+> coûtaient. **En voici un dont le coût est mesuré et non supposé.** Le portrait de machine est
+> donc le candidat le plus solide au côté payant de la ligne — et il a une propriété rare pour un
+> palier payant : **il se voit**. Le pilote sait exactement ce qu'il achète, parce qu'il le regarde.
+>
+> Cela ne tranche pas QO-1bis pour autant : reste ouvert de savoir si le premier portrait est
+> offert — il est aussi le meilleur argument d'acquisition du produit — et si seuls les suivants,
+> ou les reprises, sont payants.
+
+**Et un garde-fou d'ingénierie, pas de produit.** Le dépassement du 19 août n'est pas venu du prix
+unitaire mais de ce qu'une dépense a eu lieu **en tâche de fond, invisible pendant qu'elle se
+produisait**. La règle qui en sort vaut au-delà des images : *ne jamais donner un minimum
+d'itérations à un processus automatique qui déclenche des appels payants sans lui donner un
+maximum.*
+
 ### Économie du produit — ce qui est renversé, ce qui reste en test
 
 Trois artefacts du 16 août 2026 portaient des conclusions commerciales que ce PRD n'avait pas

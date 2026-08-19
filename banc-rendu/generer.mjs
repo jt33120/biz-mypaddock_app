@@ -9,6 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { autoriser, enregistrer, etat } from './depense.mjs'
 
 const ici = path.dirname(new URL(import.meta.url).pathname)
 const dossier = path.join(ici, 'photos')
@@ -27,7 +28,7 @@ const cheminPrompt = process.argv[2]
 if (!cheminPrompt) { console.error('usage : node banc-rendu/generer.mjs prompts/<fichier>.js [photo…]'); process.exit(1) }
 const P = await import(path.join(ici, cheminPrompt))
 
-const filtre = process.argv.slice(3)
+const filtre = process.argv.slice(3).filter(a => !a.startsWith('--'))
 const noms = fs.readdirSync(dossier)
   .filter(f => /\.(jpe?g|png)$/i.test(f) && !f.startsWith('.'))
   .filter(f => !filtre.length || filtre.some(x => f.includes(x)))
@@ -85,14 +86,23 @@ async function generer(nom) {
   return { nom, sortie, jetons: rep.usageMetadata?.totalTokenCount }
 }
 
-console.log(`prompt ${P.version} · modèle ${P.modele} · ${noms.length} photo(s)`)
+// Le cache d'abord : on ne demande d'autorisation que pour ce qui va RÉELLEMENT être payé.
+const aPayer = noms.filter(nom =>
+  !fs.existsSync(path.join(sorties, `${P.version}--${path.parse(nom).name}.png`)))
+console.log(`prompt ${P.version} · modèle ${P.modele} · ${noms.length} photo(s) · ` +
+            `${noms.length - aPayer.length} en cache · ${aPayer.length} à générer`)
+if (aPayer.length) autoriser(aPayer.length, { quoi: `${P.version} sur ${aPayer.length} photo(s)` })
 let jetons = 0
 for (const nom of noms) {
   try {
     const r = await generer(nom)
     jetons += r.jetons ?? 0
+    if (!r.cache) enregistrer({ version: P.version, cible: nom, jetons: r.jetons, modele: P.modele })
     const ko = Math.round(fs.statSync(r.sortie).size / 1024)
     console.log(`  ${nom.padEnd(18)} ${r.cache ? '(cache)' : '       '} ${ko} Ko  ${path.basename(r.sortie)}`)
   } catch (e) { console.log(`  ${nom.padEnd(18)} ÉCHEC : ${e.message}`) }
 }
 if (jetons) console.log(`${jetons} jetons`)
+
+const e = etat()
+console.log(`banc : ${e.n} appel(s) journalisés ≈ ${e.depense.toFixed(2)} € / ${e.plafond.toFixed(2)} €`)

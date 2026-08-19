@@ -14,6 +14,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { autoriser, enregistrer, etat } from './depense.mjs'
 
 const ici = path.dirname(new URL(import.meta.url).pathname)
 const dossier = path.join(ici, 'photos')
@@ -41,7 +42,7 @@ if (!cle) { console.error('GEMINI_IMAGE absente de .env'); process.exit(1) }
 const cheminPrompt = process.argv[2]
 if (!cheminPrompt) { console.error('usage : node banc-rendu/generer2.mjs prompts/<f>.js [groupe…]'); process.exit(1) }
 const P = await import(path.join(ici, cheminPrompt))
-const voulus = process.argv.slice(3)
+const voulus = process.argv.slice(3).filter(a => !a.startsWith('--'))
 const noms = Object.keys(GROUPES).filter(g => !voulus.length || voulus.includes(g))
 
 function reduire(nom, px) {
@@ -52,6 +53,11 @@ function reduire(nom, px) {
   fs.unlinkSync(tmp)
   return { inlineData: { mimeType: 'image/jpeg', data: b } }
 }
+
+const aPayer = noms.filter(g => !fs.existsSync(path.join(sorties, `${P.version}--${g}.png`)))
+console.log(`prompt ${P.version} · ${noms.length} groupe(s) · ${noms.length - aPayer.length} en cache · ` +
+            `${aPayer.length} à générer`)
+if (aPayer.length) autoriser(aPayer.length, { quoi: `${P.version} sur ${aPayer.length} groupe(s)` })
 
 for (const g of noms) {
   const G = GROUPES[g]
@@ -92,7 +98,11 @@ for (const g of noms) {
     const img = (rep.candidates?.[0]?.content?.parts ?? []).find(p => p.inlineData)
     if (!img) throw new Error('aucune image : ' + JSON.stringify(rep).slice(0, 300))
     fs.writeFileSync(sortie, Buffer.from(img.inlineData.data, 'base64'))
+    enregistrer({ version: P.version, cible: g, jetons: rep.usageMetadata?.totalTokenCount, modele: P.modele })
     console.log(`  ${g}  ${Math.round(fs.statSync(sortie).size / 1024)} Ko  ${path.basename(sortie)}  ` +
                 `${G.references.length + 1} références · ${rep.usageMetadata?.totalTokenCount} jetons`)
   } catch (e) { console.log(`  ${g} ÉCHEC : ${e.message}`) }
 }
+
+const e = etat()
+console.log(`banc : ${e.n} appel(s) journalisés ≈ ${e.depense.toFixed(2)} € / ${e.plafond.toFixed(2)} €`)
