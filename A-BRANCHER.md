@@ -4,26 +4,20 @@ Le récit 1.2 est en place côté application : compte, session qui tient hors l
 adoption de ce qui a été saisi avant, connecteur PowerSync écrit et câblé.
 Ce qui suit se clique dans des consoles, et personne d'autre que toi ne peut le faire.
 
-L'ordre compte : **1 puis 2 suffisent pour tester le compte sur ton téléphone.**
-Le 3 n'est nécessaire que pour la synchronisation continue.
+**Le 2 suffit pour créer ton compte depuis le téléphone.** Le 3 n'est nécessaire
+que pour la synchronisation continue — la sauvegarde par geste marche sans lui.
 
 ---
 
-## 1 · Vercel — les trois variables du client
+## 1 · Vercel — rien à faire ✅
 
-Projet `mypaddock` → Settings → Environment Variables → *Production* et *Preview* :
+Vérifié le 19 août sur le paquet réellement servi par `mypaddock.vercel.app` :
+`VITE_APP_NAME`, `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY` sont bien
+en place, et le titre servi est le bon. L'onglet COMPTE montre donc un vrai
+formulaire sur ton téléphone, pas le message « Sauvegarde non configurée ».
 
-| Variable | Valeur | Pourquoi |
-|---|---|---|
-| `VITE_APP_NAME` | `MyPaddock` | nom de code, une seule constante (récit 0.3) |
-| `VITE_SUPABASE_URL` | l'URL du projet | sinon l'écran Compte annonce « Sauvegarde non configurée » |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | la clé `sb_publishable_…` | **jamais** la `service_role` (AD-15) |
-
-Elles sont dans ton `.env.local`. Un redéploiement est nécessaire après : elles sont
-figées **au build**, pas lues à l'exécution.
-
-Pour vérifier sans ouvrir le téléphone : l'onglet COMPTE doit montrer un formulaire,
-pas le message « Sauvegarde non configurée ».
+Rappel pour plus tard : ces variables sont figées **au build**, pas lues à
+l'exécution. En changer une exige un redéploiement.
 
 ## 2 · Supabase — la confirmation d'adresse
 
