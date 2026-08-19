@@ -61,6 +61,22 @@ console.log('④ FR-44 — aucun verdict :', trouves.length ? trouves : 'oui')
 console.log('   le barème se dit transcrit :',
   tout.includes('transcrit') || !tout.includes('Barème relevé') ? 'oui' : 'NON')
 
+// ── ⑤ FR-43 — L'HORLOGE REPART. Le défaut le plus grave de cette épique :
+//    `repartirDe` existait, était exporté, et n'était appelé nulle part. Le
+//    dépassement s'affichait à vie sur un organe de sécurité, et le seul
+//    recours était de retirer le suivi. Un afficheur de dépassement permanent
+//    est exactement ce qu'on apprend à ignorer.
+const compte = async () => (await page.textContent('.usure:has-text("Vidange")')).replace(/\s+/g, ' ')
+console.log('⑤ avant :', (await compte()).slice(0, 60))
+await page.click('.usure:has-text("Vidange") >> text=C\'est fait aujourd\'hui')
+await page.waitForTimeout(900)
+const apres = await compte()
+console.log('   après « c\'est fait » :', apres.slice(0, 60))
+console.log('   l\'horloge est repartie :', /Vidange\s*0 \/ 3/.test(apres) ? 'oui' : 'NON — ELLE NE REPART JAMAIS')
+console.log('   un roulage à venir ne la fait pas avancer :',
+  /Vidange\s*0 \/ 3/.test(apres) ? 'oui' : `NON (${apres.slice(0, 40)})`)
+console.log('   le dépassement a disparu :', apres.includes("Au-delà") ? 'NON' : 'oui')
+
 await page.screenshot({ path: process.argv[2] ?? '/tmp/usure.png', fullPage: true })
 console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()

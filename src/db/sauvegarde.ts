@@ -26,9 +26,18 @@ export type BilanEnvoi = Record<string, number>
 export type Refus = { table: string; ligne: string; motif: string }
 export type Resultat = { bilan: BilanEnvoi; refus: Refus[] }
 
-/** L'ordre est celui des dépendances, et il ne se négocie pas : une session sans
- *  son roulage est refusée par la clé étrangère, pas par une convention. */
-const ORDRE = ['machine', 'roulage', 'session', 'tour', 'depense', 'budget_saison', 'intervention', 'mesure', 'plan_si_alors', 'geste', 'photo', 'evenement_vise', 'horloge', 'checklist_ligne'] as const
+/** L'ordre est celui des DÉPENDANCES, et il ne se négocie pas : une session sans
+ *  son roulage est refusée par la clé étrangère, pas par une convention.
+ *
+ *  ⚠ IL A ÉTÉ FAUX, et le défaut était bloquant : `intervention` était envoyée
+ *  AVANT `photo` alors qu'elle la référence (`intervention.photo_id`). Un pilote
+ *  ayant créé une seule réparation non vitale depuis une photo voyait sa
+ *  première sauvegarde échouer en 23503, donc `adopter` ne marquait jamais
+ *  l'adoption, donc la synchronisation continue restait éteinte pour toujours —
+ *  et le défaut se rejouait à chaque tentative. Trouvé par une passe adverse.
+ *
+ *  La chaîne réelle : geste → photo → intervention → horloge. */
+const ORDRE = ['machine', 'roulage', 'session', 'tour', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'photo', 'intervention', 'evenement_vise', 'horloge', 'checklist_ligne'] as const
 
 /** TOUTES les tables de pilote portent leur propriétaire côté serveur, feuilles
  *  comprises, pour que le flux descendant s'écrive à plat et que l'envoi n'ait

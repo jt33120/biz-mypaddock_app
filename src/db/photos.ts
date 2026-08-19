@@ -119,7 +119,10 @@ export const effacerLocale = async (nom: string) => {
 
 export type Photo = {
   id: string
-  roulage_id: string
+  /** L'un des deux est renseigné, jamais aucun : une photo appartient à une
+   *  journée ou à une moto. La contrainte est tenue côté serveur. */
+  roulage_id: string | null
+  machine_id: string | null
   geste_id: string | null
   chemin_objet: string
   largeur: number | null
@@ -132,23 +135,34 @@ export type Photo = {
 export const nomLocal = (p: Pick<Photo, 'id' | 'chemin_objet'>) =>
   `${p.id}.${p.chemin_objet.split('.').pop()}`
 
+/** Le porteur d'une photo : une journée, ou une moto. Pas les deux à moitié.
+ *  ⚠ Le type est un OBJET et non deux chaînes positionnelles, précisément parce
+ *  qu'un identifiant de machine était passé là où un identifiant de roulage
+ *  était attendu — deux `string` se confondent, deux clés nommées non. */
+export type Porteur = { roulageId: string; machineId?: null } | { machineId: string; roulageId?: null }
+
 export const verserPhoto = async (
-  db: PowerSyncDatabase, roulageId: string, fichier: Blob,
+  db: PowerSyncDatabase, porteur: Porteur, fichier: Blob,
 ): Promise<Photo> => {
+  const roulageId = porteur.roulageId ?? null
+  const machineId = porteur.machineId ?? null
   const r = await reduire(fichier)
   const id = nouvelId()
   // Le chemin porte le pilote en PREMIER SEGMENT : c'est ce que la politique du
   // bucket compare à auth.uid(). Il est posé à `local` tant qu'aucun compte
   // n'existe, et réécrit au moment du téléversement — comme le propriétaire
   // d'une ligne, qui est une conséquence du compte et non une donnée locale.
-  const chemin = `local/${roulageId}/${id}.${r.extension}`
+  const chemin = `local/${roulageId ?? machineId}/${id}.${r.extension}`
   await ecrireLocale(`${id}.${r.extension}`, r.blob)
   await db.execute(
-    `INSERT INTO photo (id, roulage_id, chemin_objet, largeur, hauteur, etat)
-     VALUES (?, ?, ?, ?, ?, 'locale')`,
-    [id, roulageId, chemin, r.largeur, r.hauteur])
+    `INSERT INTO photo (id, roulage_id, machine_id, chemin_objet, largeur, hauteur, etat)
+     VALUES (?, ?, ?, ?, ?, ?, 'locale')`,
+    [id, roulageId, machineId, chemin, r.largeur, r.hauteur])
   await marquerSaisie(db)
-  return { id, roulage_id: roulageId, geste_id: null, chemin_objet: chemin, largeur: r.largeur, hauteur: r.hauteur, etat: 'locale' }
+  return {
+    id, roulage_id: roulageId, machine_id: machineId, geste_id: null,
+    chemin_objet: chemin, largeur: r.largeur, hauteur: r.hauteur, etat: 'locale',
+  }
 }
 
 /**
@@ -190,7 +204,7 @@ export const photoMachine = async (chemin: string | null): Promise<File | null> 
 
 export const photosDuRoulage = (db: PowerSyncDatabase, roulageId: string) =>
   db.getAll<Photo>(
-    `SELECT id, roulage_id, geste_id, chemin_objet, largeur, hauteur, etat
+    `SELECT id, roulage_id, machine_id, geste_id, chemin_objet, largeur, hauteur, etat
        FROM photo WHERE roulage_id = ? ORDER BY id`, [roulageId])
 
 /* ─── LE TÉLÉVERSEMENT DIFFÉRÉ ─────────────────────────────────────────────

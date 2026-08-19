@@ -101,6 +101,7 @@ type Ligne = {
  */
 export const horloges = async (
   db: PowerSyncDatabase, machineId: string,
+  jour = new Date().toISOString().slice(0, 10),
 ): Promise<Horloge[]> => {
   const lignes = await db.getAll<Ligne>(
     `SELECT id, machine_id, operation, intervalle_roulages, source_url, recolte_le,
@@ -126,10 +127,14 @@ export const horloges = async (
     // FR-61 : SEULS LES ROULAGES EN USAGE comptent. Un brouillon importé d'un
     // calendrier est une inscription, pas une journée de piste — le faire
     // avancer l'horloge ferait vieillir une machine qui n'a pas roulé.
+    // ⚠ ET SEULEMENT LES ROULAGES DÉJÀ VÉCUS. Un roulage saisi pour septembre
+    // est un projet, pas de l'usure : le compter ferait vieillir une machine
+    // pour une journée qui n'a pas eu lieu. Trouvé en lisant le résultat de
+    // l'essai — l'horloge repartait bien, mais à 1 au lieu de 0.
     const roulages = await db.getAll<{ rang: number | null; total: number | null }>(
       `SELECT groupe_rang AS rang, groupe_total AS total FROM roulage
-        WHERE machine_id = ? AND etat = 'usage'
-          AND (? IS NULL OR date_jour >= ?)`, [l.machine_id, depuis, depuis])
+        WHERE machine_id = ? AND etat = 'usage' AND date_jour <= ?
+          AND (? IS NULL OR date_jour >= ?)`, [l.machine_id, jour, depuis, depuis])
 
     let ponderes = 0, sansGroupe = 0
     for (const r of roulages) {
@@ -182,3 +187,30 @@ export const repartirDe = async (
 
 export const oublierHorloge = (db: PowerSyncDatabase, id: string) =>
   db.execute(`DELETE FROM horloge WHERE id = ?`, [id])
+
+/**
+ * « C'EST FAIT » DEPUIS L'HORLOGE — le chemin direct, sans rapprochement.
+ *
+ * Il consigne l'intervention ET fait repartir l'horloge, dans le même geste.
+ * L'atelier a son chemin, qui rapproche par le libellé et peut rater ; celui-ci
+ * ne peut pas rater, parce que le pilote désigne l'horloge en appuyant dessus.
+ * Les deux existent parce que le geste se fait des deux endroits : au garage
+ * quand on tient la clé, à l'atelier quand on note ce qu'on vient de faire.
+ */
+export const cestFaitDepuisLHorloge = async (
+  db: PowerSyncDatabase, horlogeId: string, jour: string,
+): Promise<string | null> => {
+  const h = await db.get<{ machine_id: string; operation: string }>(
+    `SELECT machine_id, operation FROM horloge WHERE id = ?`, [horlogeId])
+  if (!h) return null
+  const interventionId = nouvelId()
+  await db.execute(
+    `INSERT INTO intervention
+       (id, machine_id, categorie, etat, libelle, date_jour)
+     VALUES (?, ?, 'entretien', 'faite', ?, ?)`,
+    [interventionId, h.machine_id, h.operation, jour])
+  await db.execute(`UPDATE horloge SET depuis_intervention = ? WHERE id = ?`,
+    [interventionId, horlogeId])
+  await marquerSaisie(db)
+  return interventionId
+}

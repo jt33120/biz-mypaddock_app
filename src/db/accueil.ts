@@ -2,6 +2,7 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { CONSEILS_EMBARQUES } from './corpus'
 import { marquerSaisie } from './mesures'
+import { aplati } from './depot'
 
 /**
  * L'ACCUEIL TEMPOREL — récit 6.1.
@@ -157,13 +158,19 @@ export const sourceAccueil = async (db: PowerSyncDatabase, jour: string): Promis
 export const meilleurAuCircuit = async (
   db: PowerSyncDatabase, circuit: string, saufRoulageId: string,
 ): Promise<number | null> => {
-  const r = await db.getAll<{ m: number | null }>(
-    `SELECT min(t.temps_ms) AS m
+  // À plat, comme partout ailleurs : deux orthographes du même circuit ne font
+  // pas deux circuits. La même égalité stricte a déjà coûté un écart disparu
+  // dans le bilan et une courbe amputée.
+  const l = await db.getAll<{ nom: string; m: number }>(
+    `SELECT r.circuit_nom AS nom, min(t.temps_ms) AS m
        FROM tour t
        JOIN session s ON s.id = t.session_id
        JOIN roulage r ON r.id = s.roulage_id
-      WHERE r.circuit_nom = ? AND r.id <> ?`, [circuit, saufRoulageId])
-  return r[0]?.m ?? null
+      WHERE r.id <> ? AND r.circuit_nom IS NOT NULL
+      GROUP BY r.circuit_nom`, [saufRoulageId])
+  const cle = aplati(circuit)
+  return l.filter((x) => aplati(x.nom) === cle)
+    .reduce<number | null>((m, x) => (m == null || x.m < m ? x.m : m), null)
 }
 
 /**

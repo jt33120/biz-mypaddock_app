@@ -263,7 +263,8 @@ export function Garage({ db, onEcrit }: {
       {/* L'USURE — épique 12. Elle vit sous l'atelier parce qu'elle en est la
           conséquence : une horloge repart d'un geste consigné, pas d'un bouton
           « remettre à zéro ». */}
-      <Usure db={db} machineId={machine.id} />
+      <Usure db={db} machineId={machine.id}
+             onEcrit={() => { void charger(); onEcrit() }} />
 
       <button className="lien" onClick={() => void importerSaison()}>
         Reprendre la saison 2026 · Pau-Arnos

@@ -47,7 +47,7 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
     if (!f) return
     setOccupe(true); setSouci(null)
     try {
-      await verserPhoto(db, roulageId, f)
+      await verserPhoto(db, { roulageId }, f)
       await charger()
     } catch (e) {
       // Une erreur dit CE QUI S'EST PASSÉ, CE QUI EST CONSERVÉ, et CE QUI VA SE

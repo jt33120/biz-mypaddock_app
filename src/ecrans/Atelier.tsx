@@ -60,7 +60,12 @@ function Bloc({ db, machineId, categorie, ouverte, onOuvrir, onEcrit }: {
    *  sans rien remplir d'autre. Le levier tordu se photographie là où le
    *  téléphone est déjà en main, et devient une ligne. */
   const parLaPhoto = async (f: File) => {
-    const p = await verserPhoto(db, machineId, f)
+    // ⚠ La photo d'une réparation porte la MACHINE, pas un roulage : cette
+    // réparation n'a pas de journée, elle a une moto. La version précédente
+    // passait l'identifiant de machine dans le champ du roulage, et la ligne
+    // était refusée en 23503 puis écartée définitivement — la réparation
+    // existait sur ce téléphone et nulle part ailleurs.
+    const p = await verserPhoto(db, { machineId }, f)
     await viser(db, { machineId, categorie, libelle: 'À regarder', photoId: p.id })
     await charger(); onEcrit()
   }

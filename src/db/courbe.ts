@@ -1,4 +1,5 @@
 import type { PowerSyncDatabase } from '@powersync/web'
+import { aplati } from './depot'
 
 /**
  * LA COURBE DE PROGRESSION — FR-20, épique 11.
@@ -41,14 +42,21 @@ export type Courbe = {
 export const courbeDuCircuit = async (
   db: PowerSyncDatabase, circuit: string,
 ): Promise<Courbe | null> => {
-  const l = await db.getAll<{ id: string; date: string; ms: number }>(
-    `SELECT r.id, r.date_jour AS date, min(t.temps_ms) AS ms
+  // ⚠ LE RAPPROCHEMENT SE FAIT À PLAT, comme l'écart du bilan. L'égalité SQL
+  // stricte a déjà été corrigée une fois dans `bilanRoulage` — et rejouée ici
+  // sans y penser : « pau arnos » tapé un soir sortait de sa propre courbe, le
+  // titre annonçait un roulage de moins, et le gain se calculait sur une série
+  // amputée. Trouvé par une passe adverse, pas par un essai.
+  const tous = await db.getAll<{ id: string; date: string; ms: number; nom: string }>(
+    `SELECT r.id, r.date_jour AS date, min(t.temps_ms) AS ms, r.circuit_nom AS nom
        FROM roulage r
        JOIN session s ON s.roulage_id = r.id
        JOIN tour t ON t.session_id = s.id
-      WHERE r.circuit_nom = ?
+      WHERE r.circuit_nom IS NOT NULL
       GROUP BY r.id HAVING ms IS NOT NULL
-      ORDER BY r.date_jour ASC, r.id ASC`, [circuit])
+      ORDER BY r.date_jour ASC, r.id ASC`)
+  const cle = aplati(circuit)
+  const l = tous.filter((p) => aplati(p.nom) === cle)
   if (l.length < POINTS_MINIMUM) return null
 
   // Un RECORD est un temps meilleur que TOUS ceux qui le précèdent. Le premier
@@ -68,12 +76,25 @@ export const courbeDuCircuit = async (
 /** Les circuits qui ont de quoi faire une courbe, du plus fourni au moins.
  *  Sert à ne proposer que ce qui existe — on ne montre jamais une liste de
  *  circuits « pas encore prêts », ce qui reviendrait à afficher ce qui manque. */
-export const circuitsAvecCourbe = (db: PowerSyncDatabase) =>
-  db.getAll<{ circuit: string; n: number }>(
-    `SELECT r.circuit_nom AS circuit, count(DISTINCT r.id) AS n
+export const circuitsAvecCourbe = async (
+  db: PowerSyncDatabase,
+): Promise<{ circuit: string; n: number }[]> => {
+  // Le regroupement aussi se fait à plat : grouper sur le nom brut ferait
+  // apparaître « Pau-Arnos » et « pau arnos » comme deux circuits, chacun sous
+  // le seuil, et aucune courbe ne s'allumerait.
+  const l = await db.getAll<{ circuit: string; id: string }>(
+    `SELECT DISTINCT r.circuit_nom AS circuit, r.id
        FROM roulage r
        JOIN session s ON s.roulage_id = r.id
        JOIN tour t ON t.session_id = s.id
-      WHERE r.circuit_nom IS NOT NULL
-      GROUP BY r.circuit_nom HAVING n >= ${POINTS_MINIMUM}
-      ORDER BY n DESC, r.circuit_nom ASC`)
+      WHERE r.circuit_nom IS NOT NULL`)
+  const par = new Map<string, { circuit: string; n: number }>()
+  for (const x of l) {
+    const k = aplati(x.circuit)
+    const v = par.get(k)
+    if (v) v.n++
+    else par.set(k, { circuit: x.circuit, n: 1 })
+  }
+  return [...par.values()].filter((v) => v.n >= POINTS_MINIMUM)
+    .sort((a, b) => b.n - a.n || a.circuit.localeCompare(b.circuit))
+}

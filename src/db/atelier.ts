@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
+import { aplati } from './depot'
 
 /**
  * L'ATELIER — épique 8, l'axe machine prend ses écrans.
@@ -130,7 +131,38 @@ export const cestFait = async (db: PowerSyncDatabase, id: string, jour: string) 
   await db.execute(
     `UPDATE intervention SET etat = 'faite', date_jour = ? WHERE id = ? AND etat = 'visee'`,
     [jour, id])
+  await faireRepartirLHorloge(db, id)
   await marquerSaisie(db)
+}
+
+/**
+ * ⚠ FR-43 EN ENTIER : « un tap sur c'est fait aujourd'hui, la date se remplit,
+ * la pièce achetée se rattache, L'HORLOGE DU POSTE REPART ». Le troisième effet
+ * manquait, et le défaut était bloquant : `repartirDe` existait, était exporté,
+ * et n'était appelé nulle part. Un pilote pouvait changer ses plaquettes
+ * autant de fois qu'il voulait, l'écran d'usure affichait « 7 / 6 · au-delà de
+ * l'intervalle » pour toujours. Le seul recours offert était de retirer
+ * l'horloge, c'est-à-dire de détruire le suivi.
+ *
+ * Le rapprochement se fait sur le LIBELLÉ, à plat : « Plaquettes avant »
+ * consigné à l'atelier fait repartir l'horloge « plaquettes avant ». C'est une
+ * heuristique et elle est assumée — l'alternative serait d'obliger le pilote à
+ * choisir une horloge dans une liste au moment du geste, c'est-à-dire à faire
+ * du rangement au paddock. Un rapprochement raté ne casse rien : l'horloge
+ * garde son compte, et l'écran d'usure porte son propre « c'est fait ».
+ */
+const faireRepartirLHorloge = async (db: PowerSyncDatabase, interventionId: string) => {
+  const i = await db.get<{ machine_id: string; libelle: string }>(
+    `SELECT machine_id, libelle FROM intervention WHERE id = ?`, [interventionId])
+  if (!i) return
+  const hs = await db.getAll<{ id: string; operation: string }>(
+    `SELECT id, operation FROM horloge WHERE machine_id = ?`, [i.machine_id])
+  const cle = aplati(i.libelle)
+  for (const h of hs) {
+    if (aplati(h.operation) !== cle) continue
+    await db.execute(`UPDATE horloge SET depuis_intervention = ? WHERE id = ?`,
+      [interventionId, h.id])
+  }
 }
 
 /** Ce qu'une machine a consommé en atelier, catégorie par catégorie. Le total

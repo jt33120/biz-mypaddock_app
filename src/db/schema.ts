@@ -148,6 +148,9 @@ const mesure = new Table({
 // file d'envoi, et une saison de paddock la ferait exploser.
 const photo = new Table({
   roulage_id: column.text,
+  // Une photo appartient à un roulage OU à une machine. La photo d'une
+  // réparation non vitale n'a pas de journée : elle a une moto.
+  machine_id: column.text,
   geste_id: column.text,
   chemin_objet: column.text,
   largeur: column.integer,

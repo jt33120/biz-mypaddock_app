@@ -112,7 +112,7 @@ export const bilanMachine = async (db: PowerSyncDatabase, machineId: string) => 
  *  le bilan du lendemain annonçait « premier chrono sur ce circuit » alors que
  *  le pilote y roulait pour la deuxième fois. Deux noms qui ne diffèrent que par
  *  leur ponctuation désignent le même circuit ; il n'existe aucun contre-exemple. */
-const aplati = (s: string) =>
+export const aplati = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ').trim()
 

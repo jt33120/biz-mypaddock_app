@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
-import { horloges, oublierHorloge, poserHorloge, type Horloge } from '../db/usure'
+import {
+  cestFaitDepuisLHorloge, horloges, oublierHorloge, poserHorloge, type Horloge,
+} from '../db/usure'
 
 /**
  * LES HORLOGES D'USURE À L'ÉCRAN — FR-40, FR-44.
@@ -17,7 +19,11 @@ import { horloges, oublierHorloge, poserHorloge, type Horloge } from '../db/usur
  *     faut faire. Une horloge qui a dépassé son intervalle l'énonce — « au-delà
  *     de l'intervalle » — et s'arrête là.
  */
-export function Usure({ db, machineId }: { db: PowerSyncDatabase; machineId: string }) {
+const aujourdhui = () => new Date().toISOString().slice(0, 10)
+
+export function Usure({ db, machineId, onEcrit }: {
+  db: PowerSyncDatabase; machineId: string; onEcrit?: () => void
+}) {
   const [liste, setListe] = useState<Horloge[]>([])
   const [saisie, setSaisie] = useState(false)
   const [operation, setOperation] = useState('')
@@ -74,6 +80,15 @@ export function Usure({ db, machineId }: { db: PowerSyncDatabase; machineId: str
               </p>
             )}
 
+            {/* FR-43 — un tap, trois effets : l'intervention se consigne, la
+                date se remplit, ET L'HORLOGE REPART. Le troisième manquait, et
+                l'horloge affichait son dépassement à vie : le seul recours
+                offert était de retirer le suivi. */}
+            <button className="bouton secondaire"
+                    onClick={() => void cestFaitDepuisLHorloge(db, h.id, aujourdhui())
+                      .then(charger).then(() => onEcrit?.())}>
+              C'est fait aujourd'hui
+            </button>
             <button className="lien" onClick={() => void oublierHorloge(db, h.id).then(charger)}>
               Retirer cette horloge
             </button>
