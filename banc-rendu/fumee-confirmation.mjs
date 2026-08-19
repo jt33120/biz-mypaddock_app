@@ -17,9 +17,18 @@ await page.route('**/auth/v1/signup*', r => r.fulfill({
   body: JSON.stringify({ user: { id: 'x', email: 'julian@exemple.fr' }, session: null }),
 }))
 
+// Compte et Sonde ne sont plus des onglets : ce sont des liens en TÊTE DE
+// L'ACCUEIL, parce qu'un réglage et un instrument ne sont pas des destinations.
+const onglet = async (n) => {
+  const bas = `nav.barre .onglet:has-text("${n}")`
+  if (await page.isVisible(bas)) return page.click(bas)
+  await page.click('nav.barre .onglet:has-text("ACCUEIL")')
+  return page.click(`.tete .reglages .lien:has-text("${n.toLowerCase()}")`)
+}
+
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
 await page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
-await page.click('nav.barre .onglet:has-text("COMPTE")')
+await onglet('COMPTE')
 await page.fill('#email', 'julian@exemple.fr')
 await page.fill('#mdp', 'motdepasse')
 await page.click('section.compte .bouton')

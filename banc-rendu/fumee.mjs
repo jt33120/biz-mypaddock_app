@@ -13,7 +13,14 @@ page.on('console', m => { if (m.type() === 'error') erreurs.push('console: ' + m
 page.on('pageerror', e => erreurs.push('pageerror: ' + e.message))
 page.on('response', r => { if (r.status() >= 400) erreurs.push(`http ${r.status()} ${r.url()}`) })
 
-const onglet = (nom) => page.click(`nav.barre .onglet:has-text("${nom}")`)
+// Compte et Sonde ne sont plus des onglets : ce sont des liens en TÊTE DE
+// L'ACCUEIL, parce qu'un réglage et un instrument ne sont pas des destinations.
+const onglet = async (n) => {
+  const bas = `nav.barre .onglet:has-text("${n}")`
+  if (await page.isVisible(bas)) return page.click(bas)
+  await page.click('nav.barre .onglet:has-text("ACCUEIL")')
+  return page.click(`.tete .reglages .lien:has-text("${n.toLowerCase()}")`)
+}
 
 await page.goto(base, { waitUntil: 'networkidle' })
 await page.waitForSelector('nav.barre', { timeout: 30_000 })

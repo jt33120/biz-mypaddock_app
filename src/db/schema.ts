@@ -117,7 +117,15 @@ const mesure = new Table({
   jour: column.text,
 })
 
+// Le plan si-alors du pilote — la donnée la plus intime du produit, et la seule
+// que le code s'interdit formellement de retoucher. MOT POUR MOT : ni reformulé,
+// ni corrigé, ni noté. C'est le fait qu'il soit dans SES mots qui le fait
+// fonctionner (d ≈ 0,65 sur 94 essais).
+const plan_si_alors = new Table({ texte: column.text })
+
 // ─── Référentiel — lu, jamais écrit par la PWA (AD-12) ────────────────────
+// Le corpus de conseils y appartient (AD-10) : il s'enrichit sans redéploiement.
+const conseil = new Table({ texte: column.text, actif: column.integer })
 const circuit = new Table({ nom: column.text, pays: column.text, longueur_m: column.integer })
 const organisateur = new Table({ nom: column.text, site_web: column.text })
 
@@ -158,6 +166,8 @@ export const AppSchema = new Schema({
   budget_saison,
   intervention,
   mesure,
+  plan_si_alors,
+  conseil,
   circuit,
   organisateur,
   roulage_publie,

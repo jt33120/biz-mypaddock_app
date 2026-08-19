@@ -24,6 +24,7 @@ streams:
       - SELECT * FROM budget_saison WHERE pilote_id = auth.user_id()
       - SELECT * FROM intervention WHERE pilote_id = auth.user_id()
       - SELECT * FROM mesure       WHERE pilote_id = auth.user_id()
+      - SELECT * FROM plan_si_alors WHERE pilote_id = auth.user_id()
 
   # ─── Le référentiel — lu par tous, écrit par personne (AD-12) ───────────
   # Le BARÈME CONSTRUCTEUR EST VOLONTAIREMENT ABSENT. Un flux global le ferait
@@ -35,3 +36,4 @@ streams:
       - SELECT * FROM circuit
       - SELECT * FROM organisateur
       - SELECT * FROM roulage_publie
+      - SELECT * FROM conseil

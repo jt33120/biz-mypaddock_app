@@ -11,6 +11,10 @@ import { surCompte, type Identite } from './db/compte'
 import { creerConnecteur, powersyncConfigure } from './db/connecteur'
 import { estAdopte } from './db/sauvegarde'
 import { ouverture } from './db/mesures'
+import {
+  conseilDuJour, direAVenir, direPasse, ecarterInvite, etatPlan, poserPlan, sourceAccueil,
+  type EtatPlan, type Source,
+} from './db/accueil'
 import { Compte } from './ecrans/Compte'
 import { Garage } from './ecrans/Garage'
 import { Molettes } from './ecrans/Molettes'
@@ -36,6 +40,9 @@ export default function App() {
   const [bilan, setBilan] = useState<Bilan>(null)
   const [cout, setCout] = useState<CoutRoulage | null>(null)
   const [identite, setIdentite] = useState<Identite | null>(null)
+  const [src, setSrc] = useState<Source | null>(null)
+  const [conseil, setConseil] = useState<string | null>(null)
+  const [plan, setPlan] = useState<EtatPlan | null>(null)
 
   useEffect(() => {
     const d = ouvrirBase()
@@ -70,7 +77,15 @@ export default function App() {
     return () => { void db.disconnect() }
   }, [db, identite])
 
-  const rafraichir = useCallback(async (base: Db) => setListe(await listerRoulages(base)), [])
+  const rafraichir = useCallback(async (base: Db) => {
+    setListe(await listerRoulages(base))
+    // AD-6 : l'accueil se recalcule À L'OUVERTURE et à chaque écriture. Rien ne
+    // tourne pendant que l'application est fermée, donc rien ne peut avoir
+    // manqué son rendez-vous — l'accueil est immunisé par construction.
+    setSrc(await sourceAccueil(base, aujourdhui()))
+    setConseil(await conseilDuJour(base, aujourdhui()))
+    setPlan(await etatPlan(base, aujourdhui()))
+  }, [])
   useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
 
   if (!db) return <div className="ecran"><div className="libelle">chargement…</div></div>
@@ -87,7 +102,13 @@ export default function App() {
     <>
       <div className="sol" aria-hidden />
       <div className="ecran">
-        {ecran === 'accueil' && <Accueil liste={liste} onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan} />}
+        {ecran === 'accueil' && (
+          <Accueil src={src} liste={liste} conseil={conseil} plan={plan}
+                   onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan}
+                   onPlan={async (t) => { await poserPlan(db, t); await rafraichir(db) }}
+                   onEcarter={() => { ecarterInvite(); void rafraichir(db) }}
+                   onCompte={() => setEcran('compte')} onSonde={() => setEcran('sonde')} />
+        )}
         {ecran === 'roulages' && <Roulages liste={liste} onOuvrir={ouvrirBilan} onNouveau={() => setEcran('nouveau')} />}
         {ecran === 'nouveau' && (
           <Nouveau onValider={async (r) => {
@@ -126,15 +147,29 @@ export default function App() {
         {ecran === 'sonde' && <Sonde db={db} />}
       </div>
 
+      {/* UX-DR9 — LA BARRE SE CALCULE, elle n'est pas une liste figée. Un onglet
+          apparaît QUAND IL A QUELQUE CHOSE À MONTRER : « Machine, Saison et
+          Cercle n'apparaissent pas tant qu'ils n'ont rien à montrer. »
+
+          La règle nommait deux onglets au noyau. Elle est antérieure à la
+          réorientation du 18 août, qui fait du garage le centre du produit — le
+          garage a donc maintenant quelque chose à montrer, et c'est le TEST de
+          la règle qui tranche, pas son exemple chiffré.
+
+          ⚠ ET GARAGE EST TOUJOURS VISIBLE, y compris sans machine. Le masquer
+          jusqu'à la première machine rendait la première machine INATTEIGNABLE
+          — trouvé par l'essai, pas par la relecture. Un garage vide n'est pas
+          une pièce vide : c'est l'écran qui explique l'axe machine et par lequel
+          on déclare sa moto. AD-2 le dit déjà — une machine sans roulage est un
+          état valide, donc un garage sans machine en est un aussi.
+
+          Compte et Sonde ne sont pas des destinations du produit : ce sont un
+          réglage et un instrument. Ils vivent en tête de l'accueil, discrets,
+          et ne prennent pas la place d'un lieu. */}
       <nav className="barre">
-        {/* Le garage rejoint le noyau le 19 août : il est le centre du produit depuis la
-            réorientation. Saison et Cercle restent absents — un onglet vide ne sous-délivre
-            pas, il signale l'abandon. */}
         <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
         <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => setEcran('garage')}>GARAGE</button>
         <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => setEcran('roulages')}>ROULAGES</button>
-        <button className="onglet" data-actif={ecran === 'compte' ? '1' : '0'} onClick={() => setEcran('compte')}>COMPTE</button>
-        <button className="onglet" data-actif={ecran === 'sonde' ? '1' : '0'} onClick={() => setEcran('sonde')}>SONDE</button>
       </nav>
     </>
   )
@@ -143,43 +178,190 @@ export default function App() {
 /* ─── ACCUEIL — ce qui est le plus proche dans le temps ────────────────────
    UJ-2 : on n'ouvre jamais sur du vide, et jamais sur des cadres en attente.
    Une seule action quand il n'y a rien. */
-function Accueil({ liste, onNouveau, onOuvrir }: { liste: Liste; onNouveau: () => void; onOuvrir: (id: string) => void }) {
-  const dernier = liste[0]
+/* ─── L'ACCUEIL TEMPOREL — récits 6.1 et 6.2 ───────────────────────────────
+   DEUX ZONES, et leur propriété n'est pas la même.
+
+   · La ZONE TEMPORELLE est en tête et APPARTIENT AU SYSTÈME (FR-15). Le pilote
+     n'y touche pas : c'est le produit qui décide de ce qui est le plus proche
+     dans le temps, et c'est ce qui lui permet de changer tout seul entre deux
+     roulages sans que rien n'ait tourné pendant la fermeture (AD-6).
+   · La ZONE DES CHIFFRES est en dessous et appartient au pilote.
+
+   FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
+   échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
+   rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
+function Accueil({ src, liste, conseil, plan, onNouveau, onOuvrir, onPlan, onEcarter, onCompte, onSonde }: {
+  src: Source | null; liste: Liste; conseil: string | null; plan: EtatPlan | null
+  onNouveau: () => void; onOuvrir: (id: string) => void
+  onPlan: (texte: string) => Promise<void>; onEcarter: () => void
+  onCompte: () => void; onSonde: () => void
+}) {
   return (
     <>
-      <h1 className="titre neon">{PRODUCT_NAME}</h1>
+      <header className="tete">
+        <h1 className="titre neon">{PRODUCT_NAME}</h1>
+        <nav className="reglages">
+          <button className="lien" onClick={onCompte}>compte</button>
+          <button className="lien" onClick={onSonde}>sonde</button>
+        </nav>
+      </header>
+      <ZoneTemporelle src={src} onNouveau={onNouveau} onOuvrir={onOuvrir} />
+      {src && src.genre !== 'vide' && <ZoneChiffres liste={liste} />}
+      {conseil && <Conseil texte={conseil} />}
+      {plan && <Plan etat={plan} onPlan={onPlan} onEcarter={onEcarter} />}
+    </>
+  )
+}
 
-      {!dernier ? (
-        <>
-          <div className="bloc pile">
-            <div className="libelle">Rien de saisi</div>
-            <div style={{ fontSize: 18 }}>
-              Le premier roulage suffit à faire fonctionner l'application.
-              Le coût se saisit plus tard, pas maintenant.
-            </div>
+/** UN SEUL conseil, et il énonce une TECHNIQUE — jamais une performance à
+ *  atteindre, jamais un chiffre à battre, et surtout aucun bandeau de
+ *  prévention : l'attention à un avertissement chute dès la deuxième exposition,
+ *  et une menace sans action facile associée produit de la défense, pas du
+ *  changement (Witte & Allen, 93 études). */
+function Conseil({ texte }: { texte: string }) {
+  return (
+    <div className="conseil">
+      <p className="libelle">Une chose à la fois</p>
+      <p className="texte">{texte}</p>
+    </div>
+  )
+}
+
+/** LE PLAN SI-ALORS — l'intervention comportementale la mieux établie du
+ *  dossier (d ≈ 0,65 sur 94 essais), et elle ne fonctionne que formulée par la
+ *  personne elle-même. Le produit ne reformule rien, ne corrige rien, ne note
+ *  rien. L'invite est UNIQUE : refusée, elle ne revient pas. */
+function Plan({ etat, onPlan, onEcarter }: {
+  etat: EtatPlan; onPlan: (t: string) => Promise<void>; onEcarter: () => void
+}) {
+  const [texte, setTexte] = useState('')
+
+  if (etat.texte) {
+    return (
+      <div className="conseil plan-pose">
+        <p className="libelle">Ton plan</p>
+        {/* Mot pour mot. Aucune retouche, aucune note, aucun commentaire. */}
+        <p className="texte">{etat.texte}</p>
+      </div>
+    )
+  }
+  if (!etat.inviter) return null
+
+  return (
+    <div className="conseil">
+      <p className="libelle">Une phrase, une seule fois</p>
+      <p className="texte">
+        Écris ce que tu feras dans une situation précise, dans tes mots.
+        Par exemple : « si je me fais rattraper, alors je lève et je le laisse passer. »
+      </p>
+      <input className="champ" value={texte} onChange={(e) => setTexte(e.target.value)}
+             placeholder="si… alors…" autoComplete="off" />
+      <div className="rang">
+        <button className="bouton secondaire" disabled={!texte.trim()}
+                onClick={() => void onPlan(texte)}>Garder cette phrase</button>
+        <button className="lien" onClick={onEcarter}>Pas maintenant</button>
+      </div>
+    </div>
+  )
+}
+
+function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
+  src: Source | null; onNouveau: () => void; onOuvrir: (id: string) => void
+}) {
+  // Il n'existe AUCUN écran vide (FR-14) : sans donnée, une seule action, et une
+  // phrase qui dit ce que l'application fait — pas ce qu'il faudrait faire.
+  if (!src || src.genre === 'vide') {
+    return (
+      <>
+        <div className="bloc pile">
+          <div className="libelle">Rien de saisi</div>
+          <div style={{ fontSize: 18 }}>
+            Le premier roulage suffit à faire fonctionner l'application.
+            Le coût se saisit plus tard, pas maintenant.
           </div>
-          <button className="bouton" onClick={onNouveau}>Saisir mon premier roulage</button>
-        </>
-      ) : (
-        <>
-          <div className="bloc pile" onClick={() => onOuvrir(dernier.id)}>
-            <div className="libelle">Dernier roulage</div>
-            <div className="titre">{dernier.circuit_nom}</div>
-            <div className="rang">
-              <span className="libelle">{dernier.date_jour}</span>
-              <span className="hud-16 faible">{dernier.sessions} SESSION{dernier.sessions > 1 ? 'S' : ''}</span>
-            </div>
-            {dernier.meilleur != null && (
-              <div className="rang">
-                <span className="libelle">Meilleur tour</span>
-                <span className="chiffre hud-40 miami">{formaterChrono(dernier.meilleur)}</span>
-              </div>
+        </div>
+        <button className="bouton" onClick={onNouveau}>Saisir mon premier roulage</button>
+      </>
+    )
+  }
+
+  const r = src.roulage
+  const aVenir = src.genre === 'a_venir'
+
+  return (
+    <>
+      <div className="bloc pile" onClick={() => onOuvrir(r.id)}>
+        <div className="rang">
+          <span className="libelle">{aVenir ? 'Prochain roulage' : 'Dernier roulage'}</span>
+          {/* « dans 12 jours » et « il y a 3 jours » énoncent. Ni « plus que »,
+              ni « encore », ni « reste » — ces mots-là fabriquent une pression. */}
+          <span className="hud-16 miami">
+            {aVenir ? direAVenir(src.jours) : direPasse(src.jours)}
+          </span>
+        </div>
+
+        <div className="titre">{r.circuit_nom}</div>
+
+        {aVenir ? (
+          // FR-12 : sur un roulage à venir, le seul chiffre qui a du sens est le
+          // meilleur tour DÉJÀ FAIT ICI. Pas un objectif, pas un écart à combler.
+          <div className="rang">
+            <span className="libelle">
+              {src.meilleurIci != null ? 'Ton meilleur tour ici' : 'Jamais roulé ici'}
+            </span>
+            {src.meilleurIci != null && (
+              <span className="chiffre hud-40 miami">{formaterChrono(src.meilleurIci)}</span>
             )}
           </div>
-          <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
-        </>
-      )}
+        ) : (
+          <>
+            {r.meilleur != null && (
+              <div className="rang">
+                <span className="libelle">Meilleur tour du jour</span>
+                <span className="chiffre hud-40 miami">{formaterChrono(r.meilleur)}</span>
+              </div>
+            )}
+            <div className="rang">
+              <span className="libelle">
+                {r.sessions} session{r.sessions > 1 ? 's' : ''}
+              </span>
+              {/* Le coût s'affiche s'il existe, et RIEN ne le réclame s'il
+                  manque : une source de l'accueil est ce qu'on a envie de voir,
+                  jamais ce qu'on a oublié de faire. */}
+              {r.cout_centimes > 0 && (
+                <span className="chiffre hud-16">{formaterEuros(r.cout_centimes)}</span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
     </>
+  )
+}
+
+/** La zone des chiffres — elle appartient au pilote. Elle porte sa saison, pas
+ *  la journée : la zone du dessus s'en charge déjà. */
+function ZoneChiffres({ liste }: { liste: Liste }) {
+  const chronos = liste.map((r) => r.meilleur).filter((m): m is number => m != null)
+  const meilleur = chronos.length ? Math.min(...chronos) : null
+  const circuits = new Set(liste.map((r) => r.circuit_nom)).size
+  return (
+    <div className="chiffres-saison">
+      <div>
+        <p className="et">roulages</p>
+        <p className="va">{liste.length}</p>
+      </div>
+      <div>
+        <p className="et">circuits</p>
+        <p className="va">{circuits}</p>
+      </div>
+      <div>
+        <p className="et">meilleur tour</p>
+        <p className="va">{meilleur != null ? formaterChrono(meilleur) : '—'}</p>
+      </div>
+    </div>
   )
 }
 

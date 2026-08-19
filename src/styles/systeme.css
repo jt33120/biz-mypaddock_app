@@ -339,3 +339,39 @@ body {
 .depense .texte { color: var(--encre-faible); font-size: 15px; }
 .depense .note { color: var(--encre-tenue); font-size: 13px; }
 .depense label.libelle { display: block; }
+
+/* La zone des chiffres de l'accueil — elle appartient au pilote, la zone du
+   dessus appartient au système (FR-15). La différence de propriété se voit :
+   celle-ci est une grille sobre, pas un bloc à liseré néon. */
+.chiffres-saison {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--filet);
+}
+.chiffres-saison > div { background: var(--surface); padding: 10px 11px; }
+.chiffres-saison .et {
+  font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--encre-tenue);
+}
+.chiffres-saison .va {
+  font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* Le conseil du jour et le plan si-alors. Volontairement DISCRETS : ni bloc à
+   liseré néon, ni chiffre, ni couleur d'accent. Ce ne sont pas des données du
+   pilote, ce sont des mots — et un mot mis en avant comme un record devient une
+   consigne. */
+.conseil {
+  display: flex; flex-direction: column; gap: 8px;
+  border-left: 2px solid var(--filet-vif); padding: 2px 0 2px 12px;
+}
+.conseil .texte { color: var(--encre-faible); font-size: 15px; line-height: 1.45; }
+.conseil.plan-pose { border-left-color: var(--record); }
+.conseil.plan-pose .texte { color: var(--encre); font-style: italic; }
+.conseil .rang { gap: 10px; align-items: center; }
+.conseil .rang .bouton { width: auto; flex: 1; }
+
+/* La tête de l'accueil. Compte et Sonde y vivent parce que ce ne sont PAS des
+   destinations du produit — un réglage et un instrument ne prennent pas la
+   place d'un lieu dans la barre basse. */
+.tete { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.tete .reglages { display: flex; gap: 14px; }
+.tete .reglages .lien { min-height: auto; padding: 2px 0; }
