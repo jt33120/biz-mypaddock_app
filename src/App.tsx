@@ -26,7 +26,13 @@ import {
 import { Compte } from './ecrans/Compte'
 import { Garage } from './ecrans/Garage'
 import { Legal } from './ecrans/Legal'
+import { Courbe } from './ecrans/Courbe'
+import { courbeDuCircuit, type Courbe as DonneesCourbe } from './db/courbe'
 import { evenements, viserEvenement, type Evenement } from './db/atelier'
+import {
+  chiffresChoisis, ETIQUETTES as ETIQUETTES_CHIFFRES, MAX as MAX_CHIFFRES,
+  poserChiffres, valeurs as valeursChiffres, type Cle,
+} from './db/chiffres'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 
@@ -51,6 +57,9 @@ export default function App() {
   const [bilan, setBilan] = useState<Bilan>(null)
   const [cout, setCout] = useState<CoutRoulage | null>(null)
   const [matiere, setMatiere] = useState<Matiere | null>(null)
+  // Épique 11 : elle s'allume sur une CONDITION OBSERVABLE — trois roulages
+  // chronométrés sur ce circuit — et jamais sur une date.
+  const [courbe, setCourbe] = useState<DonneesCourbe | null>(null)
   const [identite, setIdentite] = useState<Identite | null>(null)
   const [src, setSrc] = useState<Source | null>(null)
   const [conseil, setConseil] = useState<string | null>(null)
@@ -183,6 +192,7 @@ export default function App() {
     const b = await bilanRoulage(db, id)
     setBilan(b)
     setCout(b ? await coutDuRoulage(db, id, anneeSaison(b.date)) : null)
+    setCourbe(b ? await courbeDuCircuit(db, b.circuit) : null)
     return b
   }
 
@@ -196,7 +206,7 @@ export default function App() {
       <div className="sol" aria-hidden />
       <div className="ecran">
         {ecran === 'accueil' && (
-          <Accueil src={src} liste={liste} conseil={conseil} plan={plan}
+          <Accueil db={db} src={src} conseil={conseil} plan={plan}
                    onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan}
                    onPlan={async (t) => { await poserPlan(db, t); await rafraichir(db) }}
                    onEcarter={() => { ecarterInvite(); void rafraichir(db) }}
@@ -227,7 +237,7 @@ export default function App() {
         )}
         {ecran === 'bilan' && bilan && courant && (
           <BilanEcran
-            b={bilan} cout={cout}
+            b={bilan} cout={cout} courbe={courbe}
             onSession={() => setEcran('session')}
             onAccueil={() => setEcran('accueil')}
             onDepense={() => setEcran('depense')}
@@ -298,8 +308,8 @@ export default function App() {
    FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
    échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
    rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
-function Accueil({ src, liste, conseil, plan, onNouveau, onOuvrir, onPlan, onEcarter, onCompte, onSonde, onLegal }: {
-  src: Source | null; liste: Liste; conseil: string | null; plan: EtatPlan | null
+function Accueil({ db, src, conseil, plan, onNouveau, onOuvrir, onPlan, onEcarter, onCompte, onSonde, onLegal }: {
+  db: Db; src: Source | null; conseil: string | null; plan: EtatPlan | null
   onNouveau: () => void; onOuvrir: (id: string) => void
   onPlan: (texte: string) => Promise<void>; onEcarter: () => void
   onCompte: () => void; onSonde: () => void; onLegal: () => void
@@ -318,7 +328,7 @@ function Accueil({ src, liste, conseil, plan, onNouveau, onOuvrir, onPlan, onEca
         </nav>
       </header>
       <ZoneTemporelle src={src} onNouveau={onNouveau} onOuvrir={onOuvrir} />
-      {src && src.genre !== 'vide' && <ZoneChiffres liste={liste} />}
+      {src && src.genre !== 'vide' && <ZoneChiffres db={db} />}
       {conseil && <Conseil texte={conseil} />}
       {plan && <Plan etat={plan} onPlan={onPlan} onEcarter={onEcarter} />}
     </>
@@ -573,25 +583,57 @@ function Evenements({ db, onEcrit }: { db: Db; onEcrit: () => void }) {
 
 /** La zone des chiffres — elle appartient au pilote. Elle porte sa saison, pas
  *  la journée : la zone du dessus s'en charge déjà. */
-function ZoneChiffres({ liste }: { liste: Liste }) {
-  const chronos = liste.map((r) => r.meilleur).filter((m): m is number => m != null)
-  const meilleur = chronos.length ? Math.min(...chronos) : null
-  const circuits = new Set(liste.map((r) => r.circuit_nom)).size
+/**
+ * LA ZONE DES CHIFFRES — FR-15, la seule moitié de l'accueil qui appartient au
+ * pilote. Deux clauses la tiennent, et elles se voient :
+ *   · la disposition par défaut est complète et utilisable telle quelle ;
+ *   · le réarrangement n'est JAMAIS une étape d'installation — pas d'assistant,
+ *     pas d'invite, pas de pastille. Un lien discret, sous la zone, pour qui
+ *     le cherche.
+ */
+function ZoneChiffres({ db }: { db: Db }) {
+  const [choisis, setChoisis] = useState<Cle[]>(chiffresChoisis)
+  const [vals, setVals] = useState<Record<Cle, string> | null>(null)
+  const [regler, setRegler] = useState(false)
+  useEffect(() => { void valeursChiffres(db).then(setVals) }, [db])
+  if (!vals) return null
+
+  const basculer = (c: Cle) => {
+    const l = choisis.includes(c)
+      // On ne descend jamais sous UN chiffre : une zone vide sous-délivre, et
+      // un écran qui sous-délivre signale l'abandon (FR-14).
+      ? (choisis.length > 1 ? choisis.filter((x) => x !== c) : choisis)
+      : (choisis.length < MAX_CHIFFRES ? [...choisis, c] : choisis)
+    setChoisis(l); poserChiffres(l)
+  }
+
   return (
-    <div className="chiffres-saison">
-      <div>
-        <p className="et">roulages</p>
-        <p className="va">{liste.length}</p>
+    <>
+      <div className="chiffres-saison">
+        {choisis.map((c) => (
+          <div key={c}>
+            <p className="et">{ETIQUETTES_CHIFFRES[c]}</p>
+            <p className="va">{vals[c]}</p>
+          </div>
+        ))}
       </div>
-      <div>
-        <p className="et">circuits</p>
-        <p className="va">{circuits}</p>
-      </div>
-      <div>
-        <p className="et">meilleur tour</p>
-        <p className="va">{meilleur != null ? formaterChrono(meilleur) : '—'}</p>
-      </div>
-    </div>
+      {regler ? (
+        <div className="bloc pile">
+          <div className="libelle">ce que tu veux voir · {choisis.length} sur {MAX_CHIFFRES}</div>
+          <div className="puces">
+            {(Object.keys(ETIQUETTES_CHIFFRES) as Cle[]).map((c) => (
+              <button key={c} className="puce" data-actif={choisis.includes(c) ? '1' : '0'}
+                      onClick={() => basculer(c)}>
+                {ETIQUETTES_CHIFFRES[c].toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <button className="lien" onClick={() => setRegler(false)}>Terminé</button>
+        </div>
+      ) : (
+        <button className="lien discret" onClick={() => setRegler(true)}>changer ces chiffres</button>
+      )}
+    </>
   )
 }
 
@@ -774,8 +816,9 @@ function Session({ onValider, onAnnuler }: { onValider: (ms: number) => void; on
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ b, cout, photos, onSession, onAccueil, onDepense, onRecap, onBudget }: {
-  b: NonNullable<Bilan>; cout: CoutRoulage | null; photos: React.ReactNode
+function BilanEcran({ b, cout, courbe, photos, onSession, onAccueil, onDepense, onRecap, onBudget }: {
+  b: NonNullable<Bilan>; cout: CoutRoulage | null; courbe: DonneesCourbe | null
+  photos: React.ReactNode
   onSession: () => void; onAccueil: () => void; onDepense: () => void; onRecap: () => void
   onBudget: (centimes: number) => Promise<void>
 }) {
@@ -812,6 +855,13 @@ function BilanEcran({ b, cout, photos, onSession, onAccueil, onDepense, onRecap,
           <span className="chiffre hud-24">{b.sessions}</span>
         </div>
       </div>
+
+      {/* FR-20 — elle n'apparaît QUE quand elle a de quoi dire quelque chose.
+          Une courbe de deux points fait toujours une droite, donc toujours une
+          progression ou toujours une chute : le pilote y lirait un mouvement
+          qui n'existe pas. Rien ne signale son absence, et rien n'annonce ce
+          qu'il faudrait faire pour la voir apparaître. */}
+      {courbe && <Courbe d={courbe} />}
 
       {photos}
 

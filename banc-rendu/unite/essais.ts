@@ -19,6 +19,7 @@ import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
 import { PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
 import { effacerLesReglages } from '../../src/db/effacer'
+import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
@@ -264,6 +265,13 @@ const essais = [
     egal(localStorage.getItem('autre-produit.reglage'), 'à garder', 'une clé étrangère est partie')
     egal(localStorage.getItem('sb-xyz-auth-token'), 'à garder', 'une clé étrangère est partie')
     localStorage.removeItem('autre-produit.reglage'); localStorage.removeItem('sb-xyz-auth-token')
+  }),
+
+  /* ─── LA COURBE — la condition d'allumage ─────────────────────────────── */
+  doit("la courbe demande trois points, jamais deux", () => {
+    // Deux points font TOUJOURS une droite, donc toujours une progression ou
+    // toujours une chute. Le pilote y lirait un mouvement qui n'existe pas.
+    egal(POINTS_MINIMUM, 3)
   }),
 ]
 

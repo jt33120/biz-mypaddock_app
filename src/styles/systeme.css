@@ -239,6 +239,16 @@ body {
 .legal .note { max-width: 62ch; }
 .legal .lien { display: inline; padding: 0; }
 
+/* Le lien de réarrangement est DISCRET par exigence, pas par goût : FR-15
+   interdit qu'il ressemble à une étape d'installation. Il se trouve quand on le
+   cherche et ne se remarque pas quand on ne le cherche pas. */
+.lien.discret { font-size: 11px; color: var(--encre-tenue); align-self: flex-start; }
+
+/* LA COURBE. Rien de lissé, rien de flou : `crispEdges` sur le tracé comme sur
+   les points, et une hauteur fixe pour que trois roulages et quinze occupent la
+   même place — sinon l'écran saute d'une ouverture à l'autre. */
+.courbe .trace { width: 100%; height: 120px; display: block; }
+
 /* ─── SÉMANTIQUE — le signe porte le sens, jamais la couleur seule ────────── */
 .mieux { color: var(--mieux) } .plus-lent { color: var(--plus-lent) }
 .record { color: var(--record) } .record-texte { color: var(--record-clair) }
