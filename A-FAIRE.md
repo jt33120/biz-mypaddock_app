@@ -75,7 +75,35 @@ demande aucune relecture juridique tant que le service reste gratuit et sans tra
 
 ---
 
-## 5 · Ce qui demandera ta relecture, pas ton action
+## 5 · Le service de récolte — écrit, jamais déployé
+
+**Ce qui attend :** déployer `recolte/` sur Railway, y poser `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY` et `MISTRAL_API_KEY`, puis remplir la table `source_recolte`
+avec les pages à lire.
+
+**Pourquoi je ne l'ai pas fait :** un service déployé qui tourne coûte de l'argent en
+continu, et celui-ci appelle une API d'extraction à chaque tour. Ce n'est pas à moi de
+l'allumer. Il est écrit, testé à vide, et **il refuse tout tant que `MISTRAL_API_KEY` est
+absente** — même interrupteur que la fabrique d'images : déployable sans qu'un euro puisse
+partir.
+
+**Ce que ça débloque :** les barèmes constructeur (donc les horloges d'usure avec un vrai
+intervalle au lieu d'un compteur sans échéance) et les calendriers d'organisateurs (donc les
+roulages proposés en brouillon, et les règles de conformité de la checklist).
+
+**Ce qu'il ne fera jamais :** écraser une correction du pilote. Une ligne marquée
+`corrige_par_pilote` n'est pas réécrite — une extraction par IA est une reconstruction, pas
+une transcription, et c'est le seul endroit du produit où l'erreur touche la sécurité d'une
+machine. Le déclenchement est un appel HTTP, pas une horloge interne : un service qui tourne
+tout seul est un service dont on ne voit pas la dépense.
+
+**Précaution :** il n'y a **aucune source dans la table**. Tant qu'elle est vide, un tour de
+récolte ne lit rien et n'appelle rien. C'est à toi de décider quelles pages sont lisibles et
+si leurs conditions d'utilisation le permettent.
+
+---
+
+## 6 · Ce qui demandera ta relecture, pas ton action
 
 - **Le contenu des conseils** (récit 6.3). Six conseils embarqués tiennent la clause de forme
   — chacun énonce une technique, aucun ne fixe une performance — mais ils sont provisoires et
