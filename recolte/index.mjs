@@ -37,6 +37,18 @@ const CONF = {
    *  et c'est la leçon du 19 août : le vrai danger n'était pas le prix
    *  unitaire, c'était qu'une dépense ait lieu sans être visible. */
   plafondAppels: Number(process.env.RECOLTE_PLAFOND ?? 20),
+  /** ⚠ LE JETON DE DÉCLENCHEMENT. Sans lui, `/recolter` était un POST PUBLIC
+   *  sur une URL Railway : n'importe qui la trouvant pouvait lancer un tour de
+   *  récolte, donc dépenser des jetons Mistral, autant de fois qu'il voulait.
+   *
+   *  Le défaut était invisible tant que `MISTRAL_API_KEY` manquait — la
+   *  fonction refusait avant tout appel. C'est précisément ce qui le rendait
+   *  dangereux : il ne se serait révélé qu'au moment où Julian pose la clé,
+   *  c'est-à-dire au moment exact où il commence à coûter.
+   *
+   *  Il ÉCHOUE FERMÉ : jeton absent = tout déclenchement refusé. Un secret dont
+   *  l'absence ouvre la porte n'est pas un secret. */
+  jeton: process.env.RECOLTE_JETON,
 }
 
 const journal = (...m) => console.log(new Date().toISOString(), ...m)
@@ -45,7 +57,25 @@ const journal = (...m) => console.log(new Date().toISOString(), ...m)
 export const pretARecolter = () => {
   if (!CONF.supabaseUrl || !CONF.serviceKey) return 'base non configurée'
   if (!CONF.mistral) return 'MISTRAL_API_KEY absente — aucune extraction possible'
+  if (!CONF.jeton) return 'RECOLTE_JETON absent — aucun déclenchement autorisé'
   return null
+}
+
+/**
+ * Le porteur du jeton, comparé EN TEMPS CONSTANT.
+ *
+ * Une comparaison `===` sur des chaînes s'arrête au premier caractère qui
+ * diffère : le temps de réponse fuit alors la longueur du préfixe correct, et
+ * un jeton se devine caractère par caractère. Le surcoût d'un XOR complet est
+ * nul à cette échelle ; l'économiser serait une économie contre soi.
+ */
+const jetonValide = (entete) => {
+  if (!CONF.jeton) return false
+  const donne = (entete ?? '').replace(/^Bearer /, '')
+  if (donne.length !== CONF.jeton.length) return false
+  let diff = 0
+  for (let i = 0; i < donne.length; i++) diff |= donne.charCodeAt(i) ^ CONF.jeton.charCodeAt(i)
+  return diff === 0
 }
 
 const SCHEMA_BAREME = `Rends UNIQUEMENT un tableau JSON, sans texte autour, de la forme :
@@ -180,12 +210,23 @@ if (process.env.NODE_ENV !== 'test') {
   const port = Number(process.env.PORT ?? 3000)
   const { createServer } = await import('node:http')
   createServer(async (req, res) => {
+    // `/sante` reste ouvert : il ne dit QUE si le service est prêt, ne récolte
+    // rien, n'appelle rien et ne coûte rien. C'est ce que Railway interroge
+    // pour savoir si le conteneur est vivant.
     if (req.url === '/sante') {
       const s = pretARecolter()
       res.writeHead(200, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify({ pret: !s, refus: s }))
     }
     if (req.url === '/recolter' && req.method === 'POST') {
+      // ⚠ LE JETON EST VÉRIFIÉ AVANT TOUT, y compris avant l'interrupteur de
+      // clé. Sans lui, cette route était un POST public sur une URL Railway :
+      // quiconque la trouvait pouvait dépenser des jetons Mistral en boucle.
+      if (!jetonValide(req.headers.authorization)) {
+        journal('déclenchement refusé — jeton absent ou faux')
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        return res.end(JSON.stringify({ refus: 'jeton' }))
+      }
       const b = await recolter()
       res.writeHead(b.refus ? 503 : 200, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify(b))
