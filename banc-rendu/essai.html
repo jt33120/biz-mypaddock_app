@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Essai de variante</title>
+<style>
+  :root { --nuit:#070B1A; --nuit2:#0C1228; --encre:#EDF3FF; --faible:#8FA3CE; --miami:#3DE0FF; --alerte:#FF5C5C }
+  * { box-sizing:border-box; margin:0 }
+  body { background:var(--nuit); color:var(--encre); font:13px/1.4 ui-monospace,Menlo,monospace; padding:18px }
+  h1 { font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--miami) }
+  .sous { color:var(--faible); font-size:12px; margin:5px 0 14px }
+  .rangee { display:grid; grid-template-columns:230px 230px 230px 1fr; gap:12px; padding:12px 0;
+            border-top:1px solid rgba(120,150,255,.18) }
+  .vign { width:230px; height:230px; display:grid; place-items:center; overflow:hidden;
+          /* Damier : le fond détouré est TRANSPARENT, il faut le voir comme tel. Un aplat
+             sombre donnerait l'illusion d'un détourage propre. */
+          background-image:linear-gradient(45deg,#1b2340 25%,transparent 25%,transparent 75%,#1b2340 75%),
+                           linear-gradient(45deg,#1b2340 25%,transparent 25%,transparent 75%,#1b2340 75%);
+          background-size:16px 16px; background-position:0 0,8px 8px; background-color:#111830 }
+  canvas { image-rendering:pixelated; display:block }
+  .etiq { color:var(--faible); font-size:10px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:5px }
+  .fiche div { color:var(--faible); margin:3px 0 } .fiche b { color:var(--encre) }
+  .ko { color:var(--alerte) }
+</style>
+<h1 id="titre">essai de variante</h1>
+<p class="sous" id="desc"></p>
+<div id="grille"></div>
+<script type="module" src="./essai.js"></script>

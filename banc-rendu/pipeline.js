@@ -111,7 +111,7 @@ function moyennerParBloc(px, w, h, bloc) {
 }
 
 // --------------------------------------- étape 3 : mesurer les deux teintes dominantes
-function teintes(g, gw, gh) {
+function teintes(g, gw, gh, masque = null) {
   // Histogramme circulaire pondéré par la chroma. 36 secteurs de 10°.
   //
   // ET pondéré par la POSITION, ce qui n'est pas une coquetterie : sur IMG_9245, une moto
@@ -123,7 +123,10 @@ function teintes(g, gw, gh) {
   for (let i = 0; i < gw * gh; i++) {
     const gx = i % gw, gy = (i / gw) | 0
     const dx = (gx / (gw - 1 || 1)) * 2 - 1, dy = (gy / (gh - 1 || 1)) * 2 - 1
-    const poidsPos = Math.max(0, 1 - (dx * dx + dy * dy) * 0.75)
+    // Hors machine, aucun vote : un fond détouré ne doit pas colorer la moto.
+    if (masque && !masque[i]) continue
+    // Sans masque, la pondération centrale reste le garde-fou approximatif.
+    const poidsPos = masque ? 1 : Math.max(0, 1 - (dx * dx + dy * dy) * 0.75)
     if (poidsPos <= 0) continue
     const r = g[i * 3] / 255, v = g[i * 3 + 1] / 255, b = g[i * 3 + 2] / 255
     const max = Math.max(r, v, b), min = Math.min(r, v, b)
@@ -187,7 +190,7 @@ function luminance(r, v, b) { return (0.2126 * r + 0.7152 * v + 0.0722 * b) / 25
 //      plein ne donne qu'une quinzaine de cellules de roue, où aucun rayon n'est possible ;
 //   3. le paddock, le camion et la remorque sortent de l'image.
 // Absent ou peu sûr, on retombe sur le cadre plein : le rendu dégrade, il ne casse pas.
-export function rendre(bitmap, cadre = null) {
+export function rendre(bitmap, cadre = null, masqueFn = null) {
   const t0 = performance.now()
   const marge = REGLAGES.marge
   let sx = 0, sy = 0, sl = bitmap.width, sh = bitmap.height
@@ -209,13 +212,39 @@ export function rendre(bitmap, cadre = null) {
   const px = cx.getImageData(0, 0, dl, dh).data
   bitmap = { width: dl, height: dh }
 
+  // Le détourage, s'il est fourni. Il travaille sur le recadré en pleine résolution, puis
+  // sa décision est ramenée à la grille par vote majoritaire — décider à la résolution du
+  // bloc donnerait un bord en escalier de 4 px.
+  let masqueFin = null
+  if (masqueFn) {
+    try { masqueFin = masqueFn(px, dl, dh) } catch { masqueFin = null }
+    if (masqueFin && masqueFin.length !== dl * dh) masqueFin = null
+  }
+
   const { g, gw, gh } = moyennerParBloc(px, bitmap.width, bitmap.height, REGLAGES.bloc)
-  const t = teintes(g, gw, gh)
+
+  // Vote majoritaire du masque sur chaque bloc, et — point qui compte — la teinte se mesure
+  // ENSUITE sur les seuls blocs de machine. C'est là que le détourage paie deux fois : il
+  // enlève le fond de l'image ET il le retire du vote de couleur.
+  let masque = null
+  if (masqueFin) {
+    masque = new Uint8Array(gw * gh)
+    for (let gy = 0; gy < gh; gy++) {
+      for (let gx = 0; gx < gw; gx++) {
+        let n = 0, tot = 0
+        const y1 = Math.min(dh, (gy + 1) * REGLAGES.bloc), x1 = Math.min(dl, (gx + 1) * REGLAGES.bloc)
+        for (let y = gy * REGLAGES.bloc; y < y1; y++)
+          for (let x = gx * REGLAGES.bloc; x < x1; x++) { tot++; n += masqueFin[y * dl + x] }
+        masque[gy * gw + gx] = n * 2 >= tot ? 1 : 0
+      }
+    }
+  }
+  const t = teintes(g, gw, gh, masque)
   const pal = palette(t)
 
-  // Sobel sur la luminance de la grille. C'est ce passage qui décide si les rayons
-  // sont des rayons et si le disque est perforé : sans trait, la quantification
-  // les aplatit dans le fond.
+  // Sobel sur la luminance de la grille. C'est ce passage qui pose le trait intérieur.
+  // Détouré, il ne doit PAS courir le long de la silhouette : le bord du masque est déjà
+  // une frontière, un trait par-dessus ferait une bavure noire de deux blocs.
   const lum = new Float32Array(gw * gh)
   for (let i = 0; i < gw * gh; i++) lum[i] = luminance(g[i * 3], g[i * 3 + 1], g[i * 3 + 2])
   const bord = new Uint8Array(gw * gh)
@@ -224,6 +253,12 @@ export function rendre(bitmap, cadre = null) {
       const L = (dx, dy) => lum[(y + dy) * gw + (x + dx)]
       const sx = -L(-1, -1) - 2 * L(-1, 0) - L(-1, 1) + L(1, -1) + 2 * L(1, 0) + L(1, 1)
       const sy = -L(-1, -1) - 2 * L(0, -1) - L(1, -1) + L(-1, 1) + 2 * L(0, 1) + L(1, 1)
+      if (masque) {
+        const i0 = y * gw + x
+        if (!masque[i0]) continue
+        // Un bloc de machine touchant le fond est déjà une frontière : pas de trait dessus.
+        if (!masque[i0 - 1] || !masque[i0 + 1] || !masque[i0 - gw] || !masque[i0 + gw]) continue
+      }
       if (Math.hypot(sx, sy) > REGLAGES.contour * 4) bord[y * gw + x] = 1
     }
   }
@@ -233,6 +268,13 @@ export function rendre(bitmap, cadre = null) {
   const img = ox.createImageData(gw, gh)
   for (let i = 0; i < gw * gh; i++) {
     let couleur
+    // Le fond détouré devient transparent : c'est la scène du garage qui fournit le décor,
+    // pas la photo. Un fond peint en aplat sombre paraîtrait propre ici et se verrait dès
+    // qu'on le poserait sur autre chose.
+    if (masque && !masque[i]) {
+      img.data[i * 4 + 3] = 0
+      continue
+    }
     if (bord[i]) couleur = TRAIT
     else {
       let best = 0, d = Infinity
@@ -249,11 +291,11 @@ export function rendre(bitmap, cadre = null) {
   return { canvas: out, gw, gh, teintes: t, palette: pal, ms: performance.now() - t0 }
 }
 
-export async function pipeline(source, cadre = null) {
+export async function pipeline(source, cadre = null, masqueFn = null) {
   // Le chrono couvre la réduction ET le rendu : sur une photo de 48 Mpx c'est le
   // décodage qui coûte, pas la quantification. Mesurer le seul rendu mentirait.
   const t0 = performance.now()
   const bitmap = await reduire(source)
-  const r = rendre(bitmap, cadre)
+  const r = rendre(bitmap, cadre, masqueFn)
   return { ...r, source: bitmap, ms: performance.now() - t0, msRendu: r.ms }
 }

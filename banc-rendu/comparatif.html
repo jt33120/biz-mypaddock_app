@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Comparatif</title>
+<style>
+  body { background:#070B1A; color:#EDF3FF; font:12px/1.4 ui-monospace,Menlo,monospace; padding:16px; margin:0 }
+  h1 { font-size:13px; letter-spacing:.14em; color:#3DE0FF; text-transform:uppercase }
+  table { border-collapse:collapse; margin-top:12px }
+  th { color:#8FA3CE; font-size:10px; letter-spacing:.1em; text-transform:uppercase; font-weight:400; padding:6px 4px }
+  td { padding:5px; vertical-align:top }
+  .cell { width:210px; height:210px; display:grid; place-items:center; overflow:hidden;
+          background-image:linear-gradient(45deg,#1b2340 25%,transparent 25%,transparent 75%,#1b2340 75%),
+                           linear-gradient(45deg,#1b2340 25%,transparent 25%,transparent 75%,#1b2340 75%);
+          background-size:14px 14px; background-position:0 0,7px 7px; background-color:#111830 }
+  canvas,img { image-rendering:pixelated; display:block }
+  .src img { image-rendering:auto }
+  .lg { color:#8FA3CE; font-size:10px; text-align:center; padding-top:3px }
+</style>
+<h1>Comparatif — une ligne par photo, une colonne par approche</h1>
+<div id="sortie"></div>
+<script type="module" src="./comparatif.js"></script>

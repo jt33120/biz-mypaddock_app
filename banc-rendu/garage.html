@@ -1,0 +1,141 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Garage</title>
+<link rel="stylesheet" href="../src/styles/fontes.css">
+<style>
+  /* Jetons repris de src/styles/systeme.css — c'est le même produit, pas une maquette à part. */
+  :root {
+    --nuit:#070B1A; --nuit-2:#0C1228; --violet-nuit:#1A1140; --horizon:#3A1550;
+    --surface:rgba(18,24,52,.72); --surface-haute:rgba(28,36,74,.80);
+    --filet:rgba(120,150,255,.18); --filet-vif:rgba(61,224,255,.55);
+    --encre:#EDF3FF; --encre-faible:#8FA3CE; --encre-tenue:#55648F;
+    --miami:#3DE0FF; --magenta:#FF2E9A; --chaud:#FF7A3C;
+    --mieux:#2BE88A; --plus-lent:#FFD23F;
+    --face:'Chakra Petch',system-ui,sans-serif;
+  }
+  * { box-sizing:border-box; margin:0 }
+  body {
+    width:390px; height:844px; overflow:hidden;
+    background:
+      radial-gradient(120% 60% at 50% 78%, var(--horizon) 0%, transparent 62%),
+      linear-gradient(180deg, var(--nuit) 0%, var(--violet-nuit) 62%, var(--nuit-2) 100%);
+    color:var(--encre); font-family:var(--face); font-weight:400;
+    display:flex; flex-direction:column;
+  }
+  .barre {
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:16px 18px 10px; font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--encre-tenue);
+  }
+  .barre b { color:var(--miami); font-weight:600 }
+
+  /* L'axe machine : le garage contient plusieurs véhicules (FR-2, AD-2). */
+  .onglets { display:flex; gap:0; padding:0 18px; border-bottom:1px solid var(--filet) }
+  .onglet {
+    padding:8px 14px 10px; font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+    color:var(--encre-tenue); border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .onglet.actif { color:var(--encre); border-bottom-color:var(--miami) }
+
+  .titre { padding:18px 18px 0 }
+  .marque { font-size:11px; letter-spacing:.20em; text-transform:uppercase; color:var(--miami) }
+  .modele { font-size:26px; font-weight:600; line-height:1.1; margin-top:3px; letter-spacing:-.01em }
+
+  /* La scène. Une seule ligne d'horizon lumineuse — le fond n'est jamais noir plat. */
+  /* La scène : la machine remplit, et l'horizon passe SOUS elle, à hauteur du contact des
+     pneus, pour qu'elle soit posée et non flottante. */
+  .scene { position:relative; flex:1; display:grid; place-items:center; min-height:0; padding:0 8px }
+  .scene::before {
+    content:''; position:absolute; left:4%; right:4%; bottom:31%; height:1px; z-index:0;
+    background:linear-gradient(90deg, transparent, var(--filet-vif) 18%, var(--filet-vif) 82%, transparent);
+    box-shadow:0 0 12px 1px rgba(61,224,255,.35);
+  }
+  .scene canvas {
+    position:relative; z-index:1; display:block;
+    width:100%; height:auto; max-height:76%; object-fit:contain;
+    /* Le reflet appartient à la SCÈNE de l'application, pas à l'image générée : sinon deux
+       sols et deux horizons se contredisent, ce qui était le défaut de v1. Il reste faible —
+       un reflet marqué renvoie les faux textes du carénage en miroir, donc les souligne. */
+    -webkit-box-reflect:below 1px linear-gradient(transparent 74%, rgba(255,255,255,.07));
+  }
+
+  /* Les chiffres montent sur la MACHINE, jamais sur le pilote. */
+  .chiffres {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--filet);
+    margin:0 18px;
+  }
+  .chiffres div { background:var(--surface); padding:11px 12px }
+  .et { font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--encre-tenue) }
+  .va {
+    font-size:21px; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:.01em;
+    margin-top:2px;
+  }
+  .va small { font-size:11px; font-weight:400; color:var(--encre-faible); letter-spacing:.06em }
+
+  .etat { margin:12px 18px 0; padding:11px 13px; background:var(--surface); border-left:2px solid var(--mieux) }
+  .etat .q { font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--encre-tenue) }
+  .etat .r { font-size:14px; margin-top:3px }
+  .etat .r b { color:var(--mieux); font-weight:600 }
+
+  .pied {
+    display:flex; gap:1px; background:var(--filet); margin:14px 0 0;
+    border-top:1px solid var(--filet);
+  }
+  .pied a {
+    flex:1; background:var(--nuit-2); padding:13px 0 16px; text-align:center;
+    font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--encre-tenue);
+    text-decoration:none;
+  }
+  .pied a.actif { color:var(--miami) }
+</style>
+<div class="barre"><span>garage</span><span><b>2</b> machines</span></div>
+<div class="onglets">
+  <div class="onglet actif" id="o1"></div>
+  <div class="onglet" id="o2"></div>
+</div>
+<div class="titre">
+  <p class="marque" id="marque"></p>
+  <h1 class="modele" id="modele"></h1>
+</div>
+<div class="scene"><canvas id="moto"></canvas></div>
+<div class="chiffres">
+  <div><p class="et">kilomètres</p><p class="va" id="km"></p></div>
+  <div><p class="et">roulages</p><p class="va" id="roul"></p></div>
+  <div><p class="et">meilleur tour</p><p class="va" id="tour"></p></div>
+</div>
+<div class="etat">
+  <p class="q">état</p>
+  <p class="r" id="etat"></p>
+</div>
+<nav class="pied">
+  <a href="#" class="actif">Garage</a><a href="#">Roulages</a><a href="#">Atelier</a><a href="#">Saison</a>
+</nav>
+<script type="module">
+  import { detacher } from './cle-verte.js'
+  const p = new URLSearchParams(location.search)
+  document.getElementById('marque').textContent = p.get('marque') || ''
+  document.getElementById('modele').textContent = p.get('modele') || ''
+  document.getElementById('o1').textContent = p.get('o1') || ''
+  document.getElementById('o2').textContent = p.get('o2') || ''
+  document.getElementById('km').innerHTML = p.get('km') || ''
+  document.getElementById('roul').innerHTML = p.get('roul') || ''
+  document.getElementById('tour').innerHTML = p.get('tour') || ''
+  document.getElementById('etat').innerHTML = p.get('etat') || ''
+
+  // Le fond vert commandé au modèle est retiré ici, côté client. C'est exactement ce que
+  // fera l'application : le sprite arrive une fois, il est détaché une fois, puis conservé.
+  const src = new Image()
+  src.onload = () => {
+    const cible = document.getElementById('moto')
+    const r = p.get('brut') === '1'
+      ? { canvas: null, w: src.naturalWidth, h: src.naturalHeight }
+      : detacher(src)
+    const cx = cible.getContext('2d')
+    cible.width = r.w; cible.height = r.h
+    cx.drawImage(r.canvas ?? src, 0, 0)
+    window.__couverture = r.couverture ?? null
+    window.__pret = true
+  }
+  src.onerror = () => { window.__pret = true; window.__erreur = 'image illisible' }
+  src.src = p.get('img')
+</script>
