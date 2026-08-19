@@ -7,6 +7,7 @@ import {
 import { adopter, estAdopte, etatLocal, type BilanEnvoi, type Refus } from '../db/sauvegarde'
 import { powersyncConfigure } from '../db/connecteur'
 import { accepterMesures, mesuresAcceptees } from '../db/mesures'
+import { composer as composerEmport, formaterPoids, peser, type Poids } from '../db/emporter'
 
 /**
  * L'ÉCRAN DU COMPTE — récit 1.2.
@@ -27,25 +28,117 @@ import { accepterMesures, mesuresAcceptees } from '../db/mesures'
 type Etape = 'formulaire' | 'confirmation'
 
 export function Compte({ db, identite }: { db: PowerSyncDatabase; identite: Identite | null }) {
-  if (!supabaseConfigure) {
-    return (
-      <section className="compte">
-        <p className="libelle">compte</p>
-        <h1 className="titre">Sauvegarde non configurée</h1>
-        <p className="texte">
-          Cette version ne connaît aucun serveur. Tout ce qui est saisi vit dans le téléphone,
-          et disparaîtrait avec lui.
-        </p>
-      </section>
-    )
-  }
   return (
     <>
-      {identite ? <Connecte db={db} identite={identite} /> : <Anonyme db={db} />}
-      {/* Hors des deux branches, et c'est le point : la mesure démarre à la
-          première ouverture, donc le refus doit être atteignable sans compte.
-          Un consentement qu'il faut mériter par une inscription n'en est pas un. */}
+      {!supabaseConfigure ? (
+        <section className="compte">
+          <p className="libelle">compte</p>
+          <h1 className="titre">Sauvegarde non configurée</h1>
+          <p className="texte">
+            Cette version ne connaît aucun serveur. Tout ce qui est saisi vit dans le téléphone,
+            et l'emport ci-dessous est alors la seule copie possible.
+          </p>
+        </section>
+      ) : identite ? <Connecte db={db} identite={identite} /> : <Anonyme db={db} />}
+
+      {/* HORS DES TROIS BRANCHES, et c'est tout l'intérêt : l'emport ne dépend
+          ni d'un compte, ni d'un serveur, ni même d'une configuration. Il est
+          le dernier filet précisément quand les autres ont cédé. */}
+      <section className="compte"><Emporter db={db} /></section>
+
+      {/* Hors des branches aussi, et pour la même famille de raisons : la mesure
+          démarre à la première ouverture, donc le refus doit être atteignable
+          sans compte. Un consentement qu'il faut mériter n'en est pas un. */}
       <section className="compte"><Mesures /></section>
+    </>
+  )
+}
+
+/* ─── EMPORTER SA SAISON — NFR-6, FR-27 ────────────────────────────────────
+   Ce que cet écran refuse de faire compte autant que ce qu'il fait : il
+   n'appelle aucun serveur, ne demande aucun compte, et n'annonce jamais un
+   poids qu'il n'a pas mesuré. */
+function Emporter({ db }: { db: PowerSyncDatabase }) {
+  const [poids, setPoids] = useState<Poids | null>(null)
+  const [fichier, setFichier] = useState<File | null>(null)
+  const [url, setUrl] = useState<string | null>(null)
+  const [souci, setSouci] = useState<string | null>(null)
+  const [occupe, setOccupe] = useState(false)
+
+  useEffect(() => { void peser(db).then(setPoids).catch(() => setPoids(null)) }, [db])
+
+  const emporter = async (avecPhotos: boolean) => {
+    setOccupe(true); setSouci(null)
+    let f: File
+    // DEUX ÉCHECS DISTINCTS, et les confondre produit un mensonge. Trouvé sur la
+    // capture de l'essai : `share()` échouait, et l'écran annonçait « le fichier
+    // n'a pas pu être composé » JUSTE AU-DESSUS du fichier composé, prêt à
+    // enregistrer. Composer et partager sont deux gestes ; seul le premier peut
+    // faire perdre quelque chose.
+    try {
+      f = await composerEmport(db, avecPhotos)
+    } catch (e) {
+      setSouci("Le fichier n'a pas pu être composé sur ce téléphone. Rien n'est perdu, "
+        + 'la saison est intacte. (' + (e as Error).message + ')')
+      setOccupe(false)
+      return
+    }
+    setFichier(f)
+    setUrl((ancienne) => { if (ancienne) URL.revokeObjectURL(ancienne); return URL.createObjectURL(f) })
+    // NFR-11 : `canShare` est testé avec L'OBJET EXACT qui sera partagé.
+    const charge: ShareData = { files: [f] }
+    if (navigator.canShare?.(charge)) {
+      // Un partage refusé, annulé ou indisponible ne se signale PAS : le fichier
+      // est déjà là, en dessous, et le pilote le voit. Annuler est un choix.
+      try { await navigator.share(charge) } catch { /* le repli est déjà à l'écran */ }
+    }
+    setOccupe(false)
+  }
+
+  if (!poids) return null
+  const vide = poids.lignes === 0
+
+  return (
+    <>
+      <p className="libelle">emporter ta saison</p>
+      <p className="texte">
+        Un fichier, composé dans ce téléphone et sans aucun réseau. Il porte ses propres
+        unités, donc il reste lisible sans MyPaddock — le jour où plus rien d'autre ne l'est.
+      </p>
+      <p className="libelle">
+        {vide ? 'rien de saisi pour le moment'
+          : `${poids.lignes} ligne${poids.lignes > 1 ? 's' : ''}`
+            + (poids.photos ? ` · ${poids.photos} photo${poids.photos > 1 ? 's' : ''}` : '')}
+      </p>
+
+      <button className="bouton" disabled={occupe || vide} onClick={() => void emporter(false)}>
+        {occupe ? 'composition…' : 'Emporter'}
+      </button>
+      {poids.photos > 0 && (
+        <button className="lien" disabled={occupe} onClick={() => void emporter(true)}>
+          {/* Le poids annoncé est celui DU FICHIER, pas celui des images : le
+              base64 gonfle d'un tiers, et annoncer 98 Ko pour en livrer 133
+              serait une estimation fausse là où le pilote décide sur elle. */}
+          avec les photos · ≈ {formaterPoids(Math.round(poids.octetsPhotos * 4 / 3))}
+        </button>
+      )}
+      {poids.photosAbsentes > 0 && (
+        <p className="note">
+          {poids.photosAbsentes} photo{poids.photosAbsentes > 1 ? 's' : ''} sans copie dans ce
+          téléphone : elle{poids.photosAbsentes > 1 ? 's vivent' : ' vit'} au serveur. Le fichier
+          le dit et donne le chemin, plutôt que de faire comme si de rien n'était.
+        </p>
+      )}
+
+      {souci && <p className="mot-erreur">{souci}</p>}
+      {fichier && url && (
+        <div className="bloc pile">
+          <div className="libelle">le fichier est prêt · {formaterPoids(fichier.size)}</div>
+          <a className="bouton secondaire" href={url} download={fichier.name}>
+            Enregistrer {fichier.name}
+          </a>
+        </div>
+      )}
     </>
   )
 }
