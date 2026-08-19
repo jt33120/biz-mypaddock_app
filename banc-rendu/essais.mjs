@@ -10,7 +10,7 @@ const lancer = (cmd, args) => new Promise((res) => {
 
 const BOUT_EN_BOUT = [
   'fumee', 'fumee-accueil', 'fumee-conseil', 'fumee-cout', 'fumee-instruments',
-  'fumee-confirmation', 'fumee-photo', 'fumee-recap', 'fumee-circuit', 'fumee-emport', 'fumee-portrait',
+  'fumee-confirmation', 'fumee-photo', 'fumee-recap', 'fumee-circuit', 'fumee-emport', 'fumee-portrait', 'fumee-atelier',
 ]
 
 console.log('\n═══ essais unitaires ═══')

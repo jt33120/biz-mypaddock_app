@@ -7,6 +7,7 @@ import {
 import { photoMachine, verserPhotoMachine } from '../db/photos'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
+import { Atelier } from './Atelier'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
 
 /**
@@ -245,6 +246,16 @@ export function Garage({ db, onEcrit }: {
         </>
       )}
       {souci && <p className="mot-erreur">{souci}</p>}
+
+      {/* L'ATELIER — épique 8. Il vit DANS le garage parce que c'est la machine
+          qui a un carnet, pas la journée. Trois listes séparées, jamais une. */}
+      {/* ⚠ `onEcrit` doit rafraîchir LE GARAGE AUSSI, pas seulement l'application.
+          Sans `charger()`, l'atelier écrivait un montant que la ligne « ce
+          qu'elle a coûté » ignorait jusqu'au prochain changement de machine.
+          Même défaut qu'au récit précédent, un cran plus bas : un écran qui ne
+          se rafraîchit pas ne se signale jamais. */}
+      <Atelier db={db} machineId={machine.id}
+               onEcrit={() => { void charger(); onEcrit() }} />
 
       <button className="lien" onClick={() => void importerSaison()}>
         Reprendre la saison 2026 · Pau-Arnos

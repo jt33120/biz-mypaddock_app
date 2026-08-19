@@ -215,6 +215,21 @@ body {
   image-rendering: auto;
 }
 
+/* L'ATELIER — trois blocs, et leur séparation est une clause de sécurité
+   (FR-46), pas un choix de mise en page. Chacun porte un liseré de teinte
+   distincte sur son bord gauche : à la lecture rapide, on ne peut pas prendre
+   une ligne d'entretien pour une ligne de cosmétique. */
+.atelier { gap: 8px; border-left: 3px solid var(--filet); }
+.atelier.entretien { border-left-color: var(--miami); }
+.atelier.amelioration { border-left-color: var(--encre-tenue); }
+.atelier.reparation_non_vitale { border-left-color: var(--magenta); }
+.atelier-tete {
+  background: none; border: none; padding: 0; width: 100%; cursor: pointer;
+  font-family: var(--face); text-align: left; min-height: 32px;
+}
+.ligne-atelier { align-items: center; gap: 10px; padding: 4px 0; }
+.ligne-atelier .texte { font-size: 15px; }
+
 /* ─── SÉMANTIQUE — le signe porte le sens, jamais la couleur seule ────────── */
 .mieux { color: var(--mieux) } .plus-lent { color: var(--plus-lent) }
 .record { color: var(--record) } .record-texte { color: var(--record-clair) }

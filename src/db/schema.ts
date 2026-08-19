@@ -103,12 +103,29 @@ const budget_saison = new Table({
   montant_centimes: column.integer,
 })
 
+// L'ATELIER — épique 8. `etat` porte à lui seul deux exigences que le PRD nomme
+// séparément : la pièce achetée non montée (FR-45) et la réparation non vitale
+// en attente (FR-48) sont le MÊME OBJET — un acte désiré, pas encore posé — et
+// se distinguent par leur catégorie, qui ne les mélange jamais dans une liste
+// (FR-46). `date_jour` est nulle tant que l'acte est visé : une intervention
+// visée n'a pas de date, c'est ce qui la définit.
 const intervention = new Table({
   machine_id: column.text,
   categorie: column.text,
+  etat: column.text,
   libelle: column.text,
   date_jour: column.text,
   cout_centimes: column.integer,
+  depense_id: column.text,
+  photo_id: column.text,
+})
+
+// FR-54 — « un objet léger, désiré avant d'être réservé ». Il ne touche pas la
+// machine : il vise une sortie. Sa pauvreté est le sujet, pas un manque.
+const evenement_vise = new Table({
+  libelle: column.text,
+  date_approx: column.text,
+  cout_estime_centimes: column.integer,
 })
 
 // ─── Instruments de bord (AD-16, AD-20) ───────────────────────────────────
@@ -207,6 +224,7 @@ export const AppSchema = new Schema({
   budget_saison,
   intervention,
   mesure,
+  evenement_vise,
   photo,
   geste,
   plan_si_alors,

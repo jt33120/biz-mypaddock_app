@@ -64,12 +64,29 @@ export const listerMachines = (db: PowerSyncDatabase) =>
 export const poserSprite = (db: PowerSyncDatabase, machineId: string, sprite: string | null) =>
   db.execute(`UPDATE machine SET sprite = ? WHERE id = ?`, [sprite, machineId])
 
-/** Ce que la machine a coûté : EXCLUSIVEMENT les dépenses dont la cible est cette machine.
- *  Jamais une jointure implicite par les roulages (AD-17). */
+/**
+ * Ce que la machine a coûté : EXCLUSIVEMENT ce qui la désigne. Jamais une
+ * jointure implicite par les roulages (AD-17).
+ *
+ * DEUX SOURCES, ET UNE SEULE FOIS CHACUNE. L'argent d'un geste d'atelier entre
+ * par deux portes — une dépense de cible « machine » (FR-26), ou le montant
+ * porté par l'intervention elle-même quand aucune dépense n'a été saisie
+ * (FR-43 : « consigner le geste ne dépend jamais d'avoir consigné l'argent »).
+ * Additionner les deux sans condition compterait DEUX FOIS une pièce dont on a
+ * fait les deux — d'où la clause `depense_id is null` : le montant de
+ * l'intervention ne compte que lorsqu'il est la seule trace de la somme.
+ *
+ * Trouvé à l'écran : le garage annonçait « — » sous « ce qu'elle a coûté »
+ * alors que 145,90 € venaient d'être consignés à l'atelier.
+ */
 export const coutMachine = async (db: PowerSyncDatabase, machineId: string) => {
   const r = await db.get<{ total: number | null }>(
-    `SELECT SUM(montant_centimes) AS total FROM depense WHERE cible = 'machine' AND machine_id = ?`,
-    [machineId],
+    `SELECT (SELECT coalesce(sum(montant_centimes), 0) FROM depense
+              WHERE cible = 'machine' AND machine_id = ?)
+          + (SELECT coalesce(sum(cout_centimes), 0) FROM intervention
+              WHERE machine_id = ? AND etat = 'faite' AND depense_id IS NULL)
+       AS total`,
+    [machineId, machineId],
   )
   return r.total ?? 0
 }
