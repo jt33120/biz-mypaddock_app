@@ -28,6 +28,7 @@ import { Garage } from './ecrans/Garage'
 import { Legal } from './ecrans/Legal'
 import { Courbe } from './ecrans/Courbe'
 import { Checklist } from './ecrans/Checklist'
+import { Saison } from './ecrans/Saison'
 import { courbeDuCircuit, type Courbe as DonneesCourbe } from './db/courbe'
 import { evenements, viserEvenement, type Evenement } from './db/atelier'
 import {
@@ -644,6 +645,11 @@ function Roulages({ db, liste, onOuvrir, onNouveau, onEcrit }: {
 }) {
   return (
     <>
+      {/* Le bilan de saison ouvre l'écran des roulages : c'est la vue d'ensemble
+          de ce que la liste détaille en dessous. Consultable à tout moment
+          (FR-55), jamais réservé à une fin de saison. */}
+      <Saison db={db} />
+
       <div className="libelle">Roulages · {liste.length}</div>
       <div className="pile">
         {liste.map((r) => (
