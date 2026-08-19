@@ -109,6 +109,12 @@ console.log('   poids annoncé tenu :', await page.textContent('.compte .lien:ha
 console.log('   écran cohérent :', await contradiction())
 console.log('   ne_contient_pas :', JSON.stringify(p.ne_contient_pas))
 
+// ── L'EFFACEMENT est le jumeau de l'emport, et il n'est PAS sur le chemin de
+//    quelqu'un qui n'a pas de compte : c'est le geste le plus destructeur du
+//    produit, il n'a rien à faire devant quelqu'un qui n'a rien à effacer.
+console.log('④ sans compte — bloc d\'effacement :',
+  await page.isVisible('text=effacer mon compte') ? 'NON — VISIBLE À TORT' : 'absent, correct')
+
 await page.screenshot({ path: process.argv[2] ?? '/tmp/emport.png', fullPage: true })
 console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()

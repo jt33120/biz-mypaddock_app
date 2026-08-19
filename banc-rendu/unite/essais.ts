@@ -18,6 +18,7 @@ import { formaterPoids } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
 import { PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
+import { effacerLesReglages } from '../../src/db/effacer'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
@@ -244,6 +245,25 @@ const essais = [
     let leve = false
     try { await spritifier(blob, 64) } catch { leve = true }
     vrai(leve, 'aucune erreur levée sur une image sans machine')
+  }),
+
+  /* ─── L'EFFACEMENT — ce qu'il emporte, et ce qu'il laisse ──────────────── */
+  doit("l'effacement emporte les réglages du produit, et rien d'autre", () => {
+    // `localStorage` appartient à TOUTE L'ORIGINE. Un `clear()` emporterait ce
+    // qui n'est pas à nous — et la même origine sert déjà d'autres choses.
+    localStorage.setItem('mypaddock.mesures', 'non')
+    localStorage.setItem('mypaddock.plan.ecartee', 'oui')
+    localStorage.setItem('mypaddock.adopte.abc', '1')
+    localStorage.setItem('autre-produit.reglage', 'à garder')
+    localStorage.setItem('sb-xyz-auth-token', 'à garder')
+
+    const n = effacerLesReglages()
+    vrai(n >= 3, `${n} clés effacées, au moins 3 attendues`)
+    for (const k of ['mypaddock.mesures', 'mypaddock.plan.ecartee', 'mypaddock.adopte.abc'])
+      egal(localStorage.getItem(k), null, `« ${k} » a survécu`)
+    egal(localStorage.getItem('autre-produit.reglage'), 'à garder', 'une clé étrangère est partie')
+    egal(localStorage.getItem('sb-xyz-auth-token'), 'à garder', 'une clé étrangère est partie')
+    localStorage.removeItem('autre-produit.reglage'); localStorage.removeItem('sb-xyz-auth-token')
   }),
 ]
 

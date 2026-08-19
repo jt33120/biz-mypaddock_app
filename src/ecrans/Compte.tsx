@@ -8,6 +8,7 @@ import { adopter, estAdopte, etatLocal, type BilanEnvoi, type Refus } from '../d
 import { powersyncConfigure } from '../db/connecteur'
 import { accepterMesures, mesuresAcceptees } from '../db/mesures'
 import { composer as composerEmport, formaterPoids, peser, type Poids } from '../db/emporter'
+import { effacerAuServeur, effacerLeTelephone } from '../db/effacer'
 
 /**
  * L'ÉCRAN DU COMPTE — récit 1.2.
@@ -50,6 +51,86 @@ export function Compte({ db, identite }: { db: PowerSyncDatabase; identite: Iden
           démarre à la première ouverture, donc le refus doit être atteignable
           sans compte. Un consentement qu'il faut mériter n'en est pas un. */}
       <section className="compte"><Mesures /></section>
+
+      {/* EN DERNIER, et seulement avec un compte : c'est le geste le plus
+          destructeur de l'application, et il n'a rien à faire sur le chemin de
+          quelqu'un qui n'a rien à effacer. */}
+      {identite && <section className="compte"><Effacer db={db} /></section>}
+    </>
+  )
+}
+
+/* ─── EFFACER SON COMPTE — NFR-6, FR-27 ────────────────────────────────────
+   Deux règles, et elles se voient à l'écran :
+
+     · L'ORDRE. Le serveur d'abord, ce téléphone ensuite. Un échec serveur ne
+       touche donc à rien, et le pilote ne peut pas se retrouver sans sa saison
+       ET avec son compte.
+     · CE QUI PART EST NOMMÉ AVANT, pas résumé après. « Es-tu sûr ? » ne dit
+       rien ; une liste de ce qui disparaît dit tout. */
+function Effacer({ db }: { db: PowerSyncDatabase }) {
+  const [ouvert, setOuvert] = useState(false)
+  const [occupe, setOccupe] = useState(false)
+  const [souci, setSouci] = useState<string | null>(null)
+  const [fini, setFini] = useState<{ objets: number; photos: number; cles: number } | null>(null)
+  const [etat, setEtat] = useState<BilanEnvoi>({})
+
+  useEffect(() => { void etatLocal(db).then(setEtat).catch(() => {}) }, [db])
+
+  const effacer = async () => {
+    setOccupe(true); setSouci(null)
+    const serveur = await effacerAuServeur()
+    if (!serveur.ok) { setSouci(serveur.message); setOccupe(false); return }
+    // Et SEULEMENT MAINTENANT le local. Le serveur a confirmé.
+    const local = await effacerLeTelephone(db)
+    setFini({ objets: serveur.objets, ...local })
+    setOccupe(false)
+  }
+
+  if (fini) {
+    return (
+      <>
+        <p className="libelle">compte effacé</p>
+        <h1 className="titre">Il ne reste rien</h1>
+        <p className="texte">
+          Le compte et sa saison sont supprimés du serveur, avec {fini.objets} photo
+          {fini.objets > 1 ? 's' : ''}. Sur ce téléphone : la base locale, {fini.photos} fichier
+          {fini.photos > 1 ? 's' : ''} de photo et {fini.cles} réglage{fini.cles > 1 ? 's' : ''}.
+        </p>
+        <button className="bouton" onClick={() => location.reload()}>Repartir de zéro</button>
+      </>
+    )
+  }
+
+  const lignes = Object.entries(etat).filter(([, n]) => n > 0)
+
+  return (
+    <>
+      <p className="libelle">effacer mon compte</p>
+      {!ouvert ? (
+        <button className="lien" onClick={() => setOuvert(true)}>Effacer mon compte</button>
+      ) : (
+        <div className="bloc pile">
+          <div className="libelle">ce qui part, et ne revient pas</div>
+          <p className="texte">
+            {lignes.length
+              ? lignes.map(([t, n]) => `${n} ${t.replace(/_/g, ' ')}`).join(' · ')
+              : 'rien de saisi'}
+            {' — au serveur comme sur ce téléphone, avec les photos et les réglages.'}
+          </p>
+          <p className="note">
+            Il n'y a pas de corbeille et pas de délai : un effacement qu'on peut annuler n'en est
+            pas un. L'emport est plus haut sur cet écran, et c'est le moment de s'en servir.
+          </p>
+          {souci && <p className="mot-erreur">{souci}</p>}
+          <button className="bouton" disabled={occupe} onClick={() => void effacer()}>
+            {occupe ? 'effacement…' : 'Effacer définitivement'}
+          </button>
+          <button className="bouton secondaire" disabled={occupe} onClick={() => setOuvert(false)}>
+            Garder mon compte
+          </button>
+        </div>
+      )}
     </>
   )
 }
