@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync } from 'node:fs'
 
 export default defineConfig(({ mode }) => {
   // Le nom vient d'UNE SEULE source, y compris pour le manifeste (récit 0.3).
@@ -17,6 +18,19 @@ export default defineConfig(({ mode }) => {
     worker: { format: 'es' },
     plugins: [
       react(),
+      // Le banc d'essai de rendu est servi sous /banc, émis depuis sa SOURCE UNIQUE
+      // (banc-rendu/). Pas de copie dans public/ : une copie versionnée finit toujours
+      // par diverger de l'original, et c'est l'original qu'on débogue.
+      {
+        name: 'banc-embarque',
+        generateBundle() {
+          for (const f of ['index.html', 'banc.js', 'pipeline.js'])
+            this.emitFile({
+              type: 'asset', fileName: `banc/${f}`,
+              source: readFileSync(new URL(`./banc-rendu/${f}`, import.meta.url), 'utf8'),
+            })
+        },
+      },
       // Le <title> vient de la MEME source que le manifeste, avec repli.
       // Pas de %VITE_APP_NAME% dans l'HTML : une variable absente en CI
       // laisserait le marqueur brut dans la page.

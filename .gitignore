@@ -29,3 +29,4 @@ context/
 banc-rendu/photos/*
 !banc-rendu/photos/.gitkeep
 banc-rendu/sorties/
+
