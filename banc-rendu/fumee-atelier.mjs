@@ -140,6 +140,26 @@ verifier('⑨ le manuel se cherche à partir de la machine déclarée',
 verifier('   et il annonce qu\'il sort de l\'application',
   (await texte('.poste-page')).includes('Ouvre le navigateur'))
 
+// ── ⑩ LE DOCUMENT SE VERSE, IL NE SE RAPATRIE PAS.
+//
+// ⚠ Le point vérifié n'est pas seulement que ça marche : c'est que l'écran
+// n'offre AUCUN bouton du genre « récupérer ce manuel automatiquement ». Un
+// manuel d'atelier est une œuvre protégée, et l'héberger pour tous les pilotes
+// qui ont la même moto n'est plus « garder mon manuel ». Si ce bouton
+// réapparaît un jour, cet essai doit tomber.
+const manuel = await texte('.poste-page .bloc:has-text("Le manuel")')
+const rapatrier = ['télécharger automatiquement', 'récupérer le manuel', 'importer depuis le web']
+verifier('⑩ aucun rapatriement automatique proposé',
+  !rapatrier.some((m) => manuel.toLowerCase().includes(m)))
+verifier('   le versement est offert', manuel.includes('Garder un document'))
+
+await page.setInputFiles('.poste-page .bloc:has-text("Le manuel") input[type=file]', PHOTO)
+await page.waitForSelector('.poste-page .materiel', { timeout: 30_000 })
+const garde = await texte('.poste-page .materiel')
+verifier('   le document gardé s\'annonce avec son poids',
+  /Manuel d'atelier · \d+/.test(garde), garde.slice(0, 120))
+verifier('   et il s\'ouvre', (await page.isVisible('.materiel .lien:has-text("ouvrir")')))
+
 await page.screenshot({ path: process.argv[2] ?? '/tmp/atelier.png', fullPage: true })
 verifier('aucune erreur de console', erreurs.length === 0, erreurs.join(' | '))
 await nav.close()

@@ -35,6 +35,7 @@ import {
   chiffresChoisis, ETIQUETTES as ETIQUETTES_CHIFFRES, MAX as MAX_CHIFFRES,
   poserChiffres, valeurs as valeursChiffres, type Cle, type Valeur as ValeurChiffre,
 } from './db/chiffres'
+import { televerserDocuments } from './db/documents'
 import { Chutes } from './ecrans/Chute'
 import { Circuit } from './ecrans/Circuit'
 import { Molettes } from './ecrans/Molettes'
@@ -209,7 +210,12 @@ export default function App() {
     if (!db) return
     return surRetourDeReseau(() => {
       void rafraichir(db)
-      if (identite) void televerserEnAttente(db, identite.id)
+      if (identite) {
+        void televerserEnAttente(db, identite.id)
+        // Les documents suivent le même chemin et les mêmes deux déclencheurs :
+        // un manuel versé au paddock part au retour du réseau, pas avant.
+        void televerserDocuments(db, identite.id)
+      }
       // Et l'adoption retente, si elle n'a pas encore abouti. C'est le seul
       // rythme qu'elle a : un geste humain, jamais une horloge.
       setEssai((n) => n + 1)

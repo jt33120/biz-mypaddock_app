@@ -253,6 +253,19 @@ const geste = new Table({
 // fonctionner (d ≈ 0,65 sur 94 essais).
 const plan_si_alors = new Table({ texte: column.text })
 
+// LE DOCUMENT — le manuel d'atelier en tête, versé PAR LE PILOTE.
+// ⚠ Seules ses MÉTADONNÉES passent ici, comme pour la photo : les octets vont
+// en HTTP direct vers le stockage, hors synchronisation. Un manuel scanné de
+// 20 Mo en base64 dans la file d'envoi la ferait exploser au premier document.
+const document_ = new Table({
+  machine_id: column.text,
+  nom: column.text,
+  genre: column.text,
+  chemin_objet: column.text,
+  octets: column.integer,
+  type_mime: column.text,
+})
+
 // ─── Référentiel — lu, jamais écrit par la PWA (AD-12) ────────────────────
 // Le corpus de conseils y appartient (AD-10) : il s'enrichit sans redéploiement.
 const conseil = new Table({ texte: column.text, actif: column.integer })
@@ -393,6 +406,7 @@ export const AppSchema = new Schema({
   photo,
   geste,
   plan_si_alors,
+  document: document_,
   generation,
   coefficient_usure,
   regle_organisateur,

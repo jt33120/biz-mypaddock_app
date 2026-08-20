@@ -34,6 +34,9 @@ streams:
       # combinaison existe sans moto et survit à la vente de la moto.
       - SELECT * FROM equipement   WHERE pilote_id = auth.user_id()
       - SELECT * FROM chute        WHERE pilote_id = auth.user_id()
+      # Seules les MÉTADONNÉES du document descendent : les octets vivent dans
+      # le stockage objet, hors synchronisation (AD-4).
+      - SELECT * FROM document     WHERE pilote_id = auth.user_id()
       # Le compteur de quota DESCEND mais ne remonte jamais : il n'est pas dans
       # l'ordre d'envoi. C'est le serveur qui l'écrit, et c'est ce qui le rend
       # crédible — un compteur écrit par le compté ne compte rien.

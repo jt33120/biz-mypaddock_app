@@ -46,7 +46,7 @@ export type Resultat = { bilan: BilanEnvoi; refus: Refus[] }
 // avant celle qu'elle référence est refusée en 23503, écartée définitivement, et
 // arrête toute la file derrière elle — trois fois le même incident sur ce
 // produit, et deux d'entre eux découverts des jours plus tard.
-const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'chute', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'photo', 'intervention', 'evenement_vise', 'horloge', 'checklist_ligne'] as const
+const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'chute', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'photo', 'intervention', 'evenement_vise', 'horloge', 'checklist_ligne', 'document'] as const
 
 /** TOUTES les tables de pilote portent leur propriétaire côté serveur, feuilles
  *  comprises, pour que le flux descendant s'écrive à plat et que l'envoi n'ait

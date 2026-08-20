@@ -8,6 +8,10 @@ import { enCentimes, formaterEuros, type Machine } from '../db/depot'
 import {
   lireLocale, nomLocal, piecesDeLIntervention, verserPhoto, type Genre, type Photo,
 } from '../db/photos'
+import {
+  documentsDeLaMachine, formaterOctets, NOM_GENRE, oublierDocument, ouvrirDocument,
+  verserDocument, type Document, type Genre as GenreDoc,
+} from '../db/documents'
 import { Usure } from './Usure'
 import { useGeste } from './geste'
 
@@ -87,7 +91,7 @@ export function Poste({ db, machine, categorie, onFermer, onEcrit }: {
         </div>
       </div>
 
-      {categorie === 'entretien' && <Manuel machine={machine} />}
+      {categorie === 'entretien' && <Manuel db={db} machine={machine} onEcrit={onEcrit} />}
 
       {/* LES HORLOGES D'USURE vivent ici désormais, et pas à la racine du
           garage. « La prochaine maintenance, son calendrier de maintenance
@@ -149,21 +153,119 @@ export function Poste({ db, machine, categorie, onFermer, onEcrit }: {
  * traceur posé au clic. Le produit n'a aucun traceur, et ce n'est pas au moment
  * de chercher une vidange qu'il va en offrir un.
  */
-function Manuel({ machine }: { machine: Machine }) {
+function Manuel({ db, machine, onEcrit }: {
+  db: PowerSyncDatabase; machine: Machine; onEcrit: () => void
+}) {
+  const [docs, setDocs] = useState<Document[]>([])
+  const [souci, setSouci] = useState<string | null>(null)
+  const fichier = useRef<HTMLInputElement>(null)
+
+  const charger = useCallback(
+    async () => setDocs(await documentsDeLaMachine(db, machine.id)), [db, machine.id])
+  useEffect(() => { void charger() }, [charger])
+
   const requete = [machine.marque, machine.modele, machine.annee, 'manuel atelier pdf']
     .filter(Boolean).join(' ')
   const url = `https://duckduckgo.com/?q=${encodeURIComponent(requete)}`
+
+  const verser = async (f: File, genre: GenreDoc) => {
+    setSouci(null)
+    const r = await verserDocument(db, { machineId: machine.id, genre }, f)
+    if ('refus' in r) { setSouci(r.refus); return }
+    await charger(); onEcrit()
+  }
+
   return (
     <div className="bloc pile">
-      <p className="libelle">Le manuel</p>
-      <p className="sous-titre">
-        Une recherche composée à partir de ce que tu as déclaré. Le produit ne connaît pas
-        l'adresse du manuel de ta moto et ne fait pas semblant de la connaître.
-      </p>
+      <p className="libelle">Le manuel et les papiers</p>
+
+      {docs.length > 0
+        ? docs.map((d) => (
+          <LigneDocument key={d.id} db={db} d={d}
+                         onEcrit={() => void charger().then(onEcrit)} />
+        ))
+        : (
+          <p className="sous-titre">
+            Rien de gardé. Un manuel gardé ici s'ouvre au paddock, sans réseau, à côté de
+            la moto qu'il concerne.
+          </p>
+        )}
+
+      {/* ⚠ DEUX GESTES SÉPARÉS, ET C'EST UN ARBITRAGE JURIDIQUE, PAS UNE
+          MALADRESSE D'INTERFACE.
+
+          « Un websearch une fois puis sauvegarde dans le Supabase Storage le
+          manuel » — la lecture littérale ferait suivre au serveur l'URL trouvée
+          pour en déposer une copie. Un manuel d'atelier est une œuvre protégée :
+          l'héberger pour tous les pilotes qui ont la même moto n'est plus
+          « garder mon manuel », c'est devenir une bibliothèque de manuels.
+
+          La recherche aide à le TROUVER ; le versement est le geste du pilote,
+          sur SON fichier, dans SON espace. Le service rendu est identique — il
+          est là, hors ligne, quand on en a besoin — et le pas qui engage
+          quelqu'un reste le sien. */}
       <a className="bouton secondaire" href={url} target="_blank" rel="noreferrer noopener">
         Chercher « {requete} »
       </a>
       <p className="note">Ouvre le navigateur, et demande du réseau.</p>
+
+      <input ref={fichier} type="file" hidden
+             accept="application/pdf,image/*"
+             onChange={(e) => {
+               const f = e.target.files?.[0]
+               if (f) void verser(f, 'manuel')
+             }} />
+      <button className="lien" onClick={() => fichier.current?.click()}>
+        Garder un document dans le garage
+      </button>
+      {souci && <p className="mot-erreur">{souci}</p>}
+    </div>
+  )
+}
+
+/**
+ * Un document gardé. Il S'OUVRE DEPUIS LA COPIE LOCALE quand elle existe —
+ * c'est tout l'intérêt de l'avoir gardé : au paddock, il n'y a pas de réseau.
+ *
+ * L'URL d'objet est révoquée après ouverture : un manuel de 20 Mo laissé en
+ * mémoire à chaque consultation finit par tuer l'onglet sur un téléphone.
+ */
+function LigneDocument({ db, d, onEcrit }: {
+  db: PowerSyncDatabase; d: Document; onEcrit: () => void
+}) {
+  const [absent, setAbsent] = useState(false)
+  const [ouvrir, occupe] = useGeste(async () => {
+    const f = await ouvrirDocument(d)
+    if (!f) { setAbsent(true); return }
+    const url = URL.createObjectURL(f)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  })
+  const [retirer, efface] = useGeste(async () => {
+    await oublierDocument(db, d)
+    onEcrit()
+  })
+
+  return (
+    <div className="pile materiel">
+      <span className="texte">{d.nom}</span>
+      <div className="rang">
+        <span className="libelle faible">
+          {NOM_GENRE[d.genre]}{d.octets ? ` · ${formaterOctets(d.octets)}` : ''}
+        </span>
+        <span className="rang" style={{ gap: 12, flex: '0 0 auto' }}>
+          <button className="lien" disabled={occupe} onClick={() => void ouvrir()}>
+            {occupe ? 'ouverture…' : 'ouvrir'}
+          </button>
+          <button className="lien" disabled={efface} onClick={() => void retirer()}>retirer</button>
+        </span>
+      </div>
+      {absent && (
+        <p className="note alerte">
+          Ce document n'est pas sur ce téléphone et le réseau ne répond pas. Il reviendra
+          au retour du signal.
+        </p>
+      )}
     </div>
   )
 }
