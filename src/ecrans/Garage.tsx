@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
-  ajouterSession, anneeSaison, bilanMachine, creerMachine, creerRoulage, formaterChrono,
-  listerMachines, modifierMachine, poserSprite,
+  ajouterSession, anneeSaison, bilanMachine, creerMachine, creerRoulage, enCentimes,
+  formaterChrono, formaterEuros, listerMachines, modifierMachine, poserSprite,
   type BilanMachine, type Machine,
 } from '../db/depot'
 import { Budget, Equipement } from './Budget'
@@ -218,6 +218,16 @@ export function Garage({ db, onEcrit }: {
       <div className="garage-titre">
         <p className="marque">{machine.marque}{machine.annee ? ` · ${machine.annee}` : ''}</p>
         <h1 className="modele">{machine.modele}</h1>
+        {/* ⚠ CE QUI SE SAISIT DOIT SE LIRE. L'année a passé une semaine dans la
+            base sans jamais apparaître à l'écran, donc fausse sans que personne
+            ne puisse s'en apercevoir. Le prix d'achat ne refera pas le même
+            chemin : il s'affiche là où il a été saisi. */}
+        {machine.prix_achat_centimes != null && (
+          <p className="sous-titre">
+            achetée {formaterEuros(machine.prix_achat_centimes)}
+            {machine.achetee_le ? ` · ${machine.achetee_le.replace('-', '/')}` : ''}
+          </p>
+        )}
         <button className="lien" onClick={() => setCorriger(!corriger)}>
           {corriger ? 'Annuler la correction' : machine.annee ? 'Corriger la machine' : "Ajouter l'année"}
         </button>
@@ -401,11 +411,17 @@ export function Garage({ db, onEcrit }: {
  */
 function Declarer({ machine, onValider }: {
   machine?: Machine
-  onValider: (m: { marque: string; modele: string; annee: number | null }) => Promise<void>
+  onValider: (m: {
+    marque: string; modele: string; annee: number | null
+    prixAchatCentimes: number | null; acheteeLe: string | null
+  }) => Promise<void>
 }) {
   const [marque, setMarque] = useState(machine?.marque ?? '')
   const [modele, setModele] = useState(machine?.modele ?? '')
   const [annee, setAnnee] = useState(machine?.annee ? String(machine.annee) : '')
+  const [prix, setPrix] = useState(
+    machine?.prix_achat_centimes != null ? String(machine.prix_achat_centimes / 100) : '')
+  const [achat, setAchat] = useState(machine?.achetee_le ?? '')
   const pret = marque.trim().length > 0 && modele.trim().length > 0
   const [valider, occupe] = useGeste(onValider)
 
@@ -423,9 +439,29 @@ function Declarer({ machine, onValider }: {
       <div className="libelle">Année · elle désigne le bon barème d'entretien</div>
       <input className="champ" value={annee} onChange={(e) => setAnnee(e.target.value)}
              placeholder="2010" inputMode="numeric" />
+
+      {/* LE PRIX D'ACHAT — demandé par Julian. Il ne rejoint PAS les dépenses,
+          et ce n'est pas un détail de rangement : une dépense appartient à une
+          saison (AD-18), donc l'achat d'une moto gardée cinq ans écraserait le
+          budget de la première année pour disparaître des quatre suivantes. Il
+          est ici, avec la marque et l'année, parce que c'est une donnée
+          d'IDENTITÉ — ce que la machine a coûté à entrer au garage.
+
+          Facultatif, et le libellé le dit. Un pilote qui a acheté d'occasion il
+          y a six ans ne se souvient pas du mois, et l'exiger transformerait une
+          déclaration de trente secondes en fouille de papiers. */}
+      <div className="libelle">Prix d'achat · facultatif</div>
+      <input className="champ" value={prix} onChange={(e) => setPrix(e.target.value)}
+             placeholder="7500" inputMode="decimal" />
+      <div className="libelle">Achetée en · le mois suffit</div>
+      <input className="champ" type="month" value={achat}
+             onChange={(e) => setAchat(e.target.value)} />
+
       <button className="bouton" disabled={!pret || occupe} onClick={() => void valider({
         marque: marque.trim(), modele: modele.trim(),
         annee: /^\d{4}$/.test(annee.trim()) ? Number(annee.trim()) : null,
+        prixAchatCentimes: prix.trim() ? enCentimes(prix) : null,
+        acheteeLe: /^\d{4}-\d{2}$/.test(achat) ? achat : null,
       })}>
         {occupe ? 'enregistrement…' : machine ? 'Corriger' : 'Déclarer ma machine'}
       </button>

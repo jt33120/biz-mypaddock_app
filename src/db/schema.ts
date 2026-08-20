@@ -43,6 +43,34 @@ const machine = new Table({
   // vraie la clause « un rendu refusé, la photo reprend sa place » : sans elle
   // il n'y aurait rien à quoi revenir, et retirer un sprite laisserait un vide.
   photo_chemin: column.text,
+  /** Ce que la moto a coûté à entrer au garage. ⚠ PAS une `depense` : une
+   *  dépense appartient à une saison (AD-18), et un achat conservé cinq ans
+   *  écraserait le budget de la première année pour disparaître des quatre
+   *  suivantes. C'est une donnée d'identité de la machine. */
+  prix_achat_centimes: column.integer,
+  /** Un MOIS, `AAAA-MM`. Même raison qu'à l'équipement : personne ne cherche sa
+   *  carte grise pour saisir un garage. */
+  achetee_le: column.text,
+})
+
+// ─── LA CHUTE ─────────────────────────────────────────────────────────────
+// ⚠ CE QU'ELLE N'AURA JAMAIS, et c'est la clause la plus importante de ce
+// fichier : aucun compteur, aucune série « sans chute », aucune gravité, aucune
+// responsabilité. Le produit est né d'une chute causée par la recherche d'un
+// geste ; il n'a pas le droit d'en faire un score.
+//
+// La série « X roulages sans chute » serait la plus tentante et la pire : elle
+// crée une pression à ne pas la rompre, donc à NE PAS DÉCLARER. Un carnet qu'on
+// n'ose pas remplir ne vaut rien, et sur ce sujet-là il vaut moins que rien.
+//
+// Ce qu'elle porte est un RÉCIT et un ENDROIT, libres et facultatifs tous les
+// deux : une chute qu'on ne veut pas raconter reste une chute consignée.
+const chute = new Table({
+  roulage_id: column.text,
+  /** « virage 3 », « l'épingle » : ce que le pilote dit, jamais une coordonnée.
+   *  Le téléphone n'est pas en piste (AD-3). */
+  endroit: column.text,
+  recit: column.text,
 })
 
 // ─── RACINE 2 : le roulage ────────────────────────────────────────────────
@@ -151,6 +179,10 @@ const budget_saison = new Table({
 // visée n'a pas de date, c'est ce qui la définit.
 const intervention = new Table({
   machine_id: column.text,
+  /** Ce que la chute a cassé. Le lien est ICI et non l'inverse : une chute
+   *  produit zéro, une ou dix réparations, et chacune reste une intervention
+   *  ordinaire — même carnet, même preuve, même horloge. */
+  chute_id: column.text,
   categorie: column.text,
   etat: column.text,
   libelle: column.text,
@@ -189,6 +221,10 @@ const photo = new Table({
   // plaquettes, elle, a un geste — c'est ce qui en fait une preuve.
   machine_id: column.text,
   intervention_id: column.text,
+  /** L'état d'une moto après une chute est une preuve, au même titre qu'une
+   *  facture. `set null` côté serveur : retirer une chute ne détruit pas les
+   *  photos de la journée. */
+  chute_id: column.text,
   geste_id: column.text,
   chemin_objet: column.text,
   largeur: column.integer,
@@ -279,7 +315,37 @@ const regle_organisateur = new Table({
   extrait_par_ia: column.integer,
 })
 
-const circuit = new Table({ nom: column.text, pays: column.text, longueur_m: column.integer })
+// Référentiel — lu, jamais écrit par la PWA (AD-12). Ce qu'un circuit sait de
+// lui-même : sa longueur, son sens, son plan, ses virages, et ce qu'il faut
+// savoir avant d'y aller. Tout champ récolté porte sa source, comme le barème —
+// « le virage 3 se prend en aveugle » est une phrase qui engage la sécurité de
+// quelqu'un, et une extraction par IA est une reconstruction.
+const circuit = new Table({
+  nom: column.text,
+  pays: column.text,
+  longueur_m: column.integer,
+  site_web: column.text,
+  plan_url: column.text,
+  nb_virages: column.integer,
+  sens: column.text,
+  bon_a_savoir: column.text,
+  source_url: column.text,
+  recolte_le: column.text,
+  extrait_par_ia: column.integer,
+})
+
+/** Un virage par ligne, jamais une liste dans une colonne texte : une liste ne
+ *  se lit pas, ne se corrige pas, et c'est pourtant un par un qu'on veut les
+ *  afficher. */
+const virage = new Table({
+  circuit_id: column.text,
+  numero: column.integer,
+  nom: column.text,
+  note: column.text,
+  source_url: column.text,
+  recolte_le: column.text,
+  extrait_par_ia: column.integer,
+})
 const organisateur = new Table({ nom: column.text, site_web: column.text })
 
 // FR-61 : un roulage publié est un BROUILLON. Une sortie annoncée n'est pas un
@@ -318,6 +384,7 @@ export const AppSchema = new Schema({
   depense,
   budget_saison,
   equipement,
+  chute,
   intervention,
   mesure,
   evenement_vise,
@@ -332,6 +399,7 @@ export const AppSchema = new Schema({
   conseil,
   cap,
   circuit,
+  virage,
   organisateur,
   roulage_publie,
   bareme,

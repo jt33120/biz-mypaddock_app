@@ -73,7 +73,12 @@ verifier('   la ligne d\'un poste est une cible gantée', haut >= 52, `${Math.ro
 await page.click('.atelier-tete:has-text("Équipement")')
 await page.click('text=Déclarer une pièce')
 await page.fill('.champ[placeholder="Combinaison cuir"]', 'Casque Shoei X-SPR Pro')
-await page.fill('.champ[type=month]', '2019-05')
+// ⚠ SÉLECTEUR SCOPÉ AU BLOC. Le garage vide affiche maintenant DEUX formulaires
+// à la fois — la déclaration d'une machine et celle d'un équipement — et les
+// deux portent un champ `type=month` depuis que la moto a un mois d'achat. Sans
+// le préfixe, `fill` visait le premier, c'est-à-dire l'autre formulaire, et
+// l'essai constatait l'absence d'une date qu'il n'avait jamais saisie.
+await page.fill('.atelier.equipement .champ[type=month]', '2019-05')
 await page.fill(`.champ[placeholder="ce que ça a coûté, si tu l'as"]`, '780')
 await page.click('.bouton.secondaire:has-text("Déclarer")')
 await page.waitForSelector('text=Casque Shoei X-SPR Pro', { timeout: 15_000 })

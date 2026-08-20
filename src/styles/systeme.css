@@ -594,3 +594,12 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
   font-size: 10px; letter-spacing: .04em; color: var(--encre-tenue); margin-top: 1px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+
+/* ─── LA CHUTE ─────────────────────────────────────────────────────────────
+   Aucune couleur d'alerte, aucun rouge, aucune icône d'avertissement. Le produit
+   RAPPORTE ce qui s'est passé, il ne le dramatise pas — et une journée où l'on
+   est tombé n'a pas à être signalée comme une anomalie dans son propre carnet.
+   Le filet est le magenta de la structure, comme les bricoles : présent, calme. */
+.chute { border-left: 3px solid var(--magenta); }
+.chute .texte { font-size: 15px; }
+.chute textarea.champ { resize: vertical; line-height: 1.45; font-family: var(--face); }

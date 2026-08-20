@@ -195,8 +195,9 @@ function Geste({ db, i, onEcrit }: {
     await verserPhoto(db, { interventionId: i.id }, f, g)
     await charger(); onEcrit()
   }
-  const [fait, occupe] = useGeste(async () => {
-    await cestFait(db, i.id, aujourdhui())
+  const [quand, setQuand] = useState<string | null>(null)
+  const [fait, occupe] = useGeste(async (jour: string) => {
+    await cestFait(db, i.id, jour)
     onEcrit()
   })
 
@@ -248,11 +249,38 @@ function Geste({ db, i, onEcrit }: {
         </button>
       </div>
 
-      {i.etat === 'visee' && (
-        <button className="bouton secondaire" disabled={occupe} onClick={() => void fait()}>
-          {occupe ? 'enregistrement…' : "C'est fait aujourd'hui"}
-        </button>
-      )}
+      {/* ⚠ LA DATE SE CHOISIT — retour de Julian : « quand on met un geste :
+          possibilité de mettre la date ». Le produit n'offrait que « c'est fait
+          aujourd'hui », donc consigner une vidange faite trois semaines plus tôt
+          était impossible : la date était fausse ou le geste n'était pas saisi.
+          Et une date fausse sur un carnet d'entretien est pire qu'une absence —
+          c'est elle qui fait repartir l'horloge d'usure au mauvais moment.
+
+          MAIS LE GESTE D'UN TAP RESTE LE DÉFAUT. Au paddock, gants aux mains,
+          « c'est fait aujourd'hui » doit rester un seul appui. La date est un
+          recours pour qui rattrape, pas une étape pour qui consigne sur le
+          moment — d'où le lien discret plutôt qu'un champ toujours ouvert. */}
+      {i.etat === 'visee' && (quand === null ? (
+        <>
+          <button className="bouton secondaire" disabled={occupe}
+                  onClick={() => void fait(aujourdhui())}>
+            {occupe ? 'enregistrement…' : "C'est fait aujourd'hui"}
+          </button>
+          <button className="lien" onClick={() => setQuand(aujourdhui())}>
+            C'était un autre jour
+          </button>
+        </>
+      ) : (
+        <div className="pile">
+          <input className="champ" type="date" value={quand} max={aujourdhui()}
+                 onChange={(e) => setQuand(e.target.value)} />
+          <button className="bouton secondaire" disabled={occupe || !quand}
+                  onClick={() => void fait(quand)}>
+            {occupe ? 'enregistrement…' : `C'était le ${quand}`}
+          </button>
+          <button className="lien" onClick={() => setQuand(null)}>Annuler</button>
+        </div>
+      ))}
     </div>
   )
 }
@@ -319,10 +347,12 @@ function Saisir({ db, machineId, categorie, onFini }: {
 }) {
   const [libelle, setLibelle] = useState('')
   const [montant, setMontant] = useState('')
+  const [jour, setJour] = useState(aujourdhui())
+  const [dater, setDater] = useState(false)
   const centimes = montant.trim() ? enCentimes(montant) : null
   const [poser, occupe] = useGeste(async (maintenant: boolean) => {
     const commun = { machineId, categorie, libelle, centimes }
-    if (maintenant) await consigner(db, { ...commun, date: aujourdhui() })
+    if (maintenant) await consigner(db, { ...commun, date: jour })
     else await viser(db, commun)
     onFini()
   })
@@ -333,9 +363,20 @@ function Saisir({ db, machineId, categorie, onFini }: {
              placeholder="Plaquettes avant" autoComplete="off" />
       <input className="champ" value={montant} onChange={(e) => setMontant(e.target.value)}
              placeholder="montant, si tu l'as" inputMode="decimal" />
+
+      {/* Même arbitrage qu'au-dessus : un tap par défaut, la date pour qui
+          rattrape. Un champ date toujours ouvert ajoute une décision à chaque
+          saisie, et une décision de plus au paddock est une saisie de moins. */}
+      {dater && (
+        <input className="champ" type="date" value={jour} max={aujourdhui()}
+               onChange={(e) => setJour(e.target.value)} />
+      )}
       <button className="bouton" disabled={!libelle.trim() || occupe} onClick={() => void poser(true)}>
-        C'est fait aujourd'hui
+        {jour === aujourdhui() ? "C'est fait aujourd'hui" : `C'était le ${jour}`}
       </button>
+      {!dater && (
+        <button className="lien" onClick={() => setDater(true)}>C'était un autre jour</button>
+      )}
       <button className="bouton secondaire" disabled={!libelle.trim() || occupe}
               onClick={() => void poser(false)}>
         {categorie === 'reparation_non_vitale' ? 'Ça peut attendre' : 'Acheté, pas encore monté'}

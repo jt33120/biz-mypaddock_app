@@ -33,6 +33,7 @@ streams:
       # L'ÉQUIPEMENT est une racine au même titre que la machine : la
       # combinaison existe sans moto et survit à la vente de la moto.
       - SELECT * FROM equipement   WHERE pilote_id = auth.user_id()
+      - SELECT * FROM chute        WHERE pilote_id = auth.user_id()
       # Le compteur de quota DESCEND mais ne remonte jamais : il n'est pas dans
       # l'ordre d'envoi. C'est le serveur qui l'écrit, et c'est ce qui le rend
       # crédible — un compteur écrit par le compté ne compte rien.
@@ -46,6 +47,9 @@ streams:
     auto_subscribe: true
     queries:
       - SELECT * FROM circuit
+      # Les virages descendent avec les circuits : ils sont ce qu'on veut lire
+      # AU PADDOCK, c'est-à-dire là où il n'y a pas de réseau.
+      - SELECT * FROM virage
       - SELECT * FROM organisateur
       - SELECT * FROM roulage_publie
       - SELECT * FROM coefficient_usure

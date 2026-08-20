@@ -18,6 +18,12 @@ export type Roulage = {
 
 export type Machine = {
   id: string; marque: string; modele: string; annee: number | null
+  /** Ce que la moto a coûté à entrer au garage. ⚠ PAS une dépense de saison :
+   *  un achat conservé cinq ans écraserait le budget de la première année et
+   *  disparaîtrait des quatre suivantes. C'est une donnée d'identité. */
+  prix_achat_centimes: number | null
+  /** Un MOIS, `AAAA-MM`. */
+  achetee_le: string | null
   /** Portrait pixel en data URI. `null` est un état valide : le garage montre alors une
    *  silhouette. AD-2 fait de la machine une racine, pas un objet conditionnel à un média. */
   sprite: string | null
@@ -45,12 +51,16 @@ export const formaterEcart = (ms: number): string => {
 }
 
 export const creerMachine = async (
-  db: PowerSyncDatabase, m: Omit<Machine, 'id' | 'photo_chemin'>,
+  db: PowerSyncDatabase,
+  m: { marque: string; modele: string; annee: number | null; sprite: string | null
+       prixAchatCentimes?: number | null; acheteeLe?: string | null },
 ) => {
   const id = nouvelId()
   await db.execute(
-    `INSERT INTO machine (id, marque, modele, annee, sprite) VALUES (?, ?, ?, ?, ?)`,
-    [id, m.marque, m.modele, m.annee, m.sprite],
+    `INSERT INTO machine (id, marque, modele, annee, sprite, prix_achat_centimes, achetee_le)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, m.marque, m.modele, m.annee, m.sprite,
+      m.prixAchatCentimes ?? null, m.acheteeLe || null],
   )
   await marquerSaisie(db)
   return id
@@ -58,7 +68,9 @@ export const creerMachine = async (
 
 export const listerMachines = (db: PowerSyncDatabase) =>
   db.getAll<Machine>(
-    `SELECT id, marque, modele, annee, sprite, photo_chemin FROM machine ORDER BY id DESC`)
+    `SELECT id, marque, modele, annee, sprite, photo_chemin,
+            prix_achat_centimes, achetee_le
+       FROM machine ORDER BY id DESC`)
 
 /** Le sprite se pose et se retire sans toucher au reste de la machine : c'est une
  *  reconstruction, pas une donnée d'identité. Le pilote doit pouvoir le refuser. */
@@ -99,11 +111,17 @@ export const coutMachine = async (db: PowerSyncDatabase, machineId: string) => {
 export const modifierMachine = async (
   db: PowerSyncDatabase,
   machineId: string,
-  m: { marque: string; modele: string; annee: number | null },
+  m: {
+    marque: string; modele: string; annee: number | null
+    prixAchatCentimes?: number | null; acheteeLe?: string | null
+  },
 ) => {
   await db.execute(
-    `UPDATE machine SET marque = ?, modele = ?, annee = ? WHERE id = ?`,
-    [m.marque.trim(), m.modele.trim(), m.annee, machineId])
+    `UPDATE machine SET marque = ?, modele = ?, annee = ?,
+            prix_achat_centimes = ?, achetee_le = ?
+      WHERE id = ?`,
+    [m.marque.trim(), m.modele.trim(), m.annee,
+      m.prixAchatCentimes ?? null, m.acheteeLe || null, machineId])
   await marquerSaisie(db)
 }
 

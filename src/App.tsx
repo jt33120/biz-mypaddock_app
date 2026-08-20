@@ -35,6 +35,7 @@ import {
   chiffresChoisis, ETIQUETTES as ETIQUETTES_CHIFFRES, MAX as MAX_CHIFFRES,
   poserChiffres, valeurs as valeursChiffres, type Cle, type Valeur as ValeurChiffre,
 } from './db/chiffres'
+import { Chutes } from './ecrans/Chute'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 import { useGeste } from './ecrans/geste'
@@ -313,6 +314,7 @@ export default function App() {
             onDepense={() => setEcran('depense')}
             onRecap={() => void rassembler(courant).then((m) => { setMatiere(m); setEcran('recap') })}
             photos={<Photos db={db} roulageId={courant} />}
+            chutes={<Chutes db={db} roulageId={courant} onEcrit={() => void rafraichir(db)} />}
             onBudget={async (centimes) => {
               await poserBudget(db, anneeSaison(bilan.date), centimes)
               if (courant) setCout(await coutDuRoulage(db, courant, anneeSaison(bilan.date)))
@@ -961,10 +963,15 @@ function Session({ onValider, onAnnuler }: {
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ db, b, cout, courbe, identite, photos, onSession, onAccueil, onDepense, onRecap, onBudget }: {
+function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, onSession, onAccueil, onDepense, onRecap, onBudget }: {
   db: Db; b: NonNullable<Bilan>; cout: CoutRoulage | null; courbe: DonneesCourbe | null
   identite: Identite | null
   photos: React.ReactNode
+  /** La chute de cette journée. Elle vit EN BAS du bilan, après les photos et
+   *  les gestes, et sa place est une décision : en tête elle ferait de chaque
+   *  journée une question, et ailleurs qu'ici elle serait introuvable le soir
+   *  où l'on en a besoin. */
+  chutes: React.ReactNode
   onSession: () => void; onAccueil: () => void; onDepense: () => void; onRecap: () => void
   onBudget: (centimes: number) => Promise<void>
 }) {
@@ -1023,6 +1030,8 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, onSession, onAccuei
       <Cercle identite={identite} circuit={b.circuit} />
 
       {photos}
+
+      {chutes}
 
       {cout && <BlocCout c={cout} annee={anneeSaison(b.date)} onDepense={onDepense} onBudget={onBudget} />}
 
