@@ -9,6 +9,23 @@ import { powersyncConfigure } from '../db/connecteur'
 import { accepterMesures, mesuresAcceptees } from '../db/mesures'
 import { composer as composerEmport, formaterPoids, peser, type Poids } from '../db/emporter'
 import { effacerAuServeur, effacerLeTelephone } from '../db/effacer'
+import type { Adoption } from '../App'
+
+/** Ce que dit l'écran pendant que l'application s'en occupe. Aucune de ces
+ *  phrases ne demande quoi que ce soit au pilote : elles énoncent où en est un
+ *  travail qui n'est pas le sien. */
+const MOT_ADOPTION: Record<Adoption['etat'], string> = {
+  inconnue: "Rien à déposer pour l'instant.",
+  attend_le_reseau: "Pas de réseau : la sauvegarde partira d'elle-même au retour du signal. "
+    + "Rien n'est perdu en attendant — tout est déjà sur ce téléphone.",
+  en_cours: 'La première sauvegarde est en train de partir. Elle dépose sur le serveur ce qui '
+    + 'a été saisi avant le compte.',
+  faite: "Les changements partent tout seuls dès qu'il y a du réseau.",
+  partielle: 'Une partie est partie, le reste attend. Le journal local est conservé : rien '
+    + "n'est perdu, et une relance reprend là où ça s'est arrêté.",
+  echec: "La sauvegarde n'a pas pu partir. Tout est encore sur ce téléphone, et elle "
+    + 'retentera au prochain retour de réseau.',
+}
 
 /**
  * L'ÉCRAN DU COMPTE — récit 1.2.
@@ -28,8 +45,12 @@ import { effacerAuServeur, effacerLeTelephone } from '../db/effacer'
 
 type Etape = 'formulaire' | 'confirmation'
 
-export function Compte({ db, identite, onLegal, onSonde }: {
-  db: PowerSyncDatabase; identite: Identite | null; onLegal: () => void
+export function Compte({ db, identite, adoption, onLegal, onSonde }: {
+  db: PowerSyncDatabase; identite: Identite | null
+  /** L'état de la première sauvegarde, ENTREPRISE PAR L'APPLICATION. Cet écran
+   *  la raconte, il ne la déclenche plus. */
+  adoption: Adoption
+  onLegal: () => void
   /** La sonde vit ICI depuis que le compte a pris sa place dans la barre basse.
    *  C'est un instrument, pas un lieu : elle n'a jamais eu à occuper un onglet,
    *  mais elle doit rester atteignable — le récit 7.1 exige que les trois
@@ -47,7 +68,8 @@ export function Compte({ db, identite, onLegal, onSonde }: {
             et l'emport ci-dessous est alors la seule copie possible.
           </p>
         </section>
-      ) : identite ? <Connecte db={db} identite={identite} /> : <Anonyme db={db} onLegal={onLegal} />}
+      ) : identite ? <Connecte db={db} identite={identite} adoption={adoption} />
+                   : <Anonyme db={db} onLegal={onLegal} />}
 
       {/* HORS DES TROIS BRANCHES, et c'est tout l'intérêt : l'emport ne dépend
           ni d'un compte, ni d'un serveur, ni même d'une configuration. Il est
@@ -69,6 +91,13 @@ export function Compte({ db, identite, onLegal, onSonde }: {
         <button className="lien" onClick={onSonde}>
           Instruments et sonde — ce que l'appareil fait réellement
         </button>
+        {/* ⚠ LA VERSION SE LIT EN DEUX TAPS, et ce n'est pas une coquetterie de
+            développeur. Une PWA installée sur iOS n'est jamais fermée : elle
+            peut servir un paquet vieux de plusieurs jours pendant que la
+            production, elle, est à jour. C'est arrivé — un retour a signalé
+            comme absente une fonctionnalité déjà livrée. Sans ce numéro, ce
+            genre de malentendu se débogue comme un fantôme. */}
+        <p className="note">version {__BUILD__}</p>
       </section>
 
       {identite && <section className="compte"><Effacer db={db} /></section>}
@@ -389,13 +418,20 @@ function Repris({ etat }: { etat: BilanEnvoi }) {
 
 /* ─── AVEC COMPTE ────────────────────────────────────────────────────────── */
 
-function Connecte({ db, identite }: { db: PowerSyncDatabase; identite: Identite }) {
+function Connecte({ db, identite, adoption }: {
+  db: PowerSyncDatabase; identite: Identite; adoption: Adoption
+}) {
   const [bilan, setBilan] = useState<BilanEnvoi | null>(null)
   const [refus, setRefus] = useState<Refus[]>([])
   const [erreur, setErreur] = useState<string | null>(null)
   const [occupe, setOccupe] = useState(false)
   const [enAttente, setEnAttente] = useState<number | null>(null)
-  const [adopte, setAdopte] = useState(estAdopte(identite.id))
+  // ⚠ L'ÉTAT VIENT DE L'APPLICATION, pas d'une lecture locale faite au montage.
+  // `estAdopte()` lu une seule fois restait faux pendant que l'adoption
+  // automatique tournait juste à côté : l'écran annonçait « en attente » sur un
+  // travail déjà en cours, puis sur un travail terminé.
+  const [adopteManuel, setAdopteManuel] = useState(false)
+  const adopte = adopteManuel || adoption.etat === 'faite' || estAdopte(identite.id)
 
   // `ps_crud` est la file d'envoi interne du SDK. La compter, c'est répondre à la
   // seule question que le pilote se pose vraiment : est-ce que c'est parti ?
@@ -415,7 +451,7 @@ function Connecte({ db, identite }: { db: PowerSyncDatabase; identite: Identite 
       setRefus(r)
       // Une adoption incomplète n'allume pas la synchronisation continue : le
       // serveur ne porte pas encore tout, et le journal local est conservé.
-      setAdopte(r.length === 0)
+      setAdopteManuel(r.length === 0)
       await compterAttente()
     } catch (e) {
       setErreur((e as Error).message)
@@ -446,8 +482,13 @@ function Connecte({ db, identite }: { db: PowerSyncDatabase; identite: Identite 
             ? "L'instance de synchronisation n'est pas encore ouverte. En attendant, la sauvegarde est un geste : tu appuies, l'état part."
             : adopte
               ? "Les changements partent tout seuls dès qu'il y a du réseau, et redescendent sur tes autres appareils."
-              : "Une première sauvegarde reste à faire : elle dépose sur le serveur ce qui a été saisi avant le compte. Le suivi continu s'allume juste après."}
+              : MOT_ADOPTION[adoption.etat]}
         </p>
+        {/* Un motif technique se DIT, sous le texte et en petit. Le cacher
+            oblige à deviner ; le mettre en gros fait d'un incident un drame. */}
+        {(adoption.etat === 'echec' || adoption.etat === 'partielle') && (
+          <p className="note alerte">{adoption.motif}</p>
+        )}
         {enAttente != null && enAttente > 0 && (
           <div className="rang">
             <span className="libelle">Changements en attente</span>
@@ -456,8 +497,13 @@ function Connecte({ db, identite }: { db: PowerSyncDatabase; identite: Identite 
         )}
       </div>
 
-      <button className="bouton" disabled={occupe} onClick={() => void envoyer()}>
-        {occupe ? 'envoi…' : adopte ? 'Sauvegarder maintenant' : 'Première sauvegarde'}
+      {/* LE BOUTON RESTE, comme recours et comme preuve : on peut toujours
+          forcer, et voir ligne par ligne ce qui est parti. Ce qui a changé est
+          qu'on n'ATTEND plus rien de lui — une sauvegarde qu'il faut penser à
+          faire est une sauvegarde qu'on n'a pas. */}
+      <button className="bouton" disabled={occupe || adoption.etat === 'en_cours'}
+              onClick={() => void envoyer()}>
+        {occupe || adoption.etat === 'en_cours' ? 'envoi…' : 'Sauvegarder maintenant'}
       </button>
 
       {erreur && <p className="mot-erreur">{erreur}</p>}

@@ -95,10 +95,25 @@ export const sauvegarder = async (
 ): Promise<Resultat> => {
   if (!supabase) throw new Error("Le compte n'est pas configuré.")
 
-  // La ligne du pilote est normalement posée par le déclencheur sur auth.users.
-  // On la garantit quand même : sans elle, toutes les clés étrangères tombent,
-  // et l'échec serait incompréhensible depuis l'écran.
-  const { error: ePilote } = await supabase.from('pilote').upsert({ id: piloteId })
+  // ⚠ CE `upsert` DIRECT A CASSÉ LA SAUVEGARDE EN PRODUCTION.
+  //
+  //   « pilote : new row violates row-level security policy for table pilote »
+  //
+  // La table `pilote` n'a plus qu'une politique de LECTURE depuis le filet
+  // monétaire, et c'est volontaire : avec `for all`, un simple PATCH posait
+  // `quota_sprites` à 32767 — 5 242 € de générations d'image. Un quota que le
+  // compté peut écrire ne compte rien.
+  //
+  // La garantie passe donc par une fonction `security definer` SANS AUCUN
+  // PARAMÈTRE : elle lit l'identité dans le jeton et laisse les défauts de la
+  // table poser le quota. Le client ne peut ni désigner un autre pilote, ni
+  // choisir ce qu'il vaut.
+  //
+  // La ligne est de toute façon posée par le déclencheur sur auth.users ; ceci
+  // est un FILET, pour les comptes nés avant lui et pour le jour où il tombe.
+  // Sans elle, toutes les clés étrangères s'effondrent et l'échec devient
+  // incompréhensible depuis l'écran.
+  const { error: ePilote } = await supabase.rpc('assurer_pilote')
   if (ePilote) throw new Error('pilote : ' + ePilote.message)
 
   const bilan: BilanEnvoi = {}

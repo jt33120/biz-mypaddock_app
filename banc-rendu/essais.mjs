@@ -8,6 +8,45 @@ const lancer = (cmd, args) => new Promise((res) => {
   p.on('exit', (code) => res(code ?? 1))
 })
 
+/**
+ * ⚠ LE BANC MONTE SON PROPRE SERVEUR.
+ *
+ * Sans ça, une session où `vite preview` n'a pas été lancé à la main rend
+ * VINGT-DEUX ÉCHECS d'un coup — tous avec `ERR_CONNECTION_REFUSED`, aucun avec
+ * un défaut du produit. C'est arrivé, et le premier réflexe devant vingt-deux
+ * lignes rouges est de douter du code plutôt que du harnais.
+ *
+ * Un banc qui échoue pour une raison qui n'est pas le sujet est un banc qu'on
+ * finit par ne plus croire, et un banc qu'on ne croit plus ne protège rien.
+ */
+const attendreLeServeur = async (url, essais = 60) => {
+  for (let i = 0; i < essais; i++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(1000) })
+      if (r.ok) return true
+    } catch { /* pas encore debout */ }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  return false
+}
+
+let serveur = null
+const monterLeServeur = async () => {
+  if (await attendreLeServeur('http://localhost:4173/', 1)) {
+    console.log('  (un serveur écoute déjà sur 4173 — on l\'utilise)')
+    return true
+  }
+  console.log('  démarrage de vite preview sur 4173…')
+  serveur = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort'],
+    { stdio: 'ignore', detached: false })
+  const debout = await attendreLeServeur('http://localhost:4173/')
+  if (!debout) console.error('  ✗ le serveur n\'est pas monté — les essais vont tous échouer')
+  return debout
+}
+const descendreLeServeur = () => { if (serveur) serveur.kill() }
+process.on('exit', descendreLeServeur)
+process.on('SIGINT', () => { descendreLeServeur(); process.exit(130) })
+
 const BOUT_EN_BOUT = [
   'fumee', 'fumee-accueil', 'fumee-conseil', 'fumee-cout', 'fumee-instruments',
   'fumee-confirmation', 'fumee-journee', 'fumee-photo', 'fumee-recap', 'fumee-circuit', 'fumee-emport', 'fumee-portrait', 'fumee-atelier', 'fumee-budget', 'fumee-machine', 'fumee-legal', 'fumee-vide-saisonnier', 'fumee-courbe', 'fumee-usure', 'fumee-checklist', 'fumee-saison', 'fumee-cercle',
@@ -20,6 +59,10 @@ let rates = await lancer('node', ['banc-rendu/unite.mjs']) ? ['unitaires'] : []
 // preview` — pas les sources. C'est le seul moyen de voir un défaut que le
 // bundler introduit, et c'est déjà arrivé.
 console.log('\n═══ essais de bout en bout ═══')
+if (!await monterLeServeur()) {
+  console.error('\n✗ aucun serveur sur 4173 : les essais de bout en bout n\'ont pas tourné.')
+  process.exit(1)
+}
 for (const t of BOUT_EN_BOUT) {
   console.log(`\n─── ${t}`)
   const args = t === 'fumee'
@@ -28,6 +71,7 @@ for (const t of BOUT_EN_BOUT) {
   if (await lancer('node', args)) rates.push(t)
 }
 
+descendreLeServeur()
 console.log(rates.length
   ? `\n✗ ${rates.length} en échec : ${rates.join(', ')}`
   : `\n✓ ${BOUT_EN_BOUT.length + 1} essais verts`)

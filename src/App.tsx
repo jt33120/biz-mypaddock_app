@@ -11,7 +11,8 @@ import {
 import { Depense } from './ecrans/Depense'
 import { surCompte, type Identite } from './db/compte'
 import { creerConnecteur, powersyncConfigure } from './db/connecteur'
-import { estAdopte } from './db/sauvegarde'
+import { adopter, estAdopte } from './db/sauvegarde'
+import { supabaseConfigure } from './db/supabase'
 import { ouverture } from './db/mesures'
 import { surRetourDeReseau, televerserEnAttente } from './db/photos'
 import { Photos } from './ecrans/Photos'
@@ -40,6 +41,17 @@ import { useGeste } from './ecrans/geste'
 import { Trophee } from './ecrans/Trophee'
 
 type Db = ReturnType<typeof ouvrirBase>
+
+/** Où en est le dépôt de l'état local sur le serveur. `inconnue` tant qu'aucun
+ *  compte n'existe — ce n'est ni un échec ni une attente, il n'y a simplement
+ *  rien à adopter. */
+export type Adoption =
+  | { etat: 'inconnue' }
+  | { etat: 'attend_le_reseau' }
+  | { etat: 'en_cours' }
+  | { etat: 'faite' }
+  | { etat: 'partielle'; refus: number; motif: string }
+  | { etat: 'echec'; motif: string }
 type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
@@ -66,6 +78,11 @@ export default function App() {
   const [identite, setIdentite] = useState<Identite | null>(null)
   const [src, setSrc] = useState<Source | null>(null)
   const [conseil, setConseil] = useState<string | null>(null)
+  /** L'ADOPTION SE FAIT TOUTE SEULE — « ça devrait se faire automatiquement
+   *  aussi hein ». Son état est ici et non dans l'écran du compte : c'est
+   *  l'application qui l'entreprend, l'écran ne fait que la raconter. */
+  const [adoption, setAdoption] = useState<Adoption>({ etat: 'inconnue' })
+  const [essai, setEssai] = useState(0)
 
   useEffect(() => {
     const d = ouvrirBase()
@@ -110,7 +127,12 @@ export default function App() {
     void db.connect(creerConnecteur(identite.id, (i) =>
       console.warn('[synchro] ligne écartée', i)))
     return () => { void db.disconnect() }
-  }, [db, identite])
+    // `adoption` est dans les dépendances pour que la synchronisation continue
+    // s'allume DÈS que l'adoption automatique aboutit, sans attendre un
+    // rechargement. Sans elle, la première sauvegarde réussissait et le suivi
+    // continu restait éteint jusqu'à la prochaine ouverture.
+  }, [db, identite, adoption])
+
 
   const rafraichir = useCallback(async (base: Db) => {
     setListe(await listerRoulages(base))
@@ -121,6 +143,52 @@ export default function App() {
     setConseil(await conseilDuJour(base, aujourdhui()))
   }, [])
   useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
+
+  /**
+   * ⚠ LA PREMIÈRE SAUVEGARDE NE SE DEMANDE PLUS — retour de Julian : « bug de
+   * sauvegarde, ça devrait se faire automatiquement aussi hein ». Il a raison
+   * sur les deux plans, et le second est le vrai sujet.
+   *
+   * Le produit exigeait un tap sur « Première sauvegarde » pour déposer au
+   * serveur ce qui avait été saisi avant le compte — et TANT QUE CE TAP
+   * N'AVAIT PAS EU LIEU, la synchronisation continue restait éteinte. Une
+   * saison entière pouvait donc vivre sur un seul téléphone, avec un compte
+   * connecté qui affichait « en attente » sans que personne ne comprenne ce
+   * qu'on attendait de lui. Une sauvegarde qu'il faut penser à faire est une
+   * sauvegarde qu'on n'a pas.
+   *
+   * Le bouton reste, comme recours et comme preuve : on peut toujours forcer,
+   * et voir ce qui est parti.
+   *
+   * TROIS GARDE-FOUS, et le troisième est le plus important :
+   *   ① Rien ne part hors ligne — ce serait un échec garanti, et un message
+   *     d'erreur pour une situation normale au paddock.
+   *   ② `estAdopte` interdit de rejouer : l'adoption dépose l'état local
+   *     ENTIER sous le nom du pilote, et n'a de sens qu'une fois.
+   *   ③ Aucune boucle. Une tentative par apparition de compte, et une par
+   *     retour de réseau ou de premier plan — c'est-à-dire par geste humain.
+   *     Un échec qui se relance tout seul devient une facture.
+   */
+  useEffect(() => {
+    if (!db || !identite || !supabaseConfigure) return
+    if (estAdopte(identite.id)) { setAdoption({ etat: 'faite' }); return }
+    if (!navigator.onLine) { setAdoption({ etat: 'attend_le_reseau' }); return }
+
+    let vivant = true
+    setAdoption({ etat: 'en_cours' })
+    void adopter(db, identite.id)
+      .then(({ refus }) => {
+        if (!vivant) return
+        setAdoption(refus.length
+          ? { etat: 'partielle', refus: refus.length, motif: refus[0].motif }
+          : { etat: 'faite' })
+        void rafraichir(db)
+      })
+      .catch((e: unknown) => {
+        if (vivant) setAdoption({ etat: 'echec', motif: (e as Error).message })
+      })
+    return () => { vivant = false }
+  }, [db, identite, essai, rafraichir])
 
   /* AD-6 — LES DEUX SEULS DÉCLENCHEURS, et il n'y en aura jamais d'autres :
      le retour au premier plan et le retour de connectivité. Sur iOS rien ne
@@ -136,6 +204,9 @@ export default function App() {
     return surRetourDeReseau(() => {
       void rafraichir(db)
       if (identite) void televerserEnAttente(db, identite.id)
+      // Et l'adoption retente, si elle n'a pas encore abouti. C'est le seul
+      // rythme qu'elle a : un geste humain, jamais une horloge.
+      setEssai((n) => n + 1)
     })
   }, [db, identite, rafraichir])
 
@@ -257,7 +328,8 @@ export default function App() {
                    onAnnuler={() => void ouvrirBilan(courant)} />
         )}
         {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
-        {ecran === 'compte' && <Compte db={db} identite={identite} onLegal={() => setEcran('legal')}
+        {ecran === 'compte' && <Compte db={db} identite={identite} adoption={adoption}
+                                       onLegal={() => setEcran('legal')}
                                        onSonde={() => setEcran('sonde')} />}
         {ecran === 'sonde' && <Sonde db={db} onFermer={() => setEcran('compte')} />}
         {/* QO-11 : les textes existent, et ils sont ATTEIGNABLES. Un document
