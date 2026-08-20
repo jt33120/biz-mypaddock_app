@@ -603,3 +603,14 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 .chute { border-left: 3px solid var(--magenta); }
 .chute .texte { font-size: 15px; }
 .chute textarea.champ { resize: vertical; line-height: 1.45; font-family: var(--face); }
+
+/* ─── LA FICHE D'UN CIRCUIT ────────────────────────────────────────────────
+   Le tracé est une image DISTANTE tant que la récolte ne l'a pas déposée dans
+   le stockage : elle échoue au paddock, et c'est prévu — `onError` la retire
+   plutôt que de laisser l'icône de fichier absent, qui se lit comme une panne. */
+.plan-circuit {
+  width: 100%; height: auto; display: block;
+  background: var(--surface); border: 1px solid var(--filet);
+}
+.circuit-page .garage-titre { border-left: 3px solid var(--miami); padding-left: 12px; }
+.circuit-page .garage-tete .lien { min-height: 40px; }

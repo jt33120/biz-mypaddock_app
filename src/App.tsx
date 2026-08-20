@@ -36,6 +36,7 @@ import {
   poserChiffres, valeurs as valeursChiffres, type Cle, type Valeur as ValeurChiffre,
 } from './db/chiffres'
 import { Chutes } from './ecrans/Chute'
+import { Circuit } from './ecrans/Circuit'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 import { useGeste } from './ecrans/geste'
@@ -53,7 +54,7 @@ export type Adoption =
   | { etat: 'faite' }
   | { etat: 'partielle'; refus: number; motif: string }
   | { etat: 'echec'; motif: string }
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -79,6 +80,10 @@ export default function App() {
   const [identite, setIdentite] = useState<Identite | null>(null)
   const [src, setSrc] = useState<Source | null>(null)
   const [conseil, setConseil] = useState<string | null>(null)
+  /** Le circuit dont on regarde la fiche. Il voyage par son NOM et non par un
+   *  identifiant : le référentiel peut ne pas le connaître, et la fiche doit
+   *  quand même s'ouvrir — c'est ce que le pilote y a fait qui la remplit. */
+  const [circuitVu, setCircuitVu] = useState<string | null>(null)
   /** L'ADOPTION SE FAIT TOUTE SEULE — « ça devrait se faire automatiquement
    *  aussi hein ». Son état est ici et non dans l'écran du compte : c'est
    *  l'application qui l'entreprend, l'écran ne fait que la raconter. */
@@ -315,6 +320,7 @@ export default function App() {
             onRecap={() => void rassembler(courant).then((m) => { setMatiere(m); setEcran('recap') })}
             photos={<Photos db={db} roulageId={courant} />}
             chutes={<Chutes db={db} roulageId={courant} onEcrit={() => void rafraichir(db)} />}
+            onCircuit={() => { setCircuitVu(bilan.circuit); setEcran('circuit') }}
             onBudget={async (centimes) => {
               await poserBudget(db, anneeSaison(bilan.date), centimes)
               if (courant) setCout(await coutDuRoulage(db, courant, anneeSaison(bilan.date)))
@@ -337,6 +343,9 @@ export default function App() {
         {/* QO-11 : les textes existent, et ils sont ATTEIGNABLES. Un document
             juridique que rien ne lie n'a jamais été publié. */}
         {ecran === 'legal' && <Legal onFermer={() => setEcran('compte')} />}
+        {ecran === 'circuit' && circuitVu && (
+          <Circuit db={db} nom={circuitVu} onFermer={() => setEcran(courant ? 'bilan' : 'roulages')} />
+        )}
       </div>
 
       {/* UX-DR9 — LA BARRE SE CALCULE, elle n'est pas une liste figée. Un onglet
@@ -963,7 +972,7 @@ function Session({ onValider, onAnnuler }: {
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, onSession, onAccueil, onDepense, onRecap, onBudget }: {
+function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, onCircuit, onSession, onAccueil, onDepense, onRecap, onBudget }: {
   db: Db; b: NonNullable<Bilan>; cout: CoutRoulage | null; courbe: DonneesCourbe | null
   identite: Identite | null
   photos: React.ReactNode
@@ -972,6 +981,10 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, onSession, 
    *  journée une question, et ailleurs qu'ici elle serait introuvable le soir
    *  où l'on en a besoin. */
   chutes: React.ReactNode
+  /** Le nom du circuit ouvre sa fiche. C'est le seul endroit d'où l'on y entre :
+   *  une fiche de circuit se consulte quand on pense à ce circuit-là, et c'est
+   *  en regardant sa journée qu'on y pense. */
+  onCircuit: () => void
   onSession: () => void; onAccueil: () => void; onDepense: () => void; onRecap: () => void
   onBudget: (centimes: number) => Promise<void>
 }) {
@@ -981,6 +994,12 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, onSession, 
       <h1 className={'titre ' + (record ? 'record lueur-record' : 'neon')}>
         {b.circuit}
       </h1>
+      {/* La fiche du circuit s'ouvre d'ici, et de nulle part ailleurs : on
+          pense à un circuit en regardant la journée qu'on y a passée. Un lien
+          discret sous le titre plutôt qu'un titre cliquable — un titre qui
+          réagit au doigt sans le montrer se tape par accident, et un titre qui
+          le montre cesse d'être un titre. */}
+      <button className="lien" onClick={onCircuit}>Ce que tu sais de ce circuit</button>
 
       <div className="bloc pile">
         <div className="libelle">Meilleur tour du jour</div>
