@@ -199,6 +199,36 @@ export const piecesDeLIntervention = (db: PowerSyncDatabase, interventionId: str
 export const nomLocalMachine = (machineId: string, extension: string) =>
   `machine-${machineId}.${extension}`
 
+/**
+ * LA PHOTO D'UN ÉQUIPEMENT — « la combinaison c'est comme un skin, et le casque
+ * aussi, c'est à pixeliser ! ».
+ *
+ * Elle suit EXACTEMENT le chemin de la photo de machine : réduite, écrite en
+ * local d'abord, référencée ensuite, et indépendante du sprite. Le préfixe du
+ * nom local diffère pour que les deux ne se marchent jamais dessus — un casque
+ * et une moto peuvent partager un identifiant si l'un vient d'un import.
+ */
+export const nomLocalEquipement = (id: string, extension: string) =>
+  `equipement-${id}.${extension}`
+
+export const verserPhotoEquipement = async (
+  db: PowerSyncDatabase, equipementId: string, fichier: Blob,
+): Promise<string> => {
+  const r = await reduire(fichier)
+  const nom = nomLocalEquipement(equipementId, r.extension)
+  await ecrireLocale(nom, r.blob)
+  const chemin = `local/equipement/${equipementId}.${r.extension}`
+  await db.execute(`UPDATE equipement SET photo_chemin = ? WHERE id = ?`, [chemin, equipementId])
+  await marquerSaisie(db)
+  return chemin
+}
+
+export const photoEquipement = async (chemin: string | null): Promise<File | null> => {
+  if (!chemin) return null
+  const m = chemin.match(/equipement\/([^/]+)\.(\w+)$/)
+  return m ? lireLocale(nomLocalEquipement(m[1], m[2])) : null
+}
+
 export const verserPhotoMachine = async (
   db: PowerSyncDatabase, machineId: string, fichier: Blob,
 ): Promise<string> => {

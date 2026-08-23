@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
   CATEGORIES_EQUIPEMENT, coutEquipement, declarerEquipement, depenserSur,
   EXEMPLE_EQUIPEMENT, EXEMPLE_POSTE, listerEquipement, NOM_EQUIPEMENT, NOM_POSTE,
-  oublierEquipement, parPoste, POSTES,
+  oublierEquipement, parPoste, poserSpriteEquipement, POSTES,
   type CategorieEquipement, type Equipement as Materiel, type LignePoste, type Poste,
 } from '../db/budget'
+import { photoEquipement, verserPhotoEquipement } from '../db/photos'
+import { genererPortrait } from '../pixel/portrait'
+import type { Sprite } from '../pixel/spritifier'
 import { enCentimes, formaterEuros, type Cible } from '../db/depot'
 import { useGeste } from './geste'
 
@@ -191,11 +194,29 @@ function Ajouter({ db, poste, machineId, onFini }: {
  * n'en dérive rien. Le schéma n'a aucune colonne d'échéance : ce qui n'existe
  * pas ne peut pas s'afficher par accident.
  */
-export function Equipement({ db, onEcrit }: { db: PowerSyncDatabase; onEcrit: () => void }) {
+export function Equipement({ db, onEcrit, appele }: {
+  db: PowerSyncDatabase; onEcrit: () => void
+  /** Un compteur qui s'incrémente à chaque appel depuis la tête du garage :
+   *  « X machine, et si je clique je peux aller sur mon équipement ». On passe
+   *  un NOMBRE et non un booléen, parce qu'un booléen déjà vrai ne rappellerait
+   *  rien au second tap — et un pilote qui tape deux fois s'attend deux fois à
+   *  arriver quelque part. */
+  appele?: number
+}) {
   const [liste, setListe] = useState<Materiel[]>([])
   const [cout, setCout] = useState(0)
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState(false)
+  const bloc = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!appele) return
+    setOuvert(true)
+    // `scrollIntoView` APRÈS le rendu du dépliage, sinon on défile vers la
+    // hauteur d'avant et l'on atterrit au-dessus du bloc.
+    const t = setTimeout(() => bloc.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+    return () => clearTimeout(t)
+  }, [appele])
 
   const charger = useCallback(async () => {
     setListe(await listerEquipement(db))
@@ -204,7 +225,7 @@ export function Equipement({ db, onEcrit }: { db: PowerSyncDatabase; onEcrit: ()
   useEffect(() => { void charger() }, [charger])
 
   return (
-    <div className="bloc pile atelier equipement">
+    <div className="bloc pile atelier equipement" ref={bloc}>
       <button className="rang atelier-tete" onClick={() => setOuvert(!ouvert)}>
         <span className="pile" style={{ gap: 1 }}>
           <span className="libelle">Équipement</span>
@@ -258,6 +279,42 @@ function LigneMateriel({ db, e, onEcrit }: {
     await oublierEquipement(db, e.id)
     onEcrit()
   })
+
+  /* ─── LE SKIN — « la combinaison c'est comme un skin, et le casque aussi » ──
+     Même dispositif que la machine, jusque dans ses garde-fous : la photo réelle
+     existe indépendamment du portrait, le candidat n'est rien tant qu'il n'est
+     pas gardé, et refuser ne détruit rien. Et même quota : une combinaison passe
+     par la même fabrique qu'une moto, donc par le même compteur et le même
+     plafond — le quota porte sur le PILOTE, pas sur l'objet. */
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [candidat, setCandidat] = useState<Sprite | null>(null)
+  const [enCours, setEnCours] = useState(false)
+  const [souci, setSouci] = useState<string | null>(null)
+  const fichier = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let vivant = true
+    void photoEquipement(e.photo_chemin).then((f) => {
+      if (!vivant) return
+      setPhotoUrl((a) => { if (a) URL.revokeObjectURL(a); return f ? URL.createObjectURL(f) : null })
+    })
+    return () => { vivant = false }
+  }, [e.photo_chemin])
+
+  const verser = async (f: File) => {
+    setSouci(null)
+    await verserPhotoEquipement(db, e.id, f)
+    onEcrit()
+  }
+  const fabriquer = async () => {
+    const f = await photoEquipement(e.photo_chemin)
+    if (!f) return
+    setEnCours(true); setSouci(null); setCandidat(null)
+    const issue = await genererPortrait(db, { equipementId: e.id }, f)
+    setEnCours(false)
+    if (issue.ok) setCandidat(issue.sprite)
+    else setSouci(issue.message)
+  }
   /* ⚠ DEUX LIGNES, PAS UN RANG. La première version mettait le nom à gauche et
      « acheté en mars 2024 · 540 € · retirer » à droite, sur un `rang` en
      `space-between`. Sur un écran de 390 px, « Combinaison Ixon 2 pièces » se
@@ -267,8 +324,22 @@ function LigneMateriel({ db, e, onEcrit }: {
      et la mise en page doit le supposer plutôt que l'espérer court. */
   return (
     <div className="pile materiel">
+      {/* TROIS ÉTATS, même préséance qu'au garage : le portrait pixel s'il a été
+          gardé, la photo réelle sinon, et rien du tout en dernier — un
+          équipement sans média reste pleinement un équipement. */}
+      {(e.sprite || photoUrl) && (
+        <div className="scene-equipement">
+          <img className={e.sprite ? 'sprite' : 'photo-machine'}
+               src={e.sprite ?? photoUrl!} alt={e.nom} />
+        </div>
+      )}
+
       <span className="texte">{e.nom}</span>
-      <div className="rang">
+      {/* ⚠ LE RANG DES FAITS NE S'AFFICHE QUE S'IL EN A. Sans date ni montant,
+          il rendait une ligne vide avec « retirer » suspendu tout seul à droite
+          — vu sur la capture, invisible à la relecture. Une ligne vide se lit
+          comme un défaut d'affichage, et elle en est un. */}
+      {(e.achete_le || e.cout_centimes || e.note) && (
         <span className="libelle faible">
           {/* La date d'achat s'énonce, elle ne se convertit pas en âge. « acheté
               en mars 2024 » est un fait ; « 2 ans » est un jugement en attente,
@@ -278,9 +349,48 @@ function LigneMateriel({ db, e, onEcrit }: {
           {e.cout_centimes ? formaterEuros(e.cout_centimes) : ''}
           {e.note ? ` · ${e.note}` : ''}
         </span>
-        <button className="lien" disabled={occupe}
-                onClick={() => void retirer()}>retirer</button>
-      </div>
+      )}
+
+      <input ref={fichier} type="file" accept="image/*" hidden
+             onChange={(ev) => { const f = ev.target.files?.[0]; if (f) void verser(f) }} />
+
+      {candidat ? (
+        <div className="pile">
+          <div className="scene-equipement">
+            <img className="sprite" src={candidat.dataUri} alt={`${e.nom} en pixel`} />
+          </div>
+          <p className="note">
+            {candidat.largeur} × {candidat.hauteur} cellules · {candidat.couleurs} couleurs.
+            Tant qu'il n'est pas gardé, rien n'a changé.
+          </p>
+          <button className="bouton secondaire"
+                  onClick={() => void poserSpriteEquipement(db, e.id, candidat.dataUri)
+                    .then(() => { setCandidat(null); onEcrit() })}>
+            Garder ce portrait
+          </button>
+          <button className="lien" onClick={() => setCandidat(null)}>Revenir à la photo</button>
+        </div>
+      ) : (
+        <div className="rang actions-materiel">
+          <button className="lien" onClick={() => fichier.current?.click()}>
+            {e.photo_chemin ? 'Remplacer la photo' : 'Photographier'}
+          </button>
+          {e.photo_chemin && !e.sprite && (
+            <button className="lien" disabled={enCours} onClick={() => void fabriquer()}>
+              {enCours ? 'fabrication…' : 'En faire un portrait pixel'}
+            </button>
+          )}
+          {e.sprite && (
+            <button className="lien"
+                    onClick={() => void poserSpriteEquipement(db, e.id, null).then(onEcrit)}>
+              Retirer le portrait
+            </button>
+          )}
+          <button className="lien" disabled={occupe}
+                  onClick={() => void retirer()}>retirer</button>
+        </div>
+      )}
+      {souci && <p className="mot-erreur">{souci}</p>}
     </div>
   )
 }

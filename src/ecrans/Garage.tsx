@@ -39,6 +39,10 @@ export function Garage({ db, onEcrit }: {
   const [corriger, setCorriger] = useState(false)
   /** Le poste d'atelier ouvert EN PAGE. Non nul = le garage cède l'écran. */
   const [poste, setPoste] = useState<Categorie | null>(null)
+  /** Un compteur, pas un booléen : « X machine et si je clique je peux aller
+   *  sur mon équipement ». Un booléen déjà vrai ne rappellerait rien au second
+   *  tap, et un pilote qui tape deux fois s'attend deux fois à arriver. */
+  const [versEquipement, setVersEquipement] = useState(0)
   // Le portrait de jeu — récit 3bis.3. Le CANDIDAT n'est rien tant qu'il n'est
   // pas gardé : c'est ce qui rend « le pixel est une présentation, jamais un
   // remplacement destructif » vrai dans le code et pas seulement dans le texte.
@@ -194,11 +198,20 @@ export function Garage({ db, onEcrit }: {
 
   return (
     <section className="garage">
+      {/* ⚠ LE COMPTEUR DE MACHINES MÈNE À L'ÉQUIPEMENT — « en haut à droite : X
+          machine, et si je clique je peux aller sur mon équipement ».
+
+          Il y a une logique de rangement derrière : le garage contient DEUX
+          inventaires, les motos et ce qui n'appartient à aucune moto. Le second
+          vivait tout en bas, après l'atelier, l'usure et le budget — donc
+          introuvable. La tête du garage est l'endroit où l'on compte ce qu'on
+          possède ; c'est de là qu'on doit atteindre l'autre inventaire. */}
       <header className="garage-tete">
         <p className="libelle">garage</p>
-        <p className="libelle">
-          <b>{machines.length}</b> machine{machines.length > 1 ? 's' : ''}
-        </p>
+        <button className="lien tete-inventaire"
+                onClick={() => setVersEquipement((n) => n + 1)}>
+          <b>{machines.length}</b> machine{machines.length > 1 ? 's' : ''} · équipement ›
+        </button>
       </header>
 
       {machines.length > 1 && (
@@ -387,7 +400,7 @@ export function Garage({ db, onEcrit }: {
           « Il y a toujours une machine mais aussi un espace équipement. » Il est
           hors de la machine ET hors de l'onglet des machines : changer de moto
           ne change pas de combinaison. */}
-      <Equipement db={db} onEcrit={onEcrit} />
+      <Equipement db={db} onEcrit={onEcrit} appele={versEquipement} />
 
       <button className="lien" onClick={() => void importerSaison()}>
         Reprendre la saison 2026 · Pau-Arnos

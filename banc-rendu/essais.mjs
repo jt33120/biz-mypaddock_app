@@ -49,7 +49,7 @@ process.on('SIGINT', () => { descendreLeServeur(); process.exit(130) })
 
 const BOUT_EN_BOUT = [
   'fumee', 'fumee-accueil', 'fumee-conseil', 'fumee-cout', 'fumee-instruments',
-  'fumee-confirmation', 'fumee-journee', 'fumee-chute', 'fumee-photo', 'fumee-recap', 'fumee-circuit', 'fumee-circuit-fiche', 'fumee-emport', 'fumee-portrait', 'fumee-atelier', 'fumee-budget', 'fumee-machine', 'fumee-legal', 'fumee-vide-saisonnier', 'fumee-courbe', 'fumee-usure', 'fumee-checklist', 'fumee-saison', 'fumee-cercle',
+  'fumee-confirmation', 'fumee-journee', 'fumee-chute', 'fumee-preparation', 'fumee-photo', 'fumee-recap', 'fumee-circuit', 'fumee-circuit-fiche', 'fumee-emport', 'fumee-portrait', 'fumee-atelier', 'fumee-budget', 'fumee-machine', 'fumee-legal', 'fumee-vide-saisonnier', 'fumee-courbe', 'fumee-usure', 'fumee-checklist', 'fumee-saison', 'fumee-cercle',
 ]
 
 console.log('\n═══ essais unitaires ═══')

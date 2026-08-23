@@ -138,14 +138,27 @@ export type Equipement = {
   achete_le: string | null
   cout_centimes: number | null
   note: string | null
+  /** Le portrait pixel — « la combinaison c'est comme un skin, et le casque
+   *  aussi ». Nullable : un équipement sans portrait est un état valide. */
+  sprite: string | null
+  /** La photo réelle, indépendante du sprite. C'est elle qui reprend la place
+   *  quand un portrait est refusé ou retiré. */
+  photo_chemin: string | null
 }
 
 /** Rangé par catégorie puis par achat le plus récent. Aucun tri par « âge » ni
  *  par « à remplacer » : ces classements n'existent pas, et c'est le sujet. */
 export const listerEquipement = (db: PowerSyncDatabase) =>
   db.getAll<Equipement>(
-    `SELECT id, nom, categorie, achete_le, cout_centimes, note
+    `SELECT id, nom, categorie, achete_le, cout_centimes, note, sprite, photo_chemin
        FROM equipement ORDER BY categorie, coalesce(achete_le, '0000') DESC, id DESC`)
+
+/** Le sprite se pose et se retire sans toucher au reste : c'est une
+ *  reconstruction, pas une donnée d'identité — le pilote doit pouvoir le
+ *  refuser. Exactement la même règle que pour la machine. */
+export const poserSpriteEquipement = (
+  db: PowerSyncDatabase, id: string, sprite: string | null,
+) => db.execute(`UPDATE equipement SET sprite = ? WHERE id = ?`, [sprite, id])
 
 export const declarerEquipement = async (
   db: PowerSyncDatabase,

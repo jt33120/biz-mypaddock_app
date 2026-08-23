@@ -133,25 +133,33 @@ verifier('   la page d\'entretien ne contient PAS les bricoles',
 verifier('   une seule page à la fois, par construction',
   await page.$$eval('.poste-page', n => n.length) === 1)
 
-// ── ⑨ Le manuel est une RECHERCHE, pas un lien inventé.
-const lien = await page.getAttribute('.poste-page a[href*="duckduckgo"]', 'href')
-verifier('⑨ le manuel se cherche à partir de la machine déclarée',
-  lien.includes('CBR') && lien.includes('2010'), decodeURIComponent(lien ?? '').slice(0, 90))
-verifier('   et il annonce qu\'il sort de l\'application',
-  (await texte('.poste-page')).includes('Ouvre le navigateur'))
-
-// ── ⑩ LE DOCUMENT SE VERSE, IL NE SE RAPATRIE PAS.
+// ── ⑨ LE MANUEL SE TROUVE TOUT SEUL, et le secours manuel reste offert.
 //
-// ⚠ Le point vérifié n'est pas seulement que ça marche : c'est que l'écran
-// n'offre AUCUN bouton du genre « récupérer ce manuel automatiquement ». Un
-// manuel d'atelier est une œuvre protégée, et l'héberger pour tous les pilotes
-// qui ont la même moto n'est plus « garder mon manuel ». Si ce bouton
-// réapparaît un jour, cet essai doit tomber.
+// Décision de Julian, réaffirmée après mon objection sur le droit d'auteur :
+// « c'est fait en backend et automatisé, l'utilisateur ne recherche pas
+// lui-même ». Le geste principal est donc le bouton automatique ; la recherche
+// à la main et le versement d'un fichier restent en secours, en petit.
 const manuel = await texte('.poste-page .bloc:has-text("Le manuel")')
-const rapatrier = ['télécharger automatiquement', 'récupérer le manuel', 'importer depuis le web']
-verifier('⑩ aucun rapatriement automatique proposé',
-  !rapatrier.some((m) => manuel.toLowerCase().includes(m)))
-verifier('   le versement est offert', manuel.includes('Garder un document'))
+verifier('⑨ le geste principal est automatique', manuel.includes('Trouver le manuel'))
+verifier('   chercher soi-même reste possible', manuel.includes('Chercher moi-même'))
+verifier('   verser un fichier aussi', manuel.includes('Verser un document'))
+
+const lien = await page.getAttribute('.poste-page a[href*="duckduckgo"]', 'href')
+verifier('   la recherche part de la machine déclarée',
+  lien.includes('CBR') && lien.includes('2010'), decodeURIComponent(lien ?? '').slice(0, 90))
+
+// ⚠ SANS COMPTE, RIEN NE PART. La recherche vit sur le serveur et coûte de
+// l'argent : elle doit refuser AVANT tout appel, et le dire. Cet essai tourne
+// sans compte — c'est donc exactement le chemin qu'il éprouve.
+const partis = []
+page.on('request', (r) => { if (/functions\/v1\/manuel/.test(r.url())) partis.push(r.url()) })
+await page.click('.poste-page .bouton:has-text("Trouver le manuel")')
+await page.waitForSelector('.poste-page .mot-erreur', { timeout: 20_000 })
+verifier('⑩ sans compte, le refus est énoncé',
+  (await texte('.poste-page .mot-erreur')).includes('compte'),
+  await texte('.poste-page .mot-erreur'))
+verifier('   et aucune requête n\'est partie vers la fabrique',
+  partis.length === 0, `${partis.length} requête(s)`)
 
 await page.setInputFiles('.poste-page .bloc:has-text("Le manuel") input[type=file]', PHOTO)
 await page.waitForSelector('.poste-page .materiel', { timeout: 30_000 })

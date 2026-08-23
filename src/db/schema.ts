@@ -161,6 +161,13 @@ const equipement = new Table({
   achete_le: column.text,
   cout_centimes: column.integer,
   note: column.text,
+  /** « La combinaison c'est comme un skin, et le casque aussi, c'est à
+   *  pixeliser ! » — mêmes deux colonnes que `machine`, et pour les mêmes
+   *  raisons : la photo RÉELLE existe indépendamment du sprite, sinon retirer
+   *  un portrait laisserait un vide et « le pixel est une présentation, jamais
+   *  un remplacement destructif » ne serait vrai que dans le texte. */
+  sprite: column.text,
+  photo_chemin: column.text,
 })
 
 // Ce que le pilote S'ÉTAIT FIXÉ — la seule grandeur du coût qui ne se dérive pas.
@@ -264,6 +271,18 @@ const document_ = new Table({
   chemin_objet: column.text,
   octets: column.integer,
   type_mime: column.text,
+  /** ⚠ D'OÙ VIENT LE FICHIER quand il n'a pas été versé à la main. Nul pour un
+   *  document versé par le pilote, et c'est cette distinction qui doit rester
+   *  lisible : un document rapatrié qui ne dirait pas sa provenance serait
+   *  indistinguable d'un document qu'on a soi-même choisi.
+   *
+   *  Ces deux colonnes ont manqué ici pendant une heure alors qu'elles
+   *  existaient côté serveur : la requête de lecture les demandait, SQLite ne
+   *  les connaissait pas, et TOUTE la liste des documents devenait vide sans le
+   *  moindre message. Une colonne ajoutée d'un seul côté est une colonne qui
+   *  casse la lecture entière de sa table. */
+  source_url: column.text,
+  rapatrie_le: column.text,
 })
 
 // ─── Référentiel — lu, jamais écrit par la PWA (AD-12) ────────────────────

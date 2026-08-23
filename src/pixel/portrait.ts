@@ -51,9 +51,26 @@ const MOTS: Record<string, string> = {
 }
 const dire = (motif: string) => MOTS[motif] ?? "La fabrique de portraits n'a pas abouti."
 
+/**
+ * ⚠ LE SUJET VOYAGE, ET LE QUOTA NE BOUGE PAS. « La combinaison c'est comme un
+ * skin, et le casque aussi, c'est à pixeliser ! » — une combinaison passe par la
+ * même fabrique qu'une moto, donc par le même compteur et le même plafond.
+ *
+ * Le sujet est un OBJET NOMMÉ et non un second `string` positionnel : deux
+ * chaînes se confondent, et cette confusion a déjà coûté une intervention
+ * écartée définitivement côté serveur — un identifiant de machine passé là où
+ * un identifiant de roulage était attendu.
+ */
+export type Sujet =
+  | { machineId: string; equipementId?: never }
+  | { equipementId: string; machineId?: never }
+
 export const genererPortrait = async (
-  _db: PowerSyncDatabase, machineId: string, photo: Blob, piloteEnSelle = false,
+  _db: PowerSyncDatabase, sujet: Sujet | string, photo: Blob, piloteEnSelle = false,
 ): Promise<Issue> => {
+  // Un `string` reste accepté pour les appels existants : c'est une machine.
+  const s: Sujet = typeof sujet === 'string' ? { machineId: sujet } : sujet
+  const machineId = s.machineId ?? null
   const base = import.meta.env.VITE_SUPABASE_URL
   if (!base) return { ok: false, motif: 'sans_compte', message: dire('sans_compte') }
 
@@ -76,6 +93,9 @@ export const genererPortrait = async (
     rep = await fetch(`${base}/functions/v1/sprite`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+      // `machineId` sert au serveur à rattacher la ligne de `generation` : il
+      // reste nul pour un équipement, et la génération est alors comptée sans
+      // machine — le quota, lui, porte sur le PILOTE, pas sur l'objet.
       body: JSON.stringify({ photo: b64, machineId, piloteEnSelle }),
     })
   } catch { return { ok: false, motif: 'reseau', message: dire('reseau') } }

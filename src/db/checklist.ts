@@ -23,7 +23,9 @@ import { marquerSaisie } from './mesures'
  * rend utile l'année suivante, quand on ne se rappelle plus ce qu'on avait pris.
  */
 
-export type Categorie = 'machine' | 'equipement' | 'conformite'
+/** ⚠ `preparation` DIT CE QU'ON FAIT AVANT, les trois autres ce qu'on EMPORTE.
+ *  Elles ne se remplacent pas : on peut avoir tout chargé et n'avoir pas payé. */
+export type Categorie = 'machine' | 'equipement' | 'conformite' | 'preparation'
 
 export type Ligne = {
   id: string
@@ -38,6 +40,7 @@ export const NOM_CATEGORIE: Record<Categorie, string> = {
   machine: 'La machine',
   equipement: 'Ce que tu portes',
   conformite: "Ce que l'organisateur publie",
+  preparation: "Avant d'y aller",
 }
 
 /**
@@ -62,6 +65,10 @@ export const CHARGEMENT_EMBARQUE: readonly { libelle: string; categorie: Categor
   { libelle: 'Adhésif et durites de rechange', categorie: 'machine' },
 ]
 
+/** ⚠ `composer` ne pose QUE du chargement, jamais de préparation : la
+ *  préparation est DÉRIVÉE de ce que le pilote a saisi, et un fait dérivé ne se
+ *  stocke pas — il se recalcule, sinon il ment le jour où la donnée change.
+ *  Seules les lignes ajoutées à la main y sont écrites. */
 export const lignes = (db: PowerSyncDatabase, roulageId: string) =>
   db.getAll<Ligne>(
     `SELECT id, libelle, categorie, cochee, source_url, publie_le

@@ -10,7 +10,7 @@ import {
 } from '../db/photos'
 import {
   documentsDeLaMachine, formaterOctets, NOM_GENRE, oublierDocument, ouvrirDocument,
-  verserDocument, type Document, type Genre as GenreDoc,
+  rapatrierLeManuel, verserDocument, type Document, type Genre as GenreDoc,
 } from '../db/documents'
 import { Usure } from './Usure'
 import { useGeste } from './geste'
@@ -158,6 +158,7 @@ function Manuel({ db, machine, onEcrit }: {
 }) {
   const [docs, setDocs] = useState<Document[]>([])
   const [souci, setSouci] = useState<string | null>(null)
+  const [trouve, setTrouve] = useState<string | null>(null)
   const fichier = useRef<HTMLInputElement>(null)
 
   const charger = useCallback(
@@ -167,6 +168,24 @@ function Manuel({ db, machine, onEcrit }: {
   const requete = [machine.marque, machine.modele, machine.annee, 'manuel atelier pdf']
     .filter(Boolean).join(' ')
   const url = `https://duckduckgo.com/?q=${encodeURIComponent(requete)}`
+
+  /* ⚠ LA RECHERCHE EST FAITE PAR LE SERVEUR — « c'est fait en backend et
+     automatisé, l'utilisateur ne recherche pas lui-même ». Elle DOIT l'être :
+     le navigateur ne peut pas télécharger un PDF d'un domaine tiers, la
+     politique d'origine croisée le refuse et aucun site de manuel ne pose
+     d'en-tête CORS pour nous. La clé du moteur ne pourrait de toute façon pas
+     vivre dans un paquet servi au navigateur (AD-15).
+
+     La ligne redescend par la synchronisation : le serveur l'écrit, on la
+     relit. L'insérer ici la ferait exister sur ce téléphone alors que les
+     octets seraient peut-être restés en route. */
+  const [chercher, cherche] = useGeste(async () => {
+    setSouci(null); setTrouve(null)
+    const r = await rapatrierLeManuel(machine.id)
+    if (!r.ok) { setSouci(r.message); return }
+    setTrouve(r.source)
+    await charger(); onEcrit()
+  })
 
   const verser = async (f: File, genre: GenreDoc) => {
     setSouci(null)
@@ -191,23 +210,30 @@ function Manuel({ db, machine, onEcrit }: {
           </p>
         )}
 
-      {/* ⚠ DEUX GESTES SÉPARÉS, ET C'EST UN ARBITRAGE JURIDIQUE, PAS UNE
-          MALADRESSE D'INTERFACE.
+      {/* ⚠ LE GESTE PRINCIPAL EST AUTOMATIQUE — décision de Julian, réaffirmée
+          après mon objection : « l'utilisateur ne recherche pas lui-même ».
 
-          « Un websearch une fois puis sauvegarde dans le Supabase Storage le
-          manuel » — la lecture littérale ferait suivre au serveur l'URL trouvée
-          pour en déposer une copie. Un manuel d'atelier est une œuvre protégée :
-          l'héberger pour tous les pilotes qui ont la même moto n'est plus
-          « garder mon manuel », c'est devenir une bibliothèque de manuels.
+          J'avais opté pour un versement manuel au motif du droit d'auteur : un
+          manuel d'atelier est une œuvre protégée. Il a tranché l'inverse, et
+          c'est son projet. CE QUI RESTE DE LA PRÉCAUTION est le seul point qui
+          change quelque chose en droit : la copie va dans SON espace privé —
+          chemin préfixé par son identifiant, politique qui n'ouvre qu'à lui.
+          Rien n'est mutualisé, rien n'est servi à un second pilote. Ce n'est pas
+          une bibliothèque, c'est une copie privée pour son détenteur.
 
-          La recherche aide à le TROUVER ; le versement est le geste du pilote,
-          sur SON fichier, dans SON espace. Le service rendu est identique — il
-          est là, hors ligne, quand on en a besoin — et le pas qui engage
-          quelqu'un reste le sien. */}
-      <a className="bouton secondaire" href={url} target="_blank" rel="noreferrer noopener">
-        Chercher « {requete} »
-      </a>
-      <p className="note">Ouvre le navigateur, et demande du réseau.</p>
+          La source s'affiche après coup, et ce n'est pas décoratif : un document
+          rapatrié qui ne dirait pas d'où il vient serait indistinguable d'un
+          document qu'on a soi-même choisi. */}
+      <button className="bouton" disabled={cherche} onClick={() => void chercher()}>
+        {cherche ? 'recherche en cours…' : 'Trouver le manuel de cette moto'}
+      </button>
+      {cherche && (
+        <p className="note">
+          Le serveur cherche et télécharge. Ça prend une poignée de secondes.
+        </p>
+      )}
+      {trouve && <p className="note">Trouvé sur <b>{new URL(trouve).hostname}</b>.</p>}
+      {souci && <p className="mot-erreur">{souci}</p>}
 
       <input ref={fichier} type="file" hidden
              accept="application/pdf,image/*"
@@ -215,13 +241,23 @@ function Manuel({ db, machine, onEcrit }: {
                const f = e.target.files?.[0]
                if (f) void verser(f, 'manuel')
              }} />
-      <button className="lien" onClick={() => fichier.current?.click()}>
-        Garder un document dans le garage
-      </button>
-      {souci && <p className="mot-erreur">{souci}</p>}
+      {/* LES DEUX SECOURS, en petit : chercher soi-même quand l'automatique ne
+          trouve rien, et verser un fichier qu'on a déjà. */}
+      <div className="rang actions-materiel">
+        <a className="lien" href={url} target="_blank" rel="noreferrer noopener">
+          Chercher moi-même
+        </a>
+        <button className="lien" onClick={() => fichier.current?.click()}>
+          Verser un document
+        </button>
+      </div>
     </div>
   )
 }
+
+/** L'hôte seul, jamais l'URL entière : une adresse de PDF fait deux cents
+ *  caractères et sortirait de l'écran. Le nom de domaine suffit à dire d'où. */
+const hote = (u: string) => { try { return new URL(u).hostname } catch { return 'source inconnue' } }
 
 /**
  * Un document gardé. Il S'OUVRE DEPUIS LA COPIE LOCALE quand elle existe —
@@ -252,6 +288,10 @@ function LigneDocument({ db, d, onEcrit }: {
       <div className="rang">
         <span className="libelle faible">
           {NOM_GENRE[d.genre]}{d.octets ? ` · ${formaterOctets(d.octets)}` : ''}
+          {/* La provenance est DITE. Un fichier rapatrié par le serveur et un
+              fichier versé à la main ne s'équivalent pas : le premier vient
+              d'une adresse que personne n'a vérifiée. */}
+          {d.source_url ? ` · ${hote(d.source_url)}` : ''}
         </span>
         <span className="rang" style={{ gap: 12, flex: '0 0 auto' }}>
           <button className="lien" disabled={occupe} onClick={() => void ouvrir()}>

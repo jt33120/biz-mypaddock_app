@@ -38,6 +38,9 @@ export type Source =
 export type Prochain = {
   id: string
   circuit_nom: string
+  /** Nulle est un état valide (AD-2). Sert à dériver la préparation : sans
+   *  machine, la liste se réduit aux points qui ne dépendent pas d'une moto. */
+  machine_id: string | null
   date_jour: string
   meilleur: number | null
   sessions: number
@@ -50,7 +53,7 @@ export const ecartJours = (de: string, a: string): number =>
   Math.round((Date.parse(a + 'T12:00:00Z') - Date.parse(de + 'T12:00:00Z')) / 86_400_000)
 
 const LIGNE = `
-  SELECT r.id, r.circuit_nom, r.date_jour,
+  SELECT r.id, r.circuit_nom, r.machine_id, r.date_jour,
          (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
          (SELECT min(t.temps_ms) FROM tour t
             JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur,

@@ -614,3 +614,52 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 }
 .circuit-page .garage-titre { border-left: 3px solid var(--miami); padding-left: 12px; }
 .circuit-page .garage-tete .lien { min-height: 40px; }
+
+/* ─── AVANT D'Y ALLER ──────────────────────────────────────────────────────
+   Aucun rouge, aucune pastille, aucune barre de progression. Ce bloc ÉNONCE ce
+   qui attend ; il ne compte pas ce qui manque et ne relance personne. Le filet
+   est le jaune de la structure — présent, jamais alarmant. */
+.preparation { border-left: 3px solid var(--plus-lent); }
+/* Une tâche dérivée est une PORTE, pas une case : elle mène là où elle se règle
+   réellement. Cocher une plaquette de frein donnerait le sentiment d'avoir fait
+   le travail sans l'avoir fait. */
+.ligne-atelier.tache {
+  width: 100%; min-height: var(--cible-min);
+  background: none; border: 0; padding: 4px 0; cursor: pointer;
+  font-family: var(--face); color: inherit; text-align: left;
+}
+.ligne-atelier.tache .signe {
+  font-size: 22px; line-height: 1; color: var(--encre-tenue); width: 20px; text-align: center;
+}
+/* Le champ d'ajout d'une tâche. `min-width: 0` est OBLIGATOIRE : un `input` a
+   une largeur minimale intrinsèque d'environ 180 px qu'il refuse de franchir,
+   et il pousse alors le bouton hors du bloc. */
+.ajout-tache { gap: 8px; align-items: stretch; }
+.ajout-tache .champ { flex: 1 1 auto; min-width: 0; }
+.ajout-tache .bouton { flex: 0 0 auto; width: auto; padding: 0 16px; white-space: nowrap; }
+
+/* La tête du garage compte ce qu'on possède, et mène à l'autre inventaire —
+   celui qui n'appartient à aucune moto. Il vivait tout en bas de l'écran, donc
+   introuvable. */
+.tete-inventaire {
+  align-self: auto; text-decoration: none; padding: 0; min-height: 0;
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--encre-faible);
+}
+.tete-inventaire b { color: var(--miami); font-weight: 600; }
+
+/* La scène d'un équipement — même traitement que la moto, en plus petit : le
+   pixel reste net à toute taille au plus proche voisin, un lissage le
+   trahirait en photo floue. */
+.scene-equipement { display: grid; place-items: center; padding: 2px 0 6px; }
+.scene-equipement .sprite {
+  width: 62%; max-width: 200px; height: auto; display: block; image-rendering: pixelated;
+}
+.scene-equipement .photo-machine {
+  width: 62%; max-width: 200px; height: auto; display: block;
+  border: 1px solid var(--filet);
+}
+/* Les actions d'une pièce d'équipement passent à la ligne plutôt que de sortir
+   de l'écran : elles sont deux, trois ou quatre selon qu'il y a une photo et un
+   portrait, et trois liens en une seule rangée débordent sur 390 px. */
+.actions-materiel { flex-wrap: wrap; gap: 4px 16px; }

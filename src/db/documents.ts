@@ -3,6 +3,7 @@ import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
 import { supabase } from './supabase'
 import { ecrireLocale, effacerLocale, lireLocale } from './photos'
+import { jeton } from './compte'
 
 /**
  * LES DOCUMENTS D'UNE MACHINE — le manuel d'atelier en tête.
@@ -36,6 +37,11 @@ export const NOM_GENRE: Record<Genre, string> = {
 
 export type Document = {
   id: string
+  /** D'OÙ VIENT LE FICHIER quand il n'a pas été versé à la main. Nul pour un
+   *  document versé par le pilote — et c'est cette distinction qui doit rester
+   *  lisible à l'écran : un document rapatrié qui ne dirait pas sa provenance
+   *  serait indistinguable d'un document qu'on a soi-même choisi. */
+  source_url?: string | null
   machine_id: string
   nom: string
   genre: Genre
@@ -88,8 +94,63 @@ export const verserDocument = async (
 
 export const documentsDeLaMachine = (db: PowerSyncDatabase, machineId: string) =>
   db.getAll<Document>(
-    `SELECT id, machine_id, nom, genre, chemin_objet, octets, type_mime
+    `SELECT id, machine_id, nom, genre, chemin_objet, octets, type_mime, source_url
        FROM document WHERE machine_id = ? ORDER BY genre, id DESC`, [machineId])
+
+/* ─── LE MANUEL, TROUVÉ ET RAPATRIÉ PAR LE SERVEUR ────────────────────────
+   Décision de Julian, réaffirmée : « c'est fait en backend et automatisé,
+   l'utilisateur ne recherche pas lui-même ».
+
+   ⚠ TOUT SE PASSE SUR LE SERVEUR, et c'est obligatoire — pas un choix de
+   confort. Le navigateur ne peut PAS télécharger un PDF d'un domaine tiers :
+   la politique d'origine croisée le refuse, et aucun site de manuel ne pose
+   d'en-tête CORS pour nous. C'est la même raison qui met la fabrique d'images
+   côté serveur, et la clé du moteur ne peut de toute façon pas vivre dans un
+   paquet servi au navigateur (AD-15).
+
+   La ligne `document` est écrite PAR LE SERVEUR et redescend par la
+   synchronisation : le client ne l'insère pas, sinon elle existerait ici sans
+   que les octets soient arrivés là-bas. */
+
+export type IssueManuel =
+  | { ok: true; nom: string; octets: number; source: string }
+  | { ok: false; message: string }
+
+const MOT: Record<string, string> = {
+  sans_compte: 'La recherche se fait sur le serveur, donc elle demande un compte.',
+  cle_absente: "La recherche n'est pas encore branchée. Rien n'a été cherché, rien n'a coûté.",
+  machine_inconnue: 'Cette machine est introuvable sur le serveur. Sauvegarde d’abord.',
+  introuvable: "Aucun manuel en PDF n'a été trouvé pour cette moto. Tu peux en verser un toi-même.",
+  pas_un_pdf: "Ce qui a été trouvé n'est pas un PDF. Rien n'a été gardé.",
+  url_refusee: "L'adresse trouvée n'a pas été jugée sûre. Rien n'a été téléchargé.",
+  trop_lourd: 'Le fichier trouvé dépasse 25 Mo.',
+  moteur: "Le moteur de recherche n'a pas répondu. Réessaie plus tard.",
+  reseau: 'Pas de réseau. Le manuel se cherchera au retour du signal.',
+}
+
+export const rapatrierLeManuel = async (machineId: string): Promise<IssueManuel> => {
+  const base = import.meta.env.VITE_SUPABASE_URL
+  if (!base) return { ok: false, message: MOT.sans_compte }
+
+  let jwt: string | null = null
+  try { jwt = await jeton() } catch { /* hors ligne : traité comme un réseau absent */ }
+  if (!jwt) return { ok: false, message: MOT.sans_compte }
+
+  let rep: Response
+  try {
+    rep = await fetch(`${base}/functions/v1/manuel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ machineId }),
+    })
+  } catch { return { ok: false, message: MOT.reseau } }
+
+  const corps = await rep.json().catch(() => ({}))
+  if (!rep.ok || !corps.id) {
+    return { ok: false, message: MOT[String(corps.refus)] ?? "La recherche n'a pas abouti." }
+  }
+  return { ok: true, nom: corps.nom, octets: corps.octets, source: corps.source }
+}
 
 /** La copie locale d'abord, TOUJOURS. Un document versé au paddock hors ligne
  *  doit s'ouvrir au paddock hors ligne — c'est tout l'intérêt de l'avoir versé. */

@@ -37,6 +37,7 @@ import {
 } from './db/chiffres'
 import { televerserDocuments } from './db/documents'
 import { Chutes } from './ecrans/Chute'
+import { Preparation } from './ecrans/Preparation'
 import { Circuit } from './ecrans/Circuit'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
@@ -293,7 +294,14 @@ export default function App() {
         {ecran === 'accueil' && (
           <Accueil db={db} src={src} conseil={conseil}
                    onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan}
-                   onLegal={() => setEcran('legal')} />
+                   onLegal={() => setEcran('legal')}
+                   onAller={(vers, roulageId) => {
+                     // L'argent d'une journée se saisit SUR la journée : la
+                     // dépense d'engagement porte `cible = 'roulage'`, et la
+                     // saisir ailleurs la rattacherait à la saison seule.
+                     if (vers === 'budget') void ouvrirBilan(roulageId).then(() => setEcran('depense'))
+                     else setEcran('garage')
+                   }} />
         )}
         {ecran === 'roulages' && <Roulages db={db} liste={liste} onOuvrir={ouvrirBilan}
                                             onNouveau={() => setEcran('nouveau')}
@@ -409,10 +417,13 @@ export default function App() {
    FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
    échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
    rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
-function Accueil({ db, src, conseil, onNouveau, onOuvrir, onLegal }: {
+function Accueil({ db, src, conseil, onNouveau, onOuvrir, onLegal, onAller }: {
   db: Db; src: Source | null; conseil: string | null
   onNouveau: () => void; onOuvrir: (id: string) => void
   onLegal: () => void
+  /** Chaque tâche de préparation MÈNE QUELQUE PART. Une liste de rappels dont
+   *  les lignes ne mènent nulle part se lit une fois et ne se relit jamais. */
+  onAller: (vers: 'atelier' | 'usure' | 'budget', roulageId: string) => void
 }) {
   return (
     <>
@@ -427,6 +438,19 @@ function Accueil({ db, src, conseil, onNouveau, onOuvrir, onLegal }: {
         </nav>
       </header>
       <ZoneTemporelle src={src} onNouveau={onNouveau} onOuvrir={onOuvrir} />
+      {/* ⚠ LA PRÉPARATION N'APPARAÎT QUE SUR UN ROULAGE À VENIR, et jamais sur
+          le dernier vécu. « Ce qui reste à faire » sur une journée déjà passée
+          serait un reproche, et le produit ne reproche rien.
+
+          Elle vit sous la zone temporelle et au-dessus des chiffres : c'est ce
+          qu'on vient chercher quand une date approche, et ce n'est rien du tout
+          le reste de l'année — où elle est simplement absente. */}
+      {src?.genre === 'a_venir' && (
+        <Preparation db={db}
+                     roulage={{ id: src.roulage.id, machineId: src.roulage.machine_id,
+                                date: src.roulage.date_jour }}
+                     onAller={(vers) => onAller(vers, src.roulage.id)} />
+      )}
       {src && src.genre !== 'vide' && <ZoneChiffres db={db} />}
       {conseil && <Conseil texte={conseil} />}
     </>
