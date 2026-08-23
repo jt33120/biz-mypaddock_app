@@ -120,6 +120,37 @@ machine.
 
 ---
 
+## 5bis · `MISTRAL_API_KEY` — un secret, deux fonctions
+
+**Ce qui attend :** poser `MISTRAL_API_KEY` à DEUX endroits, qui sont deux
+services distincts et n'ont pas la même conséquence :
+
+1. **Supabase → Edge Functions → Secrets.** Débloque la fonction `manuel` : la
+   recherche automatique du manuel d'atelier et son rapatriement dans ton espace.
+2. **Railway → service `recolte` → Variables.** Débloque la récolte (§5).
+
+**Ce que ça coûtera :** un appel de recherche web par manuel cherché, plus le
+téléchargement du PDF. Quelques centimes l'unité. Deux plafonds tiennent déjà :
+25 Mo par fichier, et **un seul manuel par machine** — le second appel remplace
+le premier au lieu d'empiler, sans quoi un tap répété serait une facture répétée.
+
+**⚠ CE CHEMIN N'A JAMAIS TOURNÉ EN ENTIER.** Sans la clé, la fonction refuse en
+`cle_absente` — c'est vérifié en ligne, comme le refus sans compte. Mais la
+recherche elle-même, l'extraction de l'URL et le téléchargement n'ont jamais été
+éprouvés sur un vrai manuel. **Attends-toi à ce que le premier essai échoue** :
+trouver le PDF exact d'un manuel d'atelier est difficile, et les refus prévus
+(`introuvable`, `pas_un_pdf`, `url_refusee`) sont des issues normales, pas des
+bugs. L'écran les dit en clair et propose les deux secours — chercher soi-même,
+verser un fichier.
+
+**Le point juridique, en une phrase :** j'avais refusé le rapatriement au motif
+du droit d'auteur, tu as tranché l'inverse. Ce qui reste de la précaution est le
+seul point qui change quelque chose en droit — la copie va dans TON espace privé,
+elle n'est jamais servie à un autre pilote. C'est une copie privée, pas une
+bibliothèque.
+
+---
+
 ## 6 · Le système de crédit — ta décision de monétisation à écrire
 
 **Ton idée, du 19 août :** « On va avoir pas mal de fonctionnalités IA : analyse de vidéo,
