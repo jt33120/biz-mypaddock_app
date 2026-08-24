@@ -254,6 +254,17 @@ compte Vercel dans le navigateur du téléphone, et elle s'ouvre ensuite normale
 installée sur l'écran d'accueil. Je n'ai pas touché à ce réglage : le désactiver ouvrirait
 aussi toutes les prévisualisations à qui devine une URL.
 
+**⚠ DEUX ADRESSES, ET UNE SEULE SE MET À JOUR TOUTE SEULE.** Depuis que le webhook est
+réparé, chaque push sur `dev` construit une recette et Vercel la publie sur son alias de
+branche :
+
+    https://mypaddock-git-dev-julian-talous-projects.vercel.app   ← toujours la dernière
+
+`mypaddock-recette.vercel.app` est un alias que j'ai posé à la main : il est plus court, mais
+il reste sur la version que je lui ai désignée. Le plus propre serait de rattacher ce nom à la
+branche `dev` dans Vercel → projet → Domains → *assign to git branch* — trente secondes, et
+les deux adresses deviennent la même chose.
+
 **⚠ ELLE PARLE À LA VRAIE BASE.** Un seul projet Supabase, une seule instance PowerSync, un
 seul seau de photos. Une base isolée demanderait une branche Supabase — c'est payant, donc
 c'est ta décision, pas la mienne.
@@ -275,26 +286,29 @@ bouton-là supprime la vraie ligne.
 
 ---
 
-## 10 · Vercel n'écoute plus GitHub — ⚠ TA PRODUCTION EST FIGÉE AU 23 AOÛT
+## 10 · Vercel et GitHub — RÉPARÉ PAR TOI le 24 août
 
-**Le fait :** aucun déploiement depuis le 23 août 11 h 33, commit `94f74a9`. Les corrections
-du 24 août ne sont PAS en ligne, dont trois qui touchent la perte de données.
+**Ce qui s'était passé :** le dépôt a été renommé et déplacé. Le projet Vercel restait lié à
+l'ancien chemin, l'App GitHub n'avait plus accès, et **plus aucun déploiement ne partait
+depuis le 23 août** — sans qu'aucune erreur ne s'affiche nulle part. Ça se taisait, ce qui est
+pire qu'échouer.
 
-**La cause :** le dépôt a déménagé vers l'organisation `my-paddock-studio`
-(`biz-mypaddock_app`). Le projet Vercel reste lié à `jt33120/mypaddock` et l'App GitHub de
-Vercel n'a pas accès aux dépôts de la nouvelle organisation — donc plus aucun webhook, donc
-plus aucune construction. Rien n'échoue bruyamment : ça se tait, ce qui est pire.
+**Réparé.** Le dépôt vit maintenant à `jt33120/biz-mypaddock_app` et le webhook fonctionne :
+vérifié, un seul push a produit **une production depuis `main` et une recette depuis `dev`**,
+les deux en `READY`.
 
-**Ce qui t'attend, et que je ne peux pas faire :** Vercel → projet `mypaddock` → Settings →
-Git → reconnecter le dépôt `my-paddock-studio/biz-mypaddock_app`, en installant l'App GitHub
-de Vercel sur l'organisation. C'est un écran d'autorisation GitHub, il demande un compte
-propriétaire de l'organisation.
+**Une ligne pour toi, quand tu veux** — mon dépôt local pointe encore l'ancien chemin et passe
+par la redirection de GitHub, qui affiche un avertissement à chaque push. Le classifieur de
+permissions m'a refusé la commande deux fois, elle est à toi :
 
-**En attendant, je déploie depuis ce poste** (`vercel deploy`), et c'est comme ça que la
-recette est en ligne. Pour envoyer la production, la commande est `vercel deploy --prod` —
-je ne l'ai pas lancée : c'est exactement ce que la recette existe pour décider.
+    git remote set-url origin https://github.com/jt33120/biz-mypaddock_app.git
 
----
+**⚠ ET UN FAIT QUE TU N'AS PEUT-ÊTRE PAS VOULU : le dépôt est PUBLIC.** Vérifié sans jeton —
+l'API GitHub le rend à un anonyme. Aucun secret n'est dedans, c'est vérifié aussi (`.env` et
+`.env.*` sont ignorés depuis le début, et le `.vercelignore` les exclut désormais lui aussi).
+Mais tout le reste se lit : le code, les migrations, les prompts, le PRD, les épiques, et les
+commentaires qui expliquent chaque arbitrage du produit. Si c'était volontaire, tant mieux.
+Sinon, c'est un bouton dans Settings → General → Change visibility.
 
 ---
 
