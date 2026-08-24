@@ -218,6 +218,24 @@ comme tel, soit rien — le produit énonce, il ne conseille pas d'acheter.
 
 ---
 
+## 7bis · Un interrupteur d'authentification — un clic, et il vaut le clic
+
+**Ce qui attend :** Supabase → Authentication → Policies → activer *Leaked password
+protection*.
+
+**Ce que ça fait :** Supabase compare le mot de passe choisi à la base de HaveIBeenPwned au
+moment de l'inscription, et refuse ceux qui ont déjà fuité ailleurs. Rien ne remonte en clair
+— seuls les cinq premiers caractères de l'empreinte partent.
+
+**Pourquoi ça compte ici :** un compte MyPaddock ne garde ni carte ni adresse, mais il garde
+la saison entière d'un pilote et les photos de sa moto. Le mot de passe réutilisé d'un forum
+percé en 2019 est la seule porte réaliste vers ça.
+
+**Pourquoi je ne l'ai pas fait :** c'est un réglage du projet Auth, pas une migration — il
+n'est ni dans le SQL, ni dans le code, et le connecteur ne l'expose pas.
+
+---
+
 ## 8 · Ce qui demandera ta relecture, pas ton action
 
 - **Le contenu des conseils** (récit 6.3). Six conseils embarqués tiennent la clause de forme
