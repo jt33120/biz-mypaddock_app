@@ -29,24 +29,73 @@ export type Resultat = { bilan: BilanEnvoi; refus: Refus[] }
 /** L'ordre est celui des DÉPENDANCES, et il ne se négocie pas : une session sans
  *  son roulage est refusée par la clé étrangère, pas par une convention.
  *
- *  ⚠ IL A ÉTÉ FAUX, et le défaut était bloquant : `intervention` était envoyée
- *  AVANT `photo` alors qu'elle la référence (`intervention.photo_id`). Un pilote
- *  ayant créé une seule réparation non vitale depuis une photo voyait sa
- *  première sauvegarde échouer en 23503, donc `adopter` ne marquait jamais
- *  l'adoption, donc la synchronisation continue restait éteinte pour toujours —
- *  et le défaut se rejouait à chaque tentative. Trouvé par une passe adverse.
+ *  ⚠ IL A ÉTÉ FAUX DEUX FOIS, EN SENS INVERSE, et c'est le signe qu'un ordre écrit
+ *  à la main ne suffit pas — d'où `DEPENDANCES` juste en dessous, et l'essai
+ *  unitaire qui le confronte à cette liste.
  *
- *  La chaîne réelle : geste → photo → intervention → horloge. */
+ *  ① `intervention` partait AVANT `photo` alors qu'elle la référence
+ *     (`intervention.photo_id`) : la première sauvegarde échouait en 23503,
+ *     l'adoption ne se marquait jamais, la synchronisation restait éteinte.
+ *  ② Le correctif a créé le défaut symétrique. Depuis la preuve d'atelier,
+ *     c'est la PHOTO qui désigne son intervention (`photo.intervention_id`), et
+ *     une photo de facture n'a pas d'autre porteur. Partant avant l'intervention,
+ *     elle était refusée en 23503 — nommée dans les refus, mais jamais renvoyée.
+ *     Les pièces perdues étaient exactement celles qui valent quelque chose
+ *     devant un tiers : la facture, la pièce montée.
+ *
+ *  Les deux liens existent, donc le graphe a un CYCLE, et aucun ordre ne le
+ *  résout. Un des deux liens doit voyager séparément : voir `LIEN_DIFFERE`. */
 // ⚠ L'ORDRE EST CELUI DES DÉPENDANCES, des racines vers les feuilles. Une ligne
 // qui part avant celle qu'elle référence est refusée en 23503, écartée
-// définitivement, et arrête toute la file derrière elle. `equipement` est une
-// racine — elle ne référence rien — donc elle peut se placer près des autres.
-// ⚠ `chute` VIENT APRÈS `roulage` ET AVANT `intervention` ET `photo`. Elle
-// référence le premier, et les deux autres la référencent. Une ligne qui part
-// avant celle qu'elle référence est refusée en 23503, écartée définitivement, et
-// arrête toute la file derrière elle — trois fois le même incident sur ce
-// produit, et deux d'entre eux découverts des jours plus tard.
-const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'chute', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'photo', 'intervention', 'evenement_vise', 'horloge', 'checklist_ligne', 'document'] as const
+// définitivement — quatre fois le même incident sur ce produit, et deux d'entre
+// eux découverts des jours plus tard.
+export const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'chute', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'intervention', 'photo', 'evenement_vise', 'horloge', 'checklist_ligne', 'document'] as const
+
+/**
+ * CE QUE CHAQUE TABLE RÉFÉRENCE, parmi les tables du pilote — les clés
+ * étrangères vers le référentiel (circuit, organisateur) sont hors sujet : il
+ * est déjà là, il ne remonte pas (AD-12).
+ *
+ * Cette carte n'est pas de la documentation : elle est CONFRONTÉE À `ORDRE` par
+ * un essai unitaire. Une table ajoutée au schéma et oubliée ici, ou placée trop
+ * tôt, fait rougir le banc au lieu de faire perdre des lignes à un pilote.
+ */
+export const DEPENDANCES: Readonly<Record<string, readonly string[]>> = {
+  machine: [], equipement: [], budget_saison: [], mesure: [], plan_si_alors: [],
+  roulage: ['machine'],
+  session: ['roulage'],
+  tour: ['session'],
+  chute: ['roulage'],
+  depense: ['roulage', 'machine'],
+  geste: ['roulage'],
+  intervention: ['machine', 'depense', 'chute', 'photo'],
+  photo: ['roulage', 'machine', 'chute', 'geste', 'intervention'],
+  evenement_vise: ['machine'],
+  horloge: ['machine', 'intervention'],
+  checklist_ligne: ['roulage'],
+  document: ['machine'],
+}
+
+/**
+ * LE SEUL LIEN QUI VOYAGE SÉPARÉMENT.
+ *
+ * `intervention.photo_id` et `photo.intervention_id` existent tous les deux, donc
+ * le graphe a un cycle. Il fallait choisir lequel des deux couper, et le choix
+ * est FORCÉ par une contrainte du serveur, pas par un goût :
+ *
+ *   check (roulage_id is not null or machine_id is not null
+ *       or intervention_id is not null or chute_id is not null)
+ *
+ * Une photo de facture n'a que son intervention pour porteur. Lui retirer
+ * `intervention_id` le temps d'un envoi, ce n'est pas la relâcher : c'est la
+ * rendre INSÉRABLE NULLE PART. `intervention.photo_id`, lui, est simplement
+ * nullable et ne porte aucune contrainte — c'est donc lui qu'on coupe.
+ *
+ * L'intervention part sans sa photo, la photo part ensuite, et le lien se repose
+ * en dernier. S'il échoue, il est nommé comme un refus : il ne manquera qu'une
+ * vignette de tête, jamais une pièce.
+ */
+export const LIEN_DIFFERE = { table: 'intervention', colonne: 'photo_id' } as const
 
 /** TOUTES les tables de pilote portent leur propriétaire côté serveur, feuilles
  *  comprises, pour que le flux descendant s'écrive à plat et que l'envoi n'ait
@@ -123,18 +172,40 @@ export const sauvegarder = async (
 
   const bilan: BilanEnvoi = {}
   const refus: Refus[] = []
+  // Le lien coupé, mis de côté pour le dernier passage. Voir `LIEN_DIFFERE`.
+  const aReposer: { id: string; valeur: unknown }[] = []
+
   for (const table of ORDRE) {
     const lignes = await db.getAll<Record<string, unknown>>(`SELECT * FROM ${table}`)
     if (!lignes.length) { bilan[table] = 0; continue }
 
-    const charge = lignes.map((l) =>
-      PORTE_PROPRIETAIRE.has(table) ? { ...l, pilote_id: piloteId } : l)
+    const charge = lignes.map((l) => {
+      const avecProprio: Record<string, unknown> = PORTE_PROPRIETAIRE.has(table)
+        ? { ...l, pilote_id: piloteId } : { ...l }
+      if (table === LIEN_DIFFERE.table && avecProprio[LIEN_DIFFERE.colonne]) {
+        aReposer.push({ id: String(avecProprio.id), valeur: avecProprio[LIEN_DIFFERE.colonne] })
+        avecProprio[LIEN_DIFFERE.colonne] = null
+      }
+      return avecProprio
+    })
 
     // `upsert` et non `insert` : l'adoption doit pouvoir être relancée sans
     // dupliquer quoi que ce soit. Les identifiants sont des UUID v7 posés par le
     // client (AD-14), donc la même ligne retrouve toujours sa place.
     bilan[table] = await envoyer(table, charge, refus)
   }
+
+  // ── Le dernier passage : reposer le lien coupé, une ligne à la fois.
+  // `update` et non `upsert` : la ligne EXISTE déjà, et un upsert partiel
+  // repartirait sur le chemin de l'insertion, donc laisserait à null les colonnes
+  // non transmises — `libelle`, `date_jour`, `categorie`. Ce serait écraser une
+  // intervention pour lui rendre sa vignette.
+  for (const { id, valeur } of aReposer) {
+    const { error } = await supabase.from(LIEN_DIFFERE.table)
+      .update({ [LIEN_DIFFERE.colonne]: valeur }).eq('id', id)
+    if (error) refus.push({ table: LIEN_DIFFERE.table, ligne: id, motif: error.message })
+  }
+
   return { bilan, refus }
 }
 

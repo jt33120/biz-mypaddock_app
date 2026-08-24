@@ -17,7 +17,8 @@ import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
 import { formaterPoids } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
-import { PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
+import { DEPENDANCES, LIEN_DIFFERE, ORDRE, PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
+import { AppSchema, REFERENTIEL } from '../../src/db/schema'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
@@ -190,6 +191,39 @@ const essais = [
     // produirait une ligne que Postgres refuse — et une file bloquée derrière.
     for (const t of ['circuit', 'conseil', 'cap', 'organisateur', 'bareme', 'roulage_publie'])
       vrai(!PORTE_PROPRIETAIRE.has(t), `${t} est du référentiel et ne doit rien porter`)
+  }),
+
+  // ⚠ CES DEUX ESSAIS EXISTENT PARCE QUE L'ORDRE D'ENVOI A ÉTÉ FAUX QUATRE FOIS,
+  // dont deux fois en sens inverse l'un de l'autre. Une ligne qui part avant
+  // celle qu'elle référence est refusée en 23503 : elle est écartée
+  // DÉFINITIVEMENT, et le pilote ne l'apprend pas. Une relecture attentive n'a
+  // pas suffi quatre fois de suite ; une assertion, si.
+  doit("l'envoi n'oublie aucune table du pilote", () => {
+    const duSchema = AppSchema.tables.map((t) => t.name).filter((n) => !REFERENTIEL.has(n))
+    const envoyees = new Set<string>(ORDRE)
+    for (const t of duSchema)
+      vrai(envoyees.has(t), `${t} est écrite par le pilote et ne part jamais`)
+    for (const t of ORDRE)
+      vrai(duSchema.includes(t), `${t} part à l'envoi mais n'existe pas au schéma`)
+  }),
+  doit("chaque table part après ce qu'elle référence", () => {
+    const rang = new Map<string, number>(ORDRE.map((t, i) => [t, i]))
+    for (const [table, requises] of Object.entries(DEPENDANCES)) {
+      vrai(rang.has(table), `${table} est décrite mais ne part pas`)
+      for (const r of requises) {
+        // L'unique exception, et elle est assumée : le cycle photo ↔ intervention.
+        // Le lien coupé est reposé par un dernier passage, pas par l'ordre.
+        if (table === LIEN_DIFFERE.table && r === 'photo') continue
+        vrai(rang.get(r)! < rang.get(table)!,
+          `${table} part avant ${r}, qu'elle référence — 23503 à l'envoi`)
+      }
+    }
+    for (const t of ORDRE)
+      vrai(t in DEPENDANCES, `${t} part sans qu'on ait dit ce qu'elle référence`)
+    // Le cycle doit RESTER un cycle : si l'un des deux liens disparaissait du
+    // schéma, le détour n'aurait plus lieu d'être et devrait être retiré.
+    vrai(DEPENDANCES.intervention.includes('photo') && DEPENDANCES.photo.includes('intervention'),
+      'le cycle photo ↔ intervention a disparu : le lien différé est devenu inutile')
   }),
 
   /* ─── LES CORPUS EMBARQUÉS ─────────────────────────────────────────────── */

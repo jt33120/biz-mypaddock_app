@@ -439,3 +439,22 @@ export const AppSchema = new Schema({
 })
 
 export type Database = (typeof AppSchema)['types']
+
+/**
+ * CE QUI DESCEND SANS JAMAIS REMONTER — AD-12.
+ *
+ * Le référentiel est lu, jamais écrit par le pilote : circuits, conseils, caps,
+ * barèmes, règles d'organisateur. `generation` est du même bord pour une autre
+ * raison — c'est un REGISTRE que seul le serveur écrit ; un compteur que le
+ * compté peut écrire ne compte rien.
+ *
+ * Cette liste n'est pas décorative. Le complément (tout le schéma moins ceci)
+ * est exactement ce que la sauvegarde doit envoyer, et un essai unitaire le
+ * confronte à `ORDRE`. Une table de pilote ajoutée ici et oubliée là-bas ne
+ * partirait jamais — un pilote la verrait sur son téléphone, et nulle part
+ * ailleurs, sans qu'aucun message ne le prévienne.
+ */
+export const REFERENTIEL: ReadonlySet<string> = new Set([
+  'generation', 'coefficient_usure', 'regle_organisateur', 'conseil', 'cap',
+  'circuit', 'virage', 'organisateur', 'roulage_publie', 'bareme',
+])
