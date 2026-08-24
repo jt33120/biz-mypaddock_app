@@ -17,7 +17,9 @@ import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
 import { formaterPoids } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
-import { DEPENDANCES, LIEN_DIFFERE, ORDRE, PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
+import {
+  DEPENDANCES, direCombien, LIEN_DIFFERE, NOM_TABLE, ORDRE, PORTE_PROPRIETAIRE,
+} from '../../src/db/sauvegarde'
 import { AppSchema, REFERENTIEL } from '../../src/db/schema'
 // Le fichier de règles tel qu'il est déployé, lu à la lettre. C'est un YAML et
 // non du code : rien ne le relie au schéma, et c'est précisément le problème.
@@ -248,6 +250,23 @@ const essais = [
       if (absentesAssumees.has(t)) continue
       vrai(lues.has(t), `${t} est au schéma local mais ne descend jamais`)
     }
+  }),
+
+  // L'inventaire de l'effacement se lit sur le seul écran du produit qui n'a pas
+  // de corbeille. Une table sans nom s'y affichait en nom de schéma — et un
+  // inventaire qu'on ne comprend pas ne pèse rien dans la décision.
+  doit("tout ce qui s'efface porte un nom de pilote, pas un nom de table", () => {
+    for (const t of ORDRE) {
+      vrai(t in NOM_TABLE, `${t} n'a pas de nom lisible`)
+      const [un, plusieurs] = NOM_TABLE[t]
+      vrai(un.length > 1 && plusieurs.length > 1, `${t} : nom vide`)
+      vrai(!un.includes('_') && !plusieurs.includes('_'), `${t} : nom de schéma`)
+    }
+    egal(direCombien('roulage', 1), '1 journée')
+    egal(direCombien('roulage', 5), '5 journées')
+    // Le pluriel est ÉCRIT, jamais fabriqué : « pièces d'équipement » ne
+    // s'obtient pas en ajoutant un « s » à la fin.
+    egal(direCombien('equipement', 2), "2 pièces d'équipement")
   }),
 
   /* ─── LES CORPUS EMBARQUÉS ─────────────────────────────────────────────── */

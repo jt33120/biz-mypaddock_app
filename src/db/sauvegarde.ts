@@ -97,6 +97,50 @@ export const DEPENDANCES: Readonly<Record<string, readonly string[]>> = {
  */
 export const LIEN_DIFFERE = { table: 'intervention', colonne: 'photo_id' } as const
 
+/**
+ * CE QUE CHAQUE TABLE S'APPELLE POUR UN PILOTE.
+ *
+ * ⚠ L'ÉCRAN D'EFFACEMENT MONTRAIT LES NOMS DU SCHÉMA. « 12 tour · 3 plan si
+ * alors · 2 evenement vise » : c'est ce que lisait quelqu'un sur le point de
+ * tout détruire, sur le seul écran du produit qui n'a pas de corbeille. Un
+ * inventaire qu'on ne comprend pas ne pèse rien dans la décision — et c'est
+ * précisément le moment où il doit peser.
+ *
+ * Le singulier et le pluriel sont écrits, jamais dérivés d'un « s » : « chevaux »
+ * et « journées » ne se fabriquent pas de la même façon, et un inventaire mal
+ * accordé se lit comme une machine, pas comme une phrase.
+ */
+export const NOM_TABLE: Readonly<Record<string, readonly [string, string]>> = {
+  machine: ['moto', 'motos'],
+  equipement: ["pièce d'équipement", "pièces d'équipement"],
+  roulage: ['journée', 'journées'],
+  session: ['session', 'sessions'],
+  tour: ['chrono', 'chronos'],
+  chute: ['chute', 'chutes'],
+  depense: ['dépense', 'dépenses'],
+  budget_saison: ['budget de saison', 'budgets de saison'],
+  mesure: ['mesure', 'mesures'],
+  plan_si_alors: ['plan si-alors', 'plans si-alors'],
+  geste: ['geste déclaré', 'gestes déclarés'],
+  photo: ['photo', 'photos'],
+  intervention: ["geste d'atelier", "gestes d'atelier"],
+  evenement_vise: ['événement visé', 'événements visés'],
+  horloge: ["horloge d'usure", "horloges d'usure"],
+  checklist_ligne: ['ligne de checklist', 'lignes de checklist'],
+  document: ['document', 'documents'],
+}
+
+/** Le nom seul, accordé. Une table sans nom retombe sur le sien plutôt que de
+ *  disparaître de l'inventaire : mieux vaut un mot technique qu'un oubli. */
+export const nomTable = (table: string, n: number): string => {
+  const nom = NOM_TABLE[table]
+  return nom ? nom[n > 1 ? 1 : 0] : table.replace(/_/g, ' ')
+}
+
+/** « 5 journées », « 1 moto ». */
+export const direCombien = (table: string, n: number): string =>
+  `${n} ${nomTable(table, n)}`
+
 /** TOUTES les tables de pilote portent leur propriétaire côté serveur, feuilles
  *  comprises, pour que le flux descendant s'écrive à plat et que l'envoi n'ait
  *  aucun cas particulier. Ce n'est pas une contrainte du moteur — les Sync

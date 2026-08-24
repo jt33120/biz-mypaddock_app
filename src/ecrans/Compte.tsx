@@ -4,7 +4,9 @@ import { supabaseConfigure } from '../db/supabase'
 import {
   confirmerParCode, seConnecter, seDeconnecter, sInscrire, type Identite, type Issue,
 } from '../db/compte'
-import { adopter, estAdopte, etatLocal, type BilanEnvoi, type Refus } from '../db/sauvegarde'
+import {
+  adopter, direCombien, estAdopte, etatLocal, nomTable, type BilanEnvoi, type Refus,
+} from '../db/sauvegarde'
 import { powersyncConfigure } from '../db/connecteur'
 import { accepterMesures, mesuresAcceptees } from '../db/mesures'
 import { composer as composerEmport, formaterPoids, peser, type Poids } from '../db/emporter'
@@ -159,7 +161,7 @@ function Effacer({ db }: { db: PowerSyncDatabase }) {
           <div className="libelle">ce qui part, et ne revient pas</div>
           <p className="texte">
             {lignes.length
-              ? lignes.map(([t, n]) => `${n} ${t.replace(/_/g, ' ')}`).join(' · ')
+              ? lignes.map(([t, n]) => direCombien(t, n)).join(' · ')
               : 'rien de saisi'}
             {' — au serveur comme sur ce téléphone, avec les photos et les réglages.'}
           </p>
@@ -389,15 +391,13 @@ function Anonyme({ db, onLegal }: { db: PowerSyncDatabase; onLegal: () => void }
  *  en six rangs elle repousserait le formulaire hors de l'écran, et coûterait
  *  plus qu'elle ne rend. Rien de saisi, rien d'affiché — on ne montre pas une
  *  colonne de zéros à quelqu'un qui vient d'arriver. */
+/* ⚠ CET ÉCRAN AVAIT SA PROPRE TABLE DE NOMS, et elle n'en couvrait que six sur
+   dix-sept : tout le reste s'affichait en nom de schéma, souligné compris —
+   « 3 plan_si_alors ». Deux tables de noms dans un même produit dérivent l'une
+   de l'autre à la première table ajoutée. Il n'y en a plus qu'une, à côté de la
+   liste d'envoi qu'elle nomme, et un essai unitaire vérifie qu'elle les couvre
+   toutes. */
 function Repris({ etat }: { etat: BilanEnvoi }) {
-  const NOMS: Record<string, [string, string]> = {
-    machine: ['machine', 'machines'],
-    roulage: ['roulage', 'roulages'],
-    session: ['session', 'sessions'],
-    tour: ['tour', 'tours'],
-    depense: ['dépense', 'dépenses'],
-    intervention: ['intervention', 'interventions'],
-  }
   const lignes = Object.entries(etat).filter(([, n]) => n > 0)
   if (!lignes.length) return null
   return (
@@ -407,7 +407,7 @@ function Repris({ etat }: { etat: BilanEnvoi }) {
         {lignes.map(([table, n], i) => (
           <span key={table}>
             {i > 0 && <span className="sep"> · </span>}
-            <b>{n}</b> {NOMS[table]?.[n > 1 ? 1 : 0] ?? table}
+            <b>{n}</b> {nomTable(table, n)}
           </span>
         ))}
       </p>
