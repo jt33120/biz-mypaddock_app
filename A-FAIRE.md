@@ -218,25 +218,87 @@ comme tel, soit rien — le produit énonce, il ne conseille pas d'acheter.
 
 ---
 
-## 7bis · Un interrupteur d'authentification — un clic, et il vaut le clic
+## 7bis · Les mots de passe déjà fuités — ⚠ CE N'EST PAS UN CLIC, C'EST UN PLAN
 
-**Ce qui attend :** Supabase → Authentication → Policies → activer *Leaked password
-protection*.
+**Je me suis trompé une fois sur cette entrée, et la correction change la décision.** Je
+l'avais écrite comme « un clic de trente secondes ». C'est faux : **la protection contre les
+mots de passe fuités est réservée au plan Pro.** L'organisation `DEV` est en plan **`free`** —
+vérifié en ligne. Le réglage n'existe pas dans ton tableau de bord ; cliquer ne donnerait rien.
 
-**Ce que ça fait :** Supabase compare le mot de passe choisi à la base de HaveIBeenPwned au
-moment de l'inscription, et refuse ceux qui ont déjà fuité ailleurs. Rien ne remonte en clair
-— seuls les cinq premiers caractères de l'empreinte partent.
+**Ce que ça ferait, si tu passais Pro (≈ 25 $/mois) :** Supabase compare le mot de passe
+choisi à la base HaveIBeenPwned au moment de l'inscription et refuse ceux qui ont déjà fuité
+ailleurs. Rien ne remonte en clair — seuls les cinq premiers caractères de l'empreinte
+partent. Un compte MyPaddock ne garde ni carte ni adresse, mais il garde la saison entière
+d'un pilote et les photos de sa moto ; le mot de passe réutilisé d'un forum percé en 2019 est
+la seule porte réaliste vers ça.
 
-**Pourquoi ça compte ici :** un compte MyPaddock ne garde ni carte ni adresse, mais il garde
-la saison entière d'un pilote et les photos de sa moto. Le mot de passe réutilisé d'un forum
-percé en 2019 est la seule porte réaliste vers ça.
+**Ce qui est GRATUIT et va dans le même sens**, et que je te recommande à la place tant que le
+plan ne bouge pas : Supabase → Authentication → Sign In / Providers → *Password* → relever la
+**longueur minimale** (elle est à 6, le défaut) et exiger des **classes de caractères**.
+L'écran d'inscription annonce déjà « 6 caractères minimum » ; le libellé suivra le réglage
+d'une ligne de code, dis-moi le chiffre que tu retiens.
 
-**Pourquoi je ne l'ai pas fait :** c'est un réglage du projet Auth, pas une migration — il
-n'est ni dans le SQL, ni dans le code, et le connecteur ne l'expose pas.
+**Pourquoi je ne le fais pas moi-même :** c'est un réglage du projet Auth, ni SQL ni code. Le
+connecteur Supabase ne l'expose pas, et il n'y a aucun jeton d'API de gestion (`sbp_…`) sur ce
+poste — je l'ai vérifié plutôt que de le supposer.
 
 ---
 
-## 8 · Ce qui demandera ta relecture, pas ton action
+## 9 · La recette — EN LIGNE, et elle dit ce qu'elle est
+
+**Fait le 24 août 2026.** https://mypaddock-recette.vercel.app
+
+**Comment y entrer :** l'URL est derrière l'authentification Vercel (réglage `ssoProtection`
+du projet, mode « tout sauf les domaines personnalisés »). Connecte-toi une fois avec ton
+compte Vercel dans le navigateur du téléphone, et elle s'ouvre ensuite normalement, y compris
+installée sur l'écran d'accueil. Je n'ai pas touché à ce réglage : le désactiver ouvrirait
+aussi toutes les prévisualisations à qui devine une URL.
+
+**⚠ ELLE PARLE À LA VRAIE BASE.** Un seul projet Supabase, une seule instance PowerSync, un
+seul seau de photos. Une base isolée demanderait une branche Supabase — c'est payant, donc
+c'est ta décision, pas la mienne.
+
+**Ce qui te protège désormais, et qui n'existait pas ce matin** — une passe adverse à seize
+agents a trouvé l'enchaînement, un sceptique l'a confirmé après cinq tentatives de le casser :
+
+- Hors production, **l'adoption ne part plus toute seule**. Elle partait sans bouton et sans
+  question, retenue par un drapeau qui vit dans le `localStorage` — donc PAR ORIGINE, donc
+  absent sur la recette. Trois journées bidon saisies en recette, une connexion pour éprouver
+  l'authentification, et elles atterrissaient dans ta vraie saison avant de redescendre sur
+  ton vrai téléphone. Le bouton manuel reste, et il montre ce qu'il enverrait.
+- **Un bandeau jaune permanent** dit où tu es et ce que ça touche. Sans lui, les deux
+  interfaces sont identiques au pixel près.
+
+**Ce qui reste vrai malgré tout :** si tu appuies sur « Sauvegarder maintenant » depuis la
+recette, ça part pour de bon. Et une suppression de journée faite en recette après ce
+bouton-là supprime la vraie ligne.
+
+---
+
+## 10 · Vercel n'écoute plus GitHub — ⚠ TA PRODUCTION EST FIGÉE AU 23 AOÛT
+
+**Le fait :** aucun déploiement depuis le 23 août 11 h 33, commit `94f74a9`. Les corrections
+du 24 août ne sont PAS en ligne, dont trois qui touchent la perte de données.
+
+**La cause :** le dépôt a déménagé vers l'organisation `my-paddock-studio`
+(`biz-mypaddock_app`). Le projet Vercel reste lié à `jt33120/mypaddock` et l'App GitHub de
+Vercel n'a pas accès aux dépôts de la nouvelle organisation — donc plus aucun webhook, donc
+plus aucune construction. Rien n'échoue bruyamment : ça se tait, ce qui est pire.
+
+**Ce qui t'attend, et que je ne peux pas faire :** Vercel → projet `mypaddock` → Settings →
+Git → reconnecter le dépôt `my-paddock-studio/biz-mypaddock_app`, en installant l'App GitHub
+de Vercel sur l'organisation. C'est un écran d'autorisation GitHub, il demande un compte
+propriétaire de l'organisation.
+
+**En attendant, je déploie depuis ce poste** (`vercel deploy`), et c'est comme ça que la
+recette est en ligne. Pour envoyer la production, la commande est `vercel deploy --prod` —
+je ne l'ai pas lancée : c'est exactement ce que la recette existe pour décider.
+
+---
+
+---
+
+## 11 · Ce qui demandera ta relecture, pas ton action
 
 - **Le contenu des conseils** (récit 6.3). Six conseils embarqués tiennent la clause de forme
   — chacun énonce une technique, aucun ne fixe une performance — mais ils sont provisoires et
