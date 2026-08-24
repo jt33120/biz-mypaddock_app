@@ -291,6 +291,22 @@ body {
 .pile { display: flex; flex-direction: column; gap: 10px }
 .rang { display: flex; justify-content: space-between; align-items: baseline; gap: 12px }
 
+/* ─── LE BANDEAU D'ENVIRONNEMENT ───────────────────────────────────────────
+   Il doit se voir sans rien coûter au produit : une bande fine, jaune, en haut,
+   qui ne se referme pas et ne se scrolle pas. Le jaune est déjà la couleur de
+   « ce qui attend » dans ce système — pas le rouge, qui dirait une panne alors
+   qu'il n'y en a aucune. */
+.bandeau-environnement {
+  position: sticky; top: 0; z-index: 20;
+  margin: 0; padding: 6px 12px calc(6px + env(safe-area-inset-top));
+  padding-top: calc(6px + env(safe-area-inset-top));
+  /* `--plus-lent` est déjà le jaune de « ce qui attend » dans ce système.
+     Le rouge dirait une panne, et il n'y en a aucune : la recette marche. */
+  background: var(--plus-lent); color: var(--nuit);
+  font-family: var(--face); font-size: 10.5px; font-weight: 700;
+  letter-spacing: .10em; text-transform: uppercase; text-align: center;
+}
+
 /* ─── BARRE BASSE ──────────────────────────────────────────────────────────── */
 .barre {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex;

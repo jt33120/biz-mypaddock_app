@@ -54,6 +54,20 @@ await page.waitForSelector('nav.barre', { timeout: 30_000 })
 await page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
 console.log('onglets :', await page.$$eval('nav.barre .onglet', ns => ns.map(n => n.textContent)))
 
+// ⚠ CET EXEMPLAIRE N'EST PAS LA PRODUCTION, ET IL DOIT LE DIRE.
+// Recette, poste de développement et production sont identiques au pixel près
+// et parlent à la MÊME base : sans ce bandeau, on retire une vraie journée en
+// croyant éprouver un bouton. Et le silence est le cas dangereux — un hôte
+// inconnu doit être traité comme une recette, jamais l'inverse.
+const env = await page.getAttribute('.ecran', 'data-environnement')
+const bandeau = await page.isVisible('.bandeau-environnement')
+  ? (await page.textContent('.bandeau-environnement')).replace(/\s+/g, ' ').trim() : null
+console.log('environnement :', env, '· bandeau :', bandeau ?? 'AUCUN')
+console.log('   hors production, le bandeau est là :',
+  env === 'production' ? 'sans objet' : bandeau ? 'oui' : 'NON — RIEN NE DISTINGUE LA COPIE')
+console.log('   et il dit la conséquence, pas seulement le nom :',
+  bandeau && /vraie base/.test(bandeau) ? 'oui' : env === 'production' ? 'sans objet' : 'NON')
+
 // 1. Une machine dans le garage.
 await onglet('GARAGE')
 await page.click('text=Reprendre la CBR 83')

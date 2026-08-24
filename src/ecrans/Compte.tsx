@@ -18,6 +18,11 @@ import type { Adoption } from '../App'
  *  travail qui n'est pas le sien. */
 const MOT_ADOPTION: Record<Adoption['etat'], string> = {
   inconnue: "Rien à déposer pour l'instant.",
+  // Hors production, le dépôt automatique est coupé — et la raison est dite, pas
+  // sous-entendue : ici, « éprouver » et « écrire pour de vrai » sont le même
+  // geste, parce qu'il n'y a qu'une base.
+  hors_production: "Cet exemplaire n'est pas la production, et il parle pourtant à la vraie base. "
+    + "Rien ne part tout seul : le bouton ci-dessous montre ce qu'il enverrait avant de l'envoyer.",
   attend_le_reseau: "Pas de réseau : la sauvegarde partira d'elle-même au retour du signal. "
     + "Rien n'est perdu en attendant — tout est déjà sur ce téléphone.",
   en_cours: 'La première sauvegarde est en train de partir. Elle dépose sur le serveur ce qui '

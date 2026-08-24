@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { PRODUCT_NAME } from './product'
+import { ENVIRONNEMENT, EST_PRODUCTION, MOT_ENVIRONNEMENT, PRODUCT_NAME } from './product'
 import { demanderPersistance, ouvrirBase } from './db/powersync'
 import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
@@ -53,6 +53,7 @@ type Db = ReturnType<typeof ouvrirBase>
 export type Adoption =
   | { etat: 'inconnue' }
   | { etat: 'attend_le_reseau' }
+  | { etat: 'hors_production' }
   | { etat: 'en_cours' }
   | { etat: 'faite' }
   | { etat: 'partielle'; refus: number; motif: string }
@@ -200,6 +201,14 @@ export default function App() {
   useEffect(() => {
     if (!db || !identite || !supabaseConfigure) return
     if (estAdopte(identite.id)) { setAdoption({ etat: 'faite' }); return }
+    // ⚠ ④ ET HORS PRODUCTION, ELLE NE PART PAS TOUTE SEULE — voir `ENVIRONNEMENT`
+    //   dans product.ts pour l'enchaînement complet. Le drapeau d'adoption vit
+    //   dans le localStorage, donc par ORIGINE : sur une recette il est absent,
+    //   le produit se croit vierge, et le premier « se connecter » déverse la
+    //   base d'essai dans la vraie saison. Le bouton manuel reste, et il montre
+    //   ce qu'il enverrait avant de l'envoyer. C'est la différence entre un
+    //   dépôt décidé et un dépôt subi.
+    if (!EST_PRODUCTION) { setAdoption({ etat: 'hors_production' }); return }
     if (!navigator.onLine) { setAdoption({ etat: 'attend_le_reseau' }); return }
 
     let vivant = true
@@ -310,7 +319,16 @@ export default function App() {
   return (
     <>
       <div className="sol" aria-hidden />
-      <div className="ecran">
+      {/* ⚠ LE BANDEAU N'EST PAS DÉCORATIF. Recette et production sont identiques
+          au pixel près et parlent à la MÊME base : sans ces mots, on retire une
+          vraie journée en croyant éprouver un bouton. Il est en haut, il ne se
+          referme pas, et il dit la conséquence — pas seulement le nom. */}
+      {!EST_PRODUCTION && (
+        <p className="bandeau-environnement" role="status">
+          {MOT_ENVIRONNEMENT[ENVIRONNEMENT as Exclude<typeof ENVIRONNEMENT, 'production'>]}
+        </p>
+      )}
+      <div className="ecran" data-environnement={ENVIRONNEMENT}>
         {ecran === 'accueil' && (
           <Accueil db={db} src={src} conseil={conseil}
                    onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan}

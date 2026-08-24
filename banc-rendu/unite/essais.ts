@@ -29,6 +29,7 @@ import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
 import { CHARGEMENT_EMBARQUE, MOIS_AVANT_DOUTE, moisDepuis } from '../../src/db/checklist'
 import { nouveauCode } from '../../src/db/cercle'
+import { lireEnvironnement } from '../../src/product'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
@@ -267,6 +268,30 @@ const essais = [
     // Le pluriel est ÉCRIT, jamais fabriqué : « pièces d'équipement » ne
     // s'obtient pas en ajoutant un « s » à la fin.
     egal(direCombien('equipement', 2), "2 pièces d'équipement")
+  }),
+
+  /* ─── QUEL EXEMPLAIRE DU PRODUIT EST-CE ───────────────────────────────── */
+  // Se tromper vers « recette » fait un bandeau de trop. Se tromper vers
+  // « production » déverse une base d'essai dans une vraie saison, et la
+  // synchronisation continue reste allumée depuis l'origine de test.
+  doit("un hôte inconnu n'est JAMAIS pris pour la production", () => {
+    egal(lireEnvironnement(undefined, 'mypaddock-git-dev-julian-talous-projects.vercel.app'), 'recette')
+    egal(lireEnvironnement(undefined, 'mypaddock-recette.vercel.app'), 'recette')
+    egal(lireEnvironnement(undefined, 'mypaddock.fr'), 'recette')
+    egal(lireEnvironnement(undefined, ''), 'recette')
+  }),
+  doit("la production se reconnaît, et le poste de développement aussi", () => {
+    egal(lireEnvironnement(undefined, 'mypaddock.vercel.app'), 'production')
+    egal(lireEnvironnement(undefined, 'localhost'), 'local')
+    egal(lireEnvironnement(undefined, '127.0.0.1'), 'local')
+  }),
+  doit('une déclaration explicite prime sur l\'hôte, une déclaration absurde non', () => {
+    egal(lireEnvironnement('recette', 'mypaddock.vercel.app'), 'recette')
+    egal(lireEnvironnement('  PRODUCTION ', 'localhost'), 'production')
+    // Une valeur qu'on ne comprend pas ne doit pas ouvrir la porte : on retombe
+    // sur l'hôte, donc sur le défaut prudent.
+    egal(lireEnvironnement('prod', 'mypaddock-recette.vercel.app'), 'recette')
+    egal(lireEnvironnement('', 'mypaddock.vercel.app'), 'production')
   }),
 
   /* ─── LES CORPUS EMBARQUÉS ─────────────────────────────────────────────── */

@@ -27,3 +27,62 @@ export const EDITEUR: string | null = import.meta.env.VITE_EDITEUR?.trim() || nu
  *  aussi. Une politique de confidentialité qui se trompe là-dessus est fausse
  *  sur le seul point que la réglementation regarde en premier. */
 export const REGION = 'Paris (eu-west-3), Union européenne'
+
+/**
+ * QUEL EXEMPLAIRE DU PRODUIT EST-CE ?
+ *
+ * ⚠ CETTE CONSTANTE EXISTE À CAUSE D'UN DÉFAUT QUI SE DÉCLENCHAIT TOUT SEUL, sur
+ * le geste même qu'une recette existe pour éprouver : se connecter.
+ *
+ * L'adoption — le dépôt sur le serveur de ce qui a été saisi avant le compte —
+ * part automatiquement dès qu'une identité apparaît, sans bouton et sans
+ * question. Elle ne se rejoue pas, parce qu'un drapeau la retient… et ce drapeau
+ * vit dans le `localStorage`, donc PAR ORIGINE. Une recette est une autre
+ * origine : le drapeau y est absent, quel que soit le compte.
+ *
+ * Enchaînement, avec un seul compte dans tout le projet : on ouvre la recette,
+ * on saisit trois journées bidon (le produit s'ouvre sans compte, c'est une
+ * règle de fond), on se connecte pour éprouver l'authentification — et les trois
+ * journées bidon atterrissent dans la vraie saison, estampillées du vrai pilote,
+ * puis redescendent sur le vrai téléphone. Rien ne les distingue : le ménage se
+ * ferait ligne par ligne, en SQL. Et ensuite la synchronisation continue reste
+ * allumée depuis l'origine de test.
+ *
+ * Pire, et plus discret : `ouverture()` écrit une ligne de `mesure` à chaque
+ * démarrage, et `mesure` monte avec le reste. Vingt ouvertures de recette
+ * suffisent à fausser le seul instrument qui dise si le produit est utilisé.
+ *
+ * LE DÉFAUT PAR DÉFAUT EST « PAS LA PRODUCTION ». Un hôte inconnu — une
+ * prévisualisation, un domaine neuf, un poste de développement — est traité
+ * comme une recette. Se tromper dans ce sens fait apparaître un bandeau de trop ;
+ * se tromper dans l'autre déverse des données de test dans une vraie saison.
+ */
+export type Environnement = 'production' | 'recette' | 'local'
+
+/** L'hôte de production, et lui seul. Le jour où un vrai domaine arrive, il
+ *  s'ajoute ICI — ou se pose dans `VITE_ENVIRONNEMENT`, qui prime. */
+const HOTES_DE_PRODUCTION = ['mypaddock.vercel.app']
+const HOTES_LOCAUX = ['localhost', '127.0.0.1', '[::1]', '::1']
+
+export const lireEnvironnement = (declare: string | undefined, hote: string): Environnement => {
+  const d = declare?.trim().toLowerCase()
+  if (d === 'production' || d === 'recette' || d === 'local') return d
+  if (HOTES_LOCAUX.includes(hote)) return 'local'
+  if (HOTES_DE_PRODUCTION.includes(hote)) return 'production'
+  return 'recette'
+}
+
+export const ENVIRONNEMENT: Environnement = lireEnvironnement(
+  import.meta.env.VITE_ENVIRONNEMENT,
+  typeof location === 'undefined' ? '' : location.hostname)
+
+export const EST_PRODUCTION = ENVIRONNEMENT === 'production'
+
+/** Ce que le bandeau dit, et pourquoi il le dit. Les deux interfaces sont
+ *  identiques au pixel près : sans ces mots, rien ne distingue la copie de
+ *  l'original, et c'est comme ça qu'on efface une vraie journée en croyant
+ *  éprouver un bouton. */
+export const MOT_ENVIRONNEMENT: Record<Exclude<Environnement, 'production'>, string> = {
+  recette: 'RECETTE · ce que tu fais ici touche la vraie base',
+  local: 'LOCAL · ce que tu fais ici touche la vraie base',
+}
