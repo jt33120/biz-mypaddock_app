@@ -29,13 +29,21 @@ const onglet = async (n) => {
 // FR-36 : depuis l'épique 4, la fin d'une saisie ouvre LE RÉCAPITULATIF, pas le
 // bilan — il se compose tout seul et s'affiche sans avoir été demandé. Les
 // essais passent donc par lui pour atteindre le roulage.
+// ⚠ LA PATIENCE DÉPEND DE LA CIBLE, et ce n'est pas de la complaisance.
+// Ce banc sert aussi à éprouver la RECETTE et la PRODUCTION, c'est-à-dire une
+// origine distante, un premier octet froid, et un paquet qui se télécharge avant
+// de composer une image de 1080 × 1350. Quarante secondes suffisent en local et
+// pas au bout du fil : l'essai échouait sur un produit correct — vérifié à la
+// main, l'image se compose, elle arrive juste plus tard.
+const PATIENCE = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(base) ? 40_000 : 120_000
+
 const enregistrerSession = async () => {
   await page.click('text=Enregistrer la session')
   // Playwright ne mélange pas un sélecteur CSS et un `text=` dans une liste :
   // on attend l'un OU l'autre par une condition, pas par un sélecteur composé.
   await page.waitForFunction(() =>
     !!document.querySelector('section.recap .recap-image')
-    || document.body.textContent.includes('Meilleur tour du jour'), null, { timeout: 40_000 })
+    || document.body.textContent.includes('Meilleur tour du jour'), null, { timeout: PATIENCE })
   if (await page.isVisible('section.recap')) {
     await page.click('text=Retour au roulage')
     await page.waitForSelector('text=Meilleur tour du jour', { timeout: 20_000 })

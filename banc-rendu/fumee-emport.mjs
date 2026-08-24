@@ -47,10 +47,28 @@ const enregistrerSession = async () => {
   await page.waitForSelector('.bloc:has-text("Photos et gestes")', { timeout: 20_000 })
   await page.waitForTimeout(500)
 }
-/** Le contenu réel du fichier, relu depuis son blob — pas ce que l'écran en dit. */
+/** Le contenu réel du fichier, relu depuis son blob — pas ce que l'écran en dit.
+ *
+ * ⚠ IL ÉTAIT RELU PAR `fetch(blob:…)`, ET C'ÉTAIT LE BANC QUI FAUTAIT. Depuis
+ * que le banc sert les en-têtes de production, `connect-src` refuse `blob:` —
+ * exactement comme en ligne. Le produit, lui, n'en a jamais eu besoin : il tient
+ * ses Blob en mémoire et ne rappelle jamais leur URL. Desserrer la politique
+ * pour faire passer un essai aurait rendu la production plus permissive au
+ * bénéfice du seul banc, ce qui est l'inverse du marché.
+ *
+ * On attrape donc le Blob À SA CRÉATION, avant qu'il ne devienne une URL. C'est
+ * un instrument d'essai posé sur le navigateur, pas une trappe dans le produit :
+ * le code de l'application n'en sait rien et n'en dépend pas. */
+await page.addInitScript(() => {
+  const vrai = URL.createObjectURL.bind(URL)
+  window.__blobs = new Map()
+  URL.createObjectURL = (o) => { const u = vrai(o); window.__blobs.set(u, o); return u }
+})
 const lireFichier = () => page.evaluate(async () => {
   const a = document.querySelector('.compte a[download]')
-  return { nom: a.getAttribute('download'), texte: await (await fetch(a.href)).text() }
+  const b = window.__blobs.get(a.href)
+  if (!b) throw new Error('blob introuvable : URL.createObjectURL n\'a pas été observé')
+  return { nom: a.getAttribute('download'), texte: await b.text() }
 })
 
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })

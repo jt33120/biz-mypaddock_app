@@ -8,7 +8,38 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const name = env.VITE_APP_NAME || 'MyPaddock'
 
+  /**
+   * ⚠ LE BANC SERT LES EN-TÊTES DE PRODUCTION, ET C'EST UNE LEÇON PAYÉE.
+   *
+   * `vite preview` n'envoie AUCUN en-tête. Les vingt-six essais de bout en bout
+   * tournaient donc sans politique de sécurité de contenu, alors que Vercel en
+   * applique une stricte. Toute une famille de défauts était invisible par
+   * construction — et l'un d'eux a cassé la vitrine en production : `fetch()`
+   * sur une URI `data:` est régi par `connect-src`, qui ne l'autorise pas. Le
+   * récapitulatif partageable rendait « L'image n'a pas pu être composée » sur
+   * toute machine ayant un portrait, c'est-à-dire le cas normal.
+   *
+   * Les en-têtes sont LUS DANS `vercel.json`, jamais recopiés : deux copies
+   * d'une politique de sécurité divergent, et c'est la copie du banc qui
+   * finirait par être la plus permissive.
+   */
+  const enTetes = (() => {
+    const vercel = JSON.parse(readFileSync(new URL('./vercel.json', import.meta.url), 'utf8'))
+    const pourTout = vercel.headers?.find((h: { source: string }) => h.source === '/(.*)')
+    const dict: Record<string, string> = {}
+    for (const { key, value } of (pourTout?.headers ?? []) as { key: string; value: string }[])
+      dict[key] = value
+    // HSTS n'a aucun sens en clair sur localhost, et Chrome le refuse : c'est le
+    // seul en-tête qu'on écarte, et il n'a aucun effet sur le rendu.
+    delete dict['Strict-Transport-Security']
+    return dict
+  })()
+
   return {
+    // Le banc et le serveur de développement voient donc la MÊME politique que
+    // le produit en ligne.
+    server: { headers: enTetes },
+    preview: { headers: enTetes },
     // Horodatage de build affiché à l'écran : sans lui, une PWA iOS installée
     // qui sert encore l'ancienne version se débogue comme un fantôme.
     define: { __BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')) },

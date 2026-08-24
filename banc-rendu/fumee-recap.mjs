@@ -39,17 +39,30 @@ console.log('   image :', JSON.stringify(img))
 // FR-33 : trois gabarits en un tap.
 console.log('② gabarits :', await page.$$eval('section.recap .puces .puce', ns => ns.map(n => n.textContent)))
 
-// FR-35 : masquer le budget masque LE COÛT AU TOUR AVEC LUI. On lit les pixels,
-// pas le DOM : c'est l'IMAGE qui doit être conforme, pas l'écran.
-const lireImage = () => page.evaluate(async () => {
-  const i = document.querySelector('.recap-image')
-  const b = await (await fetch(i.src)).blob()
-  return { type: b.type, ko: Math.round(b.size / 1024) }
-})
+// AD-13 : LE TYPE DU BLOB SE VÉRIFIE APRÈS COUP, jamais d'après le format demandé.
+//
+// ⚠ CET ESSAI LISAIT LES OCTETS PAR `fetch(blob:…)`, et c'est le BANC qui était
+// en faute : depuis que le banc sert les en-têtes de production, `connect-src`
+// refuse `blob:` — comme en ligne. Le produit, lui, n'en a jamais eu besoin : il
+// garde le Blob en mémoire et ne rappelle jamais son URL. Ajouter `blob:` à la
+// politique pour faire passer un essai aurait desserré la production pour du
+// confort de banc.
+//
+// L'invariant lui-même n'a pas disparu : il est tenu par un essai UNITAIRE, sur
+// `enFichier`, qui est la fonction qui le porte — « l'extension se dérive du type
+// réel du blob, jamais du format demandé ». C'est même le meilleur endroit : une
+// fonction pure se contredit en trois lignes, sans navigateur.
+//
+// Ici on garde ce qui ne s'observe QUE de bout en bout : qu'une vraie image
+// raster, à la bonne taille, a été décodée par le navigateur.
 await page.click('.puce:has-text("BUDGET")')
 await page.waitForTimeout(600)
-const budget = await lireImage()
-console.log('③ blob réel :', JSON.stringify(budget), '— type vérifié après coup, pas déduit')
+const taille = await page.$eval('.recap-image',
+  (n) => ({ w: n.naturalWidth, h: n.naturalHeight, src: n.src.slice(0, 5) }))
+console.log('③ image décodée :', JSON.stringify(taille))
+console.log('   au format de la vitrine, et servie depuis la copie locale :',
+  taille.w === 1080 && taille.h === 1350 && taille.src === 'blob:'
+    ? 'oui' : `NON — ${taille.w}×${taille.h} ${taille.src}`)
 
 // Un roulage sans budget déclaré : le gabarit budget ne peut PAS montrer le
 // coût au tour. On le prouve en comparant l'image à celle d'après la pose du budget.

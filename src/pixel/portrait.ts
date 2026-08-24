@@ -3,6 +3,7 @@ import { jeton } from '../db/compte'
 import { reduire } from '../db/photos'
 import { spritifier, type Sprite } from './spritifier'
 import { GRILLE } from './reglages'
+import { enBlob } from './octets'
 
 /**
  * LE PORTRAIT DE JEU — l'orchestration côté application, récit 3bis.3.
@@ -109,7 +110,9 @@ export const genererPortrait = async (
   // La moitié gratuite. Un échec ici ne rend PAS le quota — l'image a bien été
   // produite et payée. Le dire est plus honnête que de laisser croire l'inverse.
   try {
-    const octets = await (await fetch(corps.image)).blob()
+    // Même piège que la vitrine : l'image rendue par la fonction est une URI
+    // `data:`, et `fetch` sur `data:` est refusé par `connect-src` en ligne.
+    const octets = await enBlob(corps.image)
     const sprite = await spritifier(octets, corps.grille ?? GRILLE)
     return { ok: true, sprite, reste: corps.reste ?? 0, version: corps.version ?? '?' }
   } catch {

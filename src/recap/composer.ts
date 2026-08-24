@@ -1,4 +1,5 @@
 import { formaterChrono, formaterEcart, formaterEuros, type CoutRoulage } from '../db/depot'
+import { enBlob } from '../pixel/octets'
 
 /**
  * LA COMPOSITION D'IMAGE — récit 4.1.
@@ -142,7 +143,10 @@ export const composer = async (m: Matiere, gabarit: Gabarit, masquerBudget: bool
     c.fillStyle = voile
     c.fillRect(0, HAUT, LARGEUR, BAS - HAUT)
   } else if (m.sprite) {
-    const bmp = await createImageBitmap(await (await fetch(m.sprite)).blob())
+    // `enBlob` et non `fetch` : le sprite est une URI `data:`, et `connect-src`
+    // ne l'autorise pas. Voir src/pixel/octets.ts — c'est ce qui cassait la
+    // vitrine en ligne alors que tout passait en local.
+    const bmp = await createImageBitmap(await enBlob(m.sprite))
     // `imageSmoothingEnabled = false` : c'est ce qui rend le sprite légitime.
     // Lissé, il se trahirait en photo floue ; au plus proche voisin il reste net.
     c.imageSmoothingEnabled = false
