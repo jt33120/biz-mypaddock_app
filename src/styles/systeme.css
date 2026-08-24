@@ -340,6 +340,18 @@ body {
   position: relative; width: 100%; aspect-ratio: 16 / 9;
   background: repeating-linear-gradient(-45deg, var(--surface) 0 6px, transparent 6px 12px);
   border: 1px solid var(--filet);
+  display: grid; place-items: center; padding: 18px;
+}
+/* Le texte se pose SUR les hachures, donc il lui faut son propre fond : sans
+   lui, une diagonale passe au milieu d'une lettre sur deux. */
+.garage .silhouette .absente {
+  max-width: 30ch; text-align: center; font-size: 13px; line-height: 1.5;
+  color: var(--encre-tenue); background: rgba(7, 11, 26, .78); padding: 10px 12px;
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+}
+.garage .silhouette .absente b {
+  display: block; font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  font-weight: 600; color: var(--encre); margin-bottom: 4px;
 }
 
 .garage .chiffres {

@@ -51,6 +51,15 @@ console.log('   l\'année est visible dans le garage :',
   titre.includes('2019') ? 'oui' : 'NON — SAISIE MAIS JAMAIS MONTRÉE')
 console.log('   sans photo, la scène existe quand même :',
   await page.isVisible('.silhouette') ? 'silhouette' : 'NON')
+// ⚠ ET ELLE DIT SON ABSENCE. Un cadre hachuré et muet ne se distingue pas d'une
+// image qui n'a pas chargé — et c'est l'écran que voit TOUT pilote qui vient de
+// déclarer sa moto, d'autant plus longtemps que la fabrique de portraits est
+// éteinte. Le produit énonce ce qui manque, ici comme sur la fiche de circuit.
+const absente = (await page.textContent('.silhouette')).replace(/\s+/g, ' ')
+console.log('   l\'absence est DITE, pas laissée vide :',
+  absente.trim().length > 20 ? `oui — ${absente.trim()}` : 'NON — cadre muet')
+console.log('   la photo et le portrait pixel restent deux objets nommés :',
+  /photo/i.test(absente) && /portrait/i.test(absente) ? 'oui' : 'NON')
 
 // ── ② Un roulage, et il doit se rattacher tout seul : une seule machine au
 //    garage, la question « laquelle ? » n'a pas de réponse possible.

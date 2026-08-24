@@ -263,7 +263,24 @@ export function Garage({ db, onEcrit }: {
           ? <img className="sprite" src={machine.sprite} alt={`${machine.marque} ${machine.modele}`} />
           : photoUrl
             ? <img className="photo-machine" src={photoUrl} alt={`${machine.marque} ${machine.modele}`} />
-            : <div className="silhouette" aria-label="machine sans portrait" />}
+            : (
+              /* ⚠ UNE ABSENCE SE DIT. Le cadre hachuré tenait la place — AD-2, une
+                 machine sans portrait reste une machine — mais il ne disait rien,
+                 et c'est l'écran que voit TOUT pilote qui vient de déclarer sa
+                 moto. Un grand rectangle vide ne se distingue pas d'une image qui
+                 n'a pas chargé.
+
+                 Et les deux objets restent nommés séparément, comme Julian l'a
+                 demandé une fois déjà : la PHOTO est la sienne et ne dépend de
+                 rien, le PORTRAIT PIXEL se fabrique à partir d'elle. */
+              <div className="silhouette" aria-label="machine sans portrait">
+                <p className="absente">
+                  <b>pas encore d'image</b>
+                  Sa photo prendra cette place — elle reste sur ce téléphone.
+                  Le portrait pixel, lui, se fabrique à partir d'elle.
+                </p>
+              </div>
+            )}
       </div>
 
       {/* ⚠ LE MEILLEUR TOUR NOMME SON CIRCUIT. « Ça n'a pas de sens sinon au
