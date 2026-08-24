@@ -6,6 +6,7 @@
 //   ② il se lit SANS MYPADDOCK — le fichier porte ses propres unités
 //   ③ il DIT CE QU'IL NE CONTIENT PAS — un filet qui tait ses trous n'en est pas un
 import { chromium } from 'playwright-core'
+import { photoDEssai } from './photo-essai.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -61,8 +62,7 @@ await page.click('text=Saisir mon premier roulage')
 await page.fill('.champ[placeholder="Pau-Arnos"]', 'Pau-Arnos')
 await page.click('text=Continuer')
 await enregistrerSession()
-await page.setInputFiles('input[type=file]',
-  '/private/tmp/claude-501/-Users-juliantalou-Documents-PRO-03-PROJECTS-MyPaddock3/40a4a422-990d-4b2a-ae97-416403e70311/scratchpad/grande.jpg')
+await page.setInputFiles('input[type=file]', await photoDEssai())
 await page.waitForSelector('.vignette', { timeout: 60_000 })
 
 // ── ① Sans compte, hors ligne : l'emport est là.

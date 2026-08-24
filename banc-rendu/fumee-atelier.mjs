@@ -18,6 +18,7 @@
 //   · LA PREUVE : photos et factures comptées SÉPARÉMENT, parce qu'elles ne
 //     prouvent pas la même chose.
 import { chromium } from 'playwright-core'
+import { photoDEssai } from './photo-essai.mjs'
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
@@ -27,8 +28,7 @@ page.on('console', m => { if (m.type() === 'error') erreurs.push('console: ' + m
 page.on('pageerror', e => erreurs.push('pageerror: ' + e.message))
 const pret = () => page.waitForFunction(
   () => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
-const PHOTO = process.env.PHOTO_ESSAI
-  ?? '/private/tmp/claude-501/-Users-juliantalou-Documents-PRO-03-PROJECTS-MyPaddock3/40a4a422-990d-4b2a-ae97-416403e70311/scratchpad/grande.jpg'
+const PHOTO = await photoDEssai()
 
 const manques = []
 const verifier = (titre, vrai, detail = '') => {

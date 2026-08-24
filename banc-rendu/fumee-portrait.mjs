@@ -7,6 +7,7 @@
 //   ③ le refus est ÉNONCÉ, et la photo reste intacte
 //   ④ un candidat n'est rien tant qu'il n'est pas gardé
 import { chromium } from 'playwright-core'
+import { photoDEssai } from './photo-essai.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -23,7 +24,7 @@ page.on('request', r => { if (r.url().includes('/functions/v1/sprite')) appels.p
 
 const pret = () => page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
 const onglet = (n) => page.click(`nav.barre .onglet:has-text("${n}")`)
-const PHOTO = '/private/tmp/claude-501/-Users-juliantalou-Documents-PRO-03-PROJECTS-MyPaddock3/40a4a422-990d-4b2a-ae97-416403e70311/scratchpad/grande.jpg'
+const PHOTO = await photoDEssai()
 
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
 await pret()

@@ -58,7 +58,13 @@ let rates = await lancer('node', ['banc-rendu/unite.mjs']) ? ['unitaires'] : []
 // Les essais de bout en bout attaquent le PAQUET CONSTRUIT, servi par `vite
 // preview` — pas les sources. C'est le seul moyen de voir un défaut que le
 // bundler introduit, et c'est déjà arrivé.
+// La photo de 48,8 Mpx que quatre essais versent se fabrique ICI, une fois. Si
+// elle échouait à l'intérieur d'un essai, on lirait quatre échecs là où il n'y a
+// qu'un problème de harnais — c'est exactement ce qui est arrivé.
 console.log('\n═══ essais de bout en bout ═══')
+const { photoDEssai } = await import('./photo-essai.mjs')
+const photo = await photoDEssai()
+console.log(`  photo d'essai : ${photo}`)
 if (!await monterLeServeur()) {
   console.error('\n✗ aucun serveur sur 4173 : les essais de bout en bout n\'ont pas tourné.')
   process.exit(1)

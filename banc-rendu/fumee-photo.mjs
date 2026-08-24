@@ -2,6 +2,7 @@
 // deux pièges silencieux : le plafond de canevas iOS et le type du blob.
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
+import { photoDEssai } from './photo-essai.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -47,9 +48,9 @@ await enregistrerSession()
 await page.waitForSelector('text=Photos et gestes')
 console.log('① bloc photos présent, hors ligne : oui')
 
-// UNE VRAIE PHOTO D'IPHONE : 8064 × 6048 = 48,8 Mpx, soit trois fois le plafond
-// de canevas de Safari. C'est le cas NOMINAL, pas le cas limite.
-const grande = '/private/tmp/claude-501/-Users-juliantalou-Documents-PRO-03-PROJECTS-MyPaddock3/40a4a422-990d-4b2a-ae97-416403e70311/scratchpad/grande.jpg'
+// LE FORMAT D'UNE PHOTO D'IPHONE : 8064 × 6048 = 48,8 Mpx, soit trois fois le
+// plafond de canevas de Safari. C'est le cas NOMINAL, pas le cas limite.
+const grande = await photoDEssai()
 await page.setInputFiles('input[type=file]', grande)
 await page.waitForSelector('.vignette', { timeout: 60_000 })
 const v = await page.$eval('.vignette', n => ({ src: n.src.slice(0, 5), w: n.naturalWidth, h: n.naturalHeight }))

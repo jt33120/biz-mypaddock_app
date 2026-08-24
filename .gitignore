@@ -30,3 +30,8 @@ banc-rendu/photos/*
 !banc-rendu/photos/.gitkeep
 banc-rendu/sorties/
 
+# La photo d'essai de 48,8 Mpx se FABRIQUE (`node banc-rendu/photo-essai.mjs`) :
+# 2,3 Mo qui se regénèrent en trois secondes n'ont rien à faire dans l'histoire
+# du dépôt.
+banc-rendu/.fixtures/
+
