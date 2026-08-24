@@ -19,6 +19,9 @@ import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
 import { DEPENDANCES, LIEN_DIFFERE, ORDRE, PORTE_PROPRIETAIRE } from '../../src/db/sauvegarde'
 import { AppSchema, REFERENTIEL } from '../../src/db/schema'
+// Le fichier de règles tel qu'il est déployé, lu à la lettre. C'est un YAML et
+// non du code : rien ne le relie au schéma, et c'est précisément le problème.
+import REGLES_DE_SYNCHRO from '../../powersync/sync-config.yaml?raw'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
@@ -224,6 +227,27 @@ const essais = [
     // schéma, le détour n'aurait plus lieu d'être et devrait être retiré.
     vrai(DEPENDANCES.intervention.includes('photo') && DEPENDANCES.photo.includes('intervention'),
       'le cycle photo ↔ intervention a disparu : le lien différé est devenu inutile')
+  }),
+
+  // ⚠ LE DÉFAUT SYMÉTRIQUE DE L'ORDRE D'ENVOI, et il est plus silencieux encore.
+  // Une table absente des règles de synchronisation MONTE et NE REDESCEND JAMAIS.
+  // Rien n'échoue : le pilote saisit, la ligne part, le serveur la garde — et le
+  // jour où il change de téléphone, elle n'est pas là. Aucune erreur, aucun
+  // message, une saison amputée. Le fichier est un YAML, donc rien ne le reliait
+  // au schéma : c'est cet essai qui le relie.
+  doit('tout ce que le pilote écrit redescend sur son téléphone', () => {
+    const lues = new Set(
+      [...REGLES_DE_SYNCHRO.matchAll(/FROM\s+(\w+)/g)].map((m) => m[1]))
+    const absentesAssumees = new Set([
+      // Un flux global ferait descendre TOUS les barèmes constructeur chez un
+      // pilote qui possède une moto. Il lui faut un flux paramétré par le
+      // garage — mouvement 3, et pas avant.
+      'bareme',
+    ])
+    for (const t of AppSchema.tables.map((x) => x.name)) {
+      if (absentesAssumees.has(t)) continue
+      vrai(lues.has(t), `${t} est au schéma local mais ne descend jamais`)
+    }
   }),
 
   /* ─── LES CORPUS EMBARQUÉS ─────────────────────────────────────────────── */
