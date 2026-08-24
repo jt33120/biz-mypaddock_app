@@ -1,9 +1,38 @@
-# Vercel construit depuis GitHub : rien de tout ceci n'a besoin de monter.
+# ⚠ CE FICHIER REMPLACE `.gitignore`, IL NE S'Y AJOUTE PAS.
+#
+# Quand `.vercelignore` existe, la CLI Vercel ne consulte plus `.gitignore` du
+# tout. Or `.env` et `.env.local` n'étaient protégés QUE par lui : tant que
+# Vercel construisait depuis GitHub, ils n'existaient pas dans la source et la
+# question ne se posait pas. Le jour où l'on déploie depuis un poste — et ce
+# jour est arrivé quand le dépôt a déménagé et que le webhook s'est tu — ils
+# seraient montés avec le reste : MISTRAL_API_KEY, POWERSYNC_TOKEN, le mot de
+# passe Postgres.
+#
+# Les secrets d'abord, donc, et explicitement.
+.env
+.env.*
+!.env.example
+*.pem
+.npmrc
+supabase/.temp/
+
+# Trois dépôts MyPaddock antérieurs, clonés comme dépôts imbriqués.
 context/
+
+# Le travail de conception : lu par des humains, jamais par un navigateur.
 _bmad/
 _bmad-output/
 .agents/
 .claude/
+*.pdf
+
+# Construits et jetables.
 node_modules/
 dist/
-*.pdf
+
+# ⚠ `banc-rendu/` RESTE : le banc servi sous /banc est ÉMIS depuis sa source
+# unique au moment de la construction (vite.config.ts). L'exclure casserait la
+# construction. Seuls ses gros fichiers jetables partent.
+banc-rendu/.fixtures/
+banc-rendu/photos/
+banc-rendu/sorties/
