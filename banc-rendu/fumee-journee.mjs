@@ -75,15 +75,52 @@ verifier('   demande confirmation avant d\'effacer',
   await page.isVisible('text=Retirer définitivement'))
 verifier('   laisse revenir en arrière', await page.isVisible('text=Garder'))
 
+// ⚠ LA PHRASE NOMME CE QUI EST LÀ, ET RIEN D'AUTRE. Elle annonçait toujours
+// « ses chronos et ses photos », sur une journée qui n'en avait aucune — et
+// surtout elle TAISAIT les dépenses, que la suppression emporte pourtant. Sur
+// l'unique geste irréversible du produit, promettre moins qu'on ne détruit est
+// la seule faute qui ne se rattrape pas.
+const CONFIRME = '.bloc:has-text("Retirer définitivement") .note'
+const phrase = (await page.textContent(CONFIRME)).replace(/\s+/g, ' ')
+// Cette journée-ci n'a AUCUNE session enregistrée — trois taps sur « Continuer »
+// écrivent la journée, pas un chrono. La phrase disait pourtant « ses 0 session,
+// ses chronos et ses photos » : trois choses annoncées détruites dont deux
+// n'existaient pas, et un « 0 » au milieu d'une phrase.
+verifier('   une journée vide le dit, sans énumérer du vide',
+  /rien d'autre/.test(phrase) && !/photo/i.test(phrase) && !/0 session/.test(phrase), phrase)
+
 await page.click('text=Garder')
 await page.waitForTimeout(200)
 const gardee = await page.$$eval('.pile > .bloc', n => n.length)
 verifier('   « Garder » ne retire rien', gardee === 1, `${gardee} restante(s)`)
 
+// ── ②bis L'ARGENT DE LA JOURNÉE EST ANNONCÉ ────────────────────────────────
+// Un pilote qui retire une journée mal saisie perdait avec elle les 180,50 €
+// d'engagement qu'il y avait notés, sans qu'une ligne le lui dise.
+await page.click('.pile > .bloc .titre')
+await page.waitForSelector('text=Ajouter une dépense', { timeout: 20_000 })
+await page.click('text=Ajouter une dépense')
+await page.waitForSelector('section.depense')
+await page.fill('#montant', '180,50')
+await page.fill('#libelle', 'Engagement')
+await page.click('section.depense .bouton:not(.secondaire)')
+await page.waitForSelector('text=Meilleur tour du jour', { timeout: 20_000 })
+// La journée ne se quitte que par la barre : c'est un lieu, pas une modale.
+await onglet('ROULAGES')
+await page.waitForSelector('text=Retirer cette journée', { timeout: 20_000 })
 await page.click('text=Retirer cette journée')
+const avecArgent = (await page.textContent(CONFIRME)).replace(/\s+/g, ' ')
+verifier('②bis la dépense de la journée est annoncée avant de la détruire',
+  /180,5\d? €/.test(avecArgent), avecArgent)
+
 await page.click('text=Retirer définitivement')
+// ⚠ ON COMPTE LES JOURNÉES, PAS LES BLOCS. L'écran des roulages en porte
+// d'autres — le report de saison, par exemple, dès qu'une dépense existe — et
+// compter les blocs faisait échouer un essai que le produit passait.
 await page.waitForFunction(
-  () => document.querySelectorAll('.pile > .bloc').length === 0, null, { timeout: 20_000 })
+  () => document.querySelectorAll('.bloc:has(button)').length === 0
+     || !document.body.textContent.includes('Retirer cette journée'),
+  null, { timeout: 20_000 })
   .then(() => verifier('③ la journée est partie', true))
   .catch(() => verifier('③ la journée est partie', false, 'elle est toujours là'))
 

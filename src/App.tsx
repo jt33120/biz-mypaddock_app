@@ -5,7 +5,8 @@ import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
   listerMachines, type Machine,
   circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
-  normaliserEtats, poserBudget, supprimerRoulage, type Propose,
+  normaliserEtats, poserBudget, supprimerRoulage,
+  type ContenuDuRoulage, type Propose,
   type CoutRoulage,
 } from './db/depot'
 import { Depense } from './ecrans/Depense'
@@ -151,6 +152,25 @@ export default function App() {
     setConseil(await conseilDuJour(base, aujourdhui()))
   }, [])
   useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
+
+  /**
+   * ⚠ ET ELLE SE RECOMPOSE CHAQUE FOIS QU'ON OUVRE LA LISTE.
+   *
+   * `rafraichir` ne partait qu'à l'ouverture de l'application et sur les
+   * écritures que l'écran des roulages déclenche lui-même. Or tout ce qui se
+   * saisit DANS une journée — une dépense, un geste, une photo, une chute —
+   * s'écrit depuis un autre écran et revient au bilan, jamais à la liste. La
+   * liste gardait donc l'état d'avant jusqu'au prochain démarrage.
+   *
+   * Ce n'était déjà pas rien : une journée à 180 € s'y affichait sans son
+   * argent. C'est devenu grave quand la phrase de confirmation de suppression
+   * s'est mise à lire ces comptes — elle aurait annoncé « elle part seule » sur
+   * une journée qui emportait une dépense. Sur le seul geste irréversible du
+   * produit, une donnée périmée est un mensonge.
+   */
+  useEffect(() => {
+    if (db && ecran === 'roulages') void rafraichir(db)
+  }, [db, ecran, rafraichir])
 
   /**
    * ⚠ LA PREMIÈRE SAUVEGARDE NE SE DEMANDE PLUS — retour de Julian : « bug de
@@ -805,6 +825,23 @@ function LigneRoulage({ db, r, onOuvrir, onEcrit }: {
     onEcrit()
   })
 
+  /* ⚠ LA PHRASE NOMME CE QUI EST LÀ. La suppression emporte aussi les gestes,
+     la checklist et LES DÉPENSES DE LA JOURNÉE : promettre moins que ce qu'on
+     détruit est le seul mensonge qu'un produit ne peut pas se permettre sur son
+     unique geste irréversible. Les comptes descendent avec la liste, donc la
+     phrase est là au tap — une confirmation qui attend une requête est une
+     confirmation qu'on tape deux fois. */
+  const enumere = (c: ContenuDuRoulage): string => {
+    const p: string[] = []
+    if (c.sessions) p.push(`${c.sessions} session${c.sessions > 1 ? 's' : ''} chronométrée${c.sessions > 1 ? 's' : ''}`)
+    if (c.photos) p.push(`${c.photos} photo${c.photos > 1 ? 's' : ''}`)
+    if (c.gestes) p.push(`${c.gestes} geste${c.gestes > 1 ? 's' : ''} déclaré${c.gestes > 1 ? 's' : ''}`)
+    if (c.depenses) p.push(`${c.depenses} dépense${c.depenses > 1 ? 's' : ''} — ${formaterEuros(c.depenses_centimes)}`)
+    if (c.checklist) p.push('sa checklist')
+    if (!p.length) return ''
+    return p.length === 1 ? p[0] : `${p.slice(0, -1).join(', ')} et ${p[p.length - 1]}`
+  }
+
   return (
     <div className="bloc pile">
       <div className="pile" onClick={() => onOuvrir(r.id)}>
@@ -825,8 +862,9 @@ function LigneRoulage({ db, r, onOuvrir, onEcrit }: {
       {confirme ? (
         <div className="pile">
           <p className="note">
-            Cette journée part définitivement, avec ses {r.sessions} session{r.sessions > 1 ? 's' : ''},
-            ses chronos et ses photos.
+            {enumere(r)
+              ? <>Cette journée part définitivement, avec {enumere(r)}.</>
+              : <>Cette journée ne contient rien d'autre : elle part seule.</>}
           </p>
           <div className="rang">
             <button className="bouton secondaire" disabled={occupe} onClick={() => void retirer()}>

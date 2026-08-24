@@ -249,13 +249,45 @@ export const creerRoulage = async (
   return id
 }
 
+/**
+ * CE QU'UNE JOURNÉE EMPORTE AVEC ELLE, compté avant de le détruire.
+ *
+ * ⚠ LA PHRASE DE CONFIRMATION PROMETTAIT MOINS QUE CE QUE LE CODE DÉTRUISAIT.
+ * Elle nommait « ses N session, ses chronos et ses photos », toujours les mêmes
+ * mots, quelle que soit la journée. Or `supprimerRoulage` emporte AUSSI les
+ * gestes, les lignes de checklist et LES DÉPENSES DE LA JOURNÉE. Un pilote
+ * pouvait donc retirer une journée mal saisie et perdre les 340 € d'engagement
+ * qu'il y avait notés, sans qu'une seule ligne le lui ait dit.
+ *
+ * Sur la seule opération irréversible du produit, la phrase doit nommer ce qui
+ * est là — et rien d'autre : sur une journée vide, annoncer la destruction de
+ * chronos et de photos qui n'existent pas fait hésiter pour rien.
+ *
+ * Ces cinq comptes descendent avec la liste (`listerRoulages`), pas à la
+ * demande : la phrase doit être là au moment du tap, pas une requête plus tard.
+ */
+export type ContenuDuRoulage = {
+  sessions: number; photos: number; gestes: number
+  depenses: number; depenses_centimes: number; checklist: number
+}
+
 export const listerRoulages = (db: PowerSyncDatabase) =>
-  db.getAll<Roulage & { sessions: number; meilleur: number | null }>(
+  db.getAll<Roulage & ContenuDuRoulage & { meilleur: number | null }>(
     `SELECT r.id, r.circuit_nom, r.date_jour, r.groupe_nom, r.groupe_rang,
             r.groupe_total, r.machine_id,
             (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
-               JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur
+               JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur,
+            -- ⚠ CE QUE LA JOURNÉE EMPORTERAIT SI ON LA RETIRAIT, compté ICI et
+            -- non au moment du tap. Une confirmation qui attend une requête
+            -- pour s'afficher est une confirmation qu'on tape deux fois.
+            (SELECT count(*) FROM photo p WHERE p.roulage_id = r.id) AS photos,
+            (SELECT count(*) FROM geste g WHERE g.roulage_id = r.id) AS gestes,
+            (SELECT count(*) FROM checklist_ligne c WHERE c.roulage_id = r.id) AS checklist,
+            (SELECT count(*) FROM depense d
+              WHERE d.cible = 'roulage' AND d.roulage_id = r.id) AS depenses,
+            (SELECT coalesce(sum(d.montant_centimes), 0) FROM depense d
+              WHERE d.cible = 'roulage' AND d.roulage_id = r.id) AS depenses_centimes
        FROM roulage r
       ORDER BY r.date_jour DESC, r.id DESC`,
   )
