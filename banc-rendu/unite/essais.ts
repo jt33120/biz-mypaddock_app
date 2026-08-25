@@ -18,8 +18,8 @@ import { formaterPoids, TABLES_EMPORTEES } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
 import {
-  chargeDe, DEPENDANCES, direCombien, LIEN_DIFFERE, MINES_A_ECRIRE, NOM_TABLE, ORDRE,
-  PORTE_PROPRIETAIRE, sansLesNuls,
+  avecLesDefauts, chargeDe, DEFAUTS_SERVEUR, DEPENDANCES, direCombien, LIEN_DIFFERE, NOM_TABLE,
+  ORDRE, PORTE_PROPRIETAIRE,
 } from '../../src/db/sauvegarde'
 // Toutes les migrations telles qu'elles sont appliquées. Comme le YAML de
 // synchronisation : rien ne les relie au schéma local, et c'est le problème.
@@ -40,7 +40,6 @@ import {
 // rien ne la relie au code, et c'est précisément le problème.
 import MIGRATION_CATEGORIES from
   '../../supabase/migrations/20260823000001_preparation_et_skin_equipement.sql?raw'
-import { nouveauCode } from '../../src/db/cercle'
 import { lireEnvironnement } from '../../src/product'
 import { direLAbri, type Abri } from '../../src/db/abri'
 import { spritifier } from '../../src/pixel/spritifier'
@@ -536,8 +535,8 @@ const essais = [
     vrai(sans.includes('mars'), `« ${sans} » a perdu la date`)
   }),
 
-  /* ─── L'ADOPTION N'ENVOIE JAMAIS UN NUL ───────────────────────────────── */
-  doit("aucune colonne nulle ne part à l'adoption", () => {
+  /* ─── L'ADOPTION N'ENVOIE JAMAIS UN NUL LÀ OÙ LE SERVEUR EN REFUSE UN ─── */
+  doit("aucune colonne à défaut serveur ne part à nul", () => {
     // ⚠ LE DÉFAUT LE PLUS COÛTEUX DU PRODUIT, et il tenait à une nuance de SQL.
     // « la colonne vaut NULL » ≠ « la colonne est absente » : le défaut serveur
     // ne s'applique qu'à l'absente. `roulage.chrono_visible` est `not null
@@ -547,30 +546,48 @@ const essais = [
     // Vérifié sur la base réelle le 25 août 2026 avant d'être corrigé.
     const { charge } = chargeDe('roulage', [{
       id: 'r1', machine_id: 'm1', date_jour: '2026-04-18', circuit_nom: 'Nogaro',
-      chrono_visible: null, groupe_nom: null, etat: 'usage',
+      chrono_visible: null, groupe_nom: null, etat: null,
     }], 'p1')
-    vrai(!('chrono_visible' in charge[0]), 'chrono_visible part encore, et à nul')
-    for (const [c, v] of Object.entries(charge[0]))
-      vrai(v !== null, `${c} part à nul et fera refuser la ligne`)
+    egal(charge[0].chrono_visible, 0, 'le roulage part sans visibilité, et sera refusé')
+    egal(charge[0].etat, 'usage')
+    // Une colonne NULLABLE garde son nul — et surtout sa clé.
+    egal(charge[0].groupe_nom, null, 'un nul légitime a été effacé')
   }),
-  doit('mais un zéro, un faux et une chaîne vide ne sont pas des nuls', () => {
-    // La faute symétrique, et elle serait pire : filtrer sur la fausseté au lieu
-    // de la nullité effacerait `cochee: 0`, `groupe_rang: 0`, `partage: 0` —
-    // le produit enverrait alors des lignes amputées de ce qu'elles affirment.
-    const propre = sansLesNuls({ a: 0, b: false, c: '', d: null, e: undefined, f: NaN })
-    egal(Object.keys(propre).sort(), ['a', 'b', 'c', 'f'])
-    egal(propre.a, 0); egal(propre.b, false); egal(propre.c, '')
+  doit("les lignes d'un même envoi portent toutes les mêmes clés", () => {
+    // ⚠ CE N'EST PAS UN DÉTAIL DE STYLE. PostgREST exige que toutes les lignes
+    // d'une insertion groupée portent les mêmes clés, et répond
+    // « PGRST102 All object keys must match » sinon. Le premier correctif
+    // RETIRAIT les nuls : deux roulages dont l'un a touché l'interrupteur et
+    // l'autre non n'avaient plus le même jeu de clés, le bloc échouait, et
+    // l'adoption repartait ligne par ligne — une requête HTTP par ligne sur
+    // toute une saison, sans que rien ne le dise.
+    const { charge } = chargeDe('roulage', [
+      { id: 'a', circuit_nom: 'Nogaro', chrono_visible: null, groupe_nom: null, etat: 'usage' },
+      { id: 'b', circuit_nom: 'Albi', chrono_visible: 1, groupe_nom: 'Expert', etat: 'usage' },
+    ], 'p1')
+    egal(Object.keys(charge[0]).sort(), Object.keys(charge[1]).sort(),
+      'deux lignes du même envoi ont des clés différentes')
+    egal(charge[1].chrono_visible, 1, 'une visibilité choisie a été écrasée')
+  }),
+  doit('un zéro, un faux et une chaîne vide ne sont pas des nuls', () => {
+    // La faute symétrique, et elle serait pire : traiter la fausseté comme la
+    // nullité remplacerait `cochee: 0` par le défaut — sans conséquence ici,
+    // mais `partage: 0` deviendrait indistinguable d'un partage jamais décidé.
+    egal(avecLesDefauts('checklist_ligne', { cochee: 0 }).cochee, 0)
+    egal(avecLesDefauts('geste', { partage: 0 }).partage, 0)
+    egal(avecLesDefauts('roulage', { etat: '' }).etat, '', 'une chaîne vide a été remplacée')
+    // Et une table sans mine ressort intacte.
+    const t = { id: 'x', temps_ms: 0 }
+    egal(avecLesDefauts('tour', t), t)
   }),
   doit("l'adoption pose le propriétaire et diffère le lien coupé", () => {
-    // Les deux autres charges de `chargeDe`, éprouvées ici parce qu'elles
-    // vivaient au milieu d'un appel réseau et que rien ne pouvait les voir.
     for (const t of PORTE_PROPRIETAIRE) {
       const { charge } = chargeDe(t, [{ id: 'x' }], 'p1')
       egal(charge[0].pilote_id, 'p1', `${t} part sans propriétaire`)
     }
     const { charge, differes } = chargeDe(LIEN_DIFFERE.table,
       [{ id: 'i1', [LIEN_DIFFERE.colonne]: 'ph1', libelle: 'Vidange' }], 'p1')
-    vrai(!(LIEN_DIFFERE.colonne in charge[0]),
+    egal(charge[0][LIEN_DIFFERE.colonne], null,
       `${LIEN_DIFFERE.colonne} part au premier passage, donc en clé étrangère morte`)
     egal(differes, [{ id: 'i1', valeur: 'ph1' }])
     egal(charge[0].libelle, 'Vidange', 'le reste de la ligne a été perdu')
@@ -581,17 +598,19 @@ const essais = [
     // dont une prend du retard. `chrono_visible` et `partage` sont arrivées au
     // serveur le 19 août en `not null default false` ; personne ne les a écrites
     // en local, et le défaut a vécu six jours sans qu'aucun essai puisse le voir.
-    // Cet essai reconstruit la liste au lieu de la croire.
-    const auServeur = new Set<string>()
+    // Cet essai reconstruit la liste — colonnes ET valeurs — au lieu de la croire.
+    const auServeur = new Map<string, { type: string; defaut: string }>()
+    const retenir = (t: string, c: string, type: string, defaut: string) =>
+      auServeur.set(`${t}.${c}`, { type: type.toLowerCase(), defaut: defaut.trim().toLowerCase() })
     for (const sql of Object.values(MIGRATIONS)) {
       const net = sql.replace(/--[^\n]*/g, '')
       for (const m of net.matchAll(/create table (?:if not exists )?(\w+)\s*\(([\s\S]*?)\n\)\s*;/gi))
         for (const l of m[2].split('\n')) {
-          const c = l.match(/^\s*(\w+)\s+[\w[\]() ]+?\s+not null default/i)
-          if (c) auServeur.add(`${m[1]}.${c[1]}`)
+          const c = l.match(/^\s*(\w+)\s+([\w[\]()]+)[\w ]*?\s+not null default\s+([^,]+?)\s*(?:,|$)/i)
+          if (c) retenir(m[1], c[1], c[2], c[3])
         }
-      for (const m of net.matchAll(/alter table (\w+)\s+add column (?:if not exists )?(\w+)[^;]*?not null default/gi))
-        auServeur.add(`${m[1]}.${m[2]}`)
+      for (const m of net.matchAll(/alter table (\w+)\s+add column (?:if not exists )?(\w+)\s+([\w[\]()]+)[^;]*?not null default\s+([^;\n]+)/gi))
+        retenir(m[1], m[2], m[3], m[4])
     }
     vrai(auServeur.size > 25, `le lecteur de migrations n'a trouvé que ${auServeur.size} colonnes`)
 
@@ -605,23 +624,50 @@ const essais = [
         for (const c of t.columns)
           if (auServeur.has(`${t.name}.${c.name}`)) mines.push(`${t.name}.${c.name}`)
 
-    const declarees = Object.entries(MINES_A_ECRIRE)
-      .flatMap(([t, cs]) => cs.map((c) => `${t}.${c}`))
+    const declarees = Object.entries(DEFAUTS_SERVEUR)
+      .flatMap(([t, cs]) => Object.keys(cs).map((c) => `${t}.${c}`))
     egal(mines.sort(), declarees.sort(),
       'une colonne à défaut serveur est au schéma local sans être déclarée : décide où elle s\'écrit')
+
+    // ⚠ ET LA VALEUR, PAS SEULEMENT LE NOM. Un défaut déclaré de travers poserait
+    // silencieusement la mauvaise chose sur toute une saison reprise.
+    for (const [t, cs] of Object.entries(DEFAUTS_SERVEUR))
+      for (const [c, v] of Object.entries(cs)) {
+        const vu = auServeur.get(`${t}.${c}`)!
+        // « false » côté SQL, 0 côté SQLite : c'est ce que les écrivains posent,
+        // et Postgres accepte « 0 » en entrée booléenne.
+        const attendu = vu.type === 'boolean'
+          ? (vu.defaut === 'false' ? 0 : 1)
+          : vu.defaut.replace(/::\w+$/, '').replace(/^'|'$/g, '')
+        egal(String(v), String(attendu), `le défaut déclaré de ${t}.${c} ne dit pas celui du serveur`)
+      }
   }),
 
   /* ─── LE CODE DE CERCLE — il se donne DE VIVE VOIX ────────────────────── */
   doit("un code de cercle n'a aucun caractère qu'on confonde à l'oral", () => {
+    // ⚠ LE CODE SE TIRE AU SERVEUR DEPUIS LE 25 AOÛT — un client qui choisit son
+    // propre code peut en choisir un devinable. L'essai lit donc l'alphabet DANS
+    // LA MIGRATION, là où il vit réellement, plutôt qu'une copie en TypeScript
+    // qui prendrait du retard sans que rien ne le dise.
+    const sql = Object.entries(MIGRATIONS)
+      .find(([f]) => f.includes('le_cercle_ne_s_ouvre_que_par_son_code'))?.[1]
+    vrai(!!sql, 'la migration du cercle est introuvable')
+    const m = sql!.match(/substr\('([A-Z0-9]+)',/)
+    vrai(!!m, "l'alphabet du code est introuvable dans la migration")
+    const alphabet = m![1]
+
     // Il se dicte au paddock, casque à la main, dans le bruit. 0 et O, 1 et I
     // et L se confondent : ils sont exclus de l'alphabet, pas corrigés après.
-    for (let i = 0; i < 200; i++) {
-      const c = nouveauCode()
-      egal(c.length, 8)
-      vrai(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]+$/.test(c), `« ${c} » contient un caractère ambigu`)
-    }
-    // Et deux codes tirés coup sur coup ne se ressemblent pas.
-    vrai(new Set([...Array(50)].map(() => nouveauCode())).size === 50, 'des codes se répètent')
+    for (const c of '01OIL')
+      vrai(!alphabet.includes(c), `« ${c} » est dans l'alphabet et se confond à l'oral`)
+    vrai(new Set(alphabet).size === alphabet.length, "l'alphabet répète un caractère")
+    // 31 caractères sur 8 tirages : ~2^39,6. En dessous de 2^32, un balayage
+    // devient une soirée de travail — et rien ne compte les tentatives.
+    vrai(Math.log2(alphabet.length) * 8 > 32,
+      `${alphabet.length} caractères ne suffisent pas à rendre un code non devinable`)
+    // Et le tirage lit bien la longueur de l'alphabet, pas un nombre écrit à côté.
+    vrai(sql!.includes(`floor(random() * ${alphabet.length})`),
+      "le tirage et l'alphabet ne parlent pas de la même longueur")
   }),
 ]
 

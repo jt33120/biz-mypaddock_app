@@ -160,46 +160,69 @@ export const etatLocal = async (db: PowerSyncDatabase): Promise<BilanEnvoi> => {
 }
 
 /**
- * ⚠ UNE COLONNE NULLE NE S'ENVOIE PAS — ET C'EST LE DÉFAUT LE PLUS COÛTEUX QUE
- * CE FICHIER AIT PORTÉ.
+ * ⚠ UNE COLONNE NULLE N'EST PAS UNE COLONNE ABSENTE — ET LA SAISON ENTIÈRE EN
+ * DÉPENDAIT.
  *
  * En SQL, « la colonne vaut NULL » et « la colonne n'est pas dans la requête »
  * ne sont PAS la même chose. Le défaut d'une colonne ne s'applique que si elle
  * est ABSENTE. Une valeur nulle transmise explicitement écrase le défaut, et
  * une colonne `not null default false` refuse alors la ligne entière : 23502.
  *
- * Or l'adoption lit `SELECT *` et envoie tout tel quel. Le schéma local, lui,
+ * Or l'adoption lit `SELECT *` et envoyait tout tel quel. Le schéma local, lui,
  * n'a aucune notion de « non nul » : PowerSync range en SQLite, où toute colonne
  * jamais écrite vaut NULL. Toute colonne que le serveur déclare
  * `not null default …` et que le produit n'écrit pas explicitement était donc
- * une mine — et il y en avait deux, sur les deux tables les plus lourdes de
- * conséquence.
+ * une mine.
  *
  * `roulage.chrono_visible` : jamais écrite par `depot.ts`. Vérifié sur la base
  * réelle le 25 août 2026 — l'insertion avec la colonne à NULL rend
  * « 23502 null value in column "chrono_visible" », la même insertion SANS la
- * colonne passe. Conséquence pour un pilote qui a saisi sa saison avant de
- * créer un compte, ce que le produit l'invite à faire : à la connexion, CHAQUE
- * roulage est refusé — et avec eux les sessions, les tours, les chutes, les
- * dépenses, qui pendent tous à un roulage par clé étrangère. Il reste sa moto.
- *
+ * colonne passe. Conséquence pour un pilote qui a saisi sa saison avant de créer
+ * un compte, ce que le produit l'invite à faire : à la connexion, CHAQUE roulage
+ * est refusé — et avec eux les sessions, les tours, les chutes, les dépenses,
+ * qui pendent tous à un roulage par clé étrangère. Il lui reste sa moto.
  * `geste.partage` : même chose, même migration, même classe.
  *
- * ON NE RUSTINE DONC PAS LES DEUX COLONNES : on retire les nuls de la charge.
- * C'est exact pour toutes les autres, et vérifié plutôt que supposé — aucune
- * colonne nullable du schéma ne porte de défaut serveur (requête du 25 août),
- * donc « absente » et « nulle » y donnent rigoureusement le même résultat à
- * l'insertion. La règle ferme la classe entière, y compris les colonnes qui
- * n'existent pas encore.
- *
- * ⚠ CE N'EST VRAI QUE POUR L'ADOPTION. Elle DÉPOSE un état initial ; elle ne
- * modifie rien. La synchronisation continue passe par la file PowerSync, qui
- * n'envoie que les colonnes réellement changées et sait donc dire « mets ceci
- * à nul ». Appliquer cette règle là-bas rendrait un effacement impossible.
+ * ⚠ ON NE RETIRE PAS LA COLONNE, ON POSE LE DÉFAUT. Le premier correctif
+ * retirait les nuls de la charge — juste sur le fond, faux dans la plomberie :
+ * PostgREST exige que TOUTES les lignes d'une insertion groupée portent les
+ * mêmes clés, et répond `PGRST102 All object keys must match` sinon. Deux
+ * roulages dont l'un a touché l'interrupteur et l'autre non n'auraient plus eu
+ * le même jeu de clés : le bloc échouait, et l'adoption repartait ligne par
+ * ligne — une requête HTTP par ligne sur toute une saison, sans que rien ne le
+ * dise. Poser la valeur du défaut garde les clés IDENTIQUES d'une ligne à
+ * l'autre, et dit la vérité : ce roulage n'est pas « visibilité inconnue », il
+ * est masqué.
  */
-export const sansLesNuls = (ligne: Record<string, unknown>): Record<string, unknown> => {
-  const propre: Record<string, unknown> = {}
-  for (const [c, v] of Object.entries(ligne)) if (v !== null && v !== undefined) propre[c] = v
+export const DEFAUTS_SERVEUR: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+  // ⚠ CETTE LISTE EST RECONSTRUITE PAR UN ESSAI UNITAIRE depuis les migrations
+  // et le schéma local — colonnes ET valeurs. Une onzième mine ajoutée demain
+  // fera rougir le banc jusqu'à ce qu'on décide où elle s'écrit. Les deux
+  // dernières sont arrivées sans que rien ne le dise : posées au serveur le
+  // 19 août, jamais écrites en local, découvertes le 25.
+  //
+  // Les booléens valent 0 et non `false` : c'est ce que SQLite range et ce que
+  // les écrivains posent, et Postgres accepte « 0 » en entrée booléenne.
+  checklist_ligne: { cochee: 0 },              // écrite : src/db/checklist.ts, les trois INSERT
+  document: { genre: 'manuel' },               // écrite : src/db/documents.ts:84-87
+  geste: { partage: 0 },                       // écrite : src/db/gestes.ts
+  horloge: { extrait_par_ia: 0 },              // écrite : src/db/usure.ts:170-171
+  intervention: { etat: 'faite' },             // écrite : src/db/usure.ts, src/db/atelier.ts
+  mesure: { valeur: 0 },                       // écrite : src/db/mesures.ts:102-103
+  photo: { etat: 'locale', genre: 'photo' },   // écrites : src/db/photos.ts:169-172
+  roulage: { chrono_visible: 0, etat: 'usage' },  // écrites : src/db/depot.ts, même INSERT
+}
+
+/** Poser le défaut du serveur là où le local n'a jamais rien écrit. Ne touche
+ *  à rien d'autre : une colonne nullable garde son nul, et sa clé. */
+export const avecLesDefauts = (
+  table: string, ligne: Record<string, unknown>,
+): Record<string, unknown> => {
+  const defauts = DEFAUTS_SERVEUR[table]
+  if (!defauts) return ligne
+  const propre = { ...ligne }
+  for (const [c, v] of Object.entries(defauts))
+    if (propre[c] === null || propre[c] === undefined) propre[c] = v
   return propre
 }
 
@@ -209,37 +232,6 @@ export const sansLesNuls = (ligne: Record<string, unknown>): Record<string, unkn
  * ça vivait au milieu d'un appel réseau. Le défaut des colonnes nulles a vécu
  * là, invisible, parce qu'il n'y avait rien à interroger.
  */
-/**
- * LES MINES CONNUES — les colonnes que le serveur déclare `not null default …`
- * ET que le schéma local porte, donc que le produit peut envoyer à nul.
- *
- * Le compte n'est PAS celui qu'on croit, et je l'ai su en le faisant compter par
- * la machine plutôt qu'à la main : sur les cinquante-huit colonnes à défaut
- * serveur, vingt-quatre sont au schéma local — mais quatorze appartiennent au
- * RÉFÉRENTIEL, que la PWA lit sans jamais l'écrire (AD-12) et que `ORDRE` ne
- * monte pas. Restent celles-ci, qui partent réellement.
- *
- * Chacune doit être ÉCRITE EXPLICITEMENT par son écrivain — la liste dit où.
- * `sansLesNuls` est le filet ; ceci est la source, et une source qui dit la règle
- * vaut mieux qu'un filet silencieux.
- *
- * ⚠ UN ESSAI UNITAIRE RECONSTRUIT CETTE LISTE depuis les migrations et le schéma
- * local, et échoue si elle diverge. Une neuvième colonne ajoutée demain ne peut
- * donc plus arriver sans qu'on décide où elle s'écrit. Les deux dernières sont
- * arrivées comme ça — ajoutées au serveur le 19 août, jamais écrites en local,
- * découvertes le 25.
- */
-export const MINES_A_ECRIRE: Readonly<Record<string, readonly string[]>> = {
-  checklist_ligne: ['cochee'],              // src/db/checklist.ts — 0 dans les trois INSERT
-  document: ['genre'],                      // src/db/documents.ts:84-87
-  geste: ['partage'],                       // src/db/gestes.ts — à faux, explicitement
-  horloge: ['extrait_par_ia'],              // src/db/usure.ts:170-171
-  intervention: ['etat'],                   // src/db/usure.ts:208-210, src/db/atelier.ts:119-121, :143-145
-  mesure: ['valeur'],                       // src/db/mesures.ts:102-103
-  photo: ['etat', 'genre'],                 // src/db/photos.ts:169-172
-  roulage: ['chrono_visible', 'etat'],      // src/db/depot.ts — les deux dans le même INSERT
-}
-
 export const chargeDe = (
   table: string, lignes: Record<string, unknown>[], piloteId: string,
 ): { charge: Record<string, unknown>[]; differes: { id: string; valeur: unknown }[] } => {
@@ -249,11 +241,11 @@ export const chargeDe = (
       ? { ...l, pilote_id: piloteId } : { ...l }
     if (table === LIEN_DIFFERE.table && avecProprio[LIEN_DIFFERE.colonne]) {
       differes.push({ id: String(avecProprio.id), valeur: avecProprio[LIEN_DIFFERE.colonne] })
+      // Nul, et la CLÉ RESTE — voir PGRST102 ci-dessus. La colonne est nullable,
+      // le nul y est légitime, et le lien est reposé au dernier passage.
       avecProprio[LIEN_DIFFERE.colonne] = null
     }
-    // Le lien différé vient d'être mis à nul : `sansLesNuls` le retire donc de
-    // la charge — même effet à l'insertion, et il est reposé au dernier passage.
-    return sansLesNuls(avecProprio)
+    return avecLesDefauts(table, avecProprio)
   })
   return { charge, differes }
 }
