@@ -34,7 +34,7 @@ await pret()
 await page.click('nav.barre .onglet:has-text("GARAGE")')
 
 // ── ③ AVANT TOUTE MACHINE ──────────────────────────────────────────────────
-await page.waitForSelector('text=Aucune machine', { timeout: 20_000 })
+await page.waitForSelector('text=Aucune moto', { timeout: 20_000 })
 verifier('③ le budget existe sans machine', await page.isVisible('.atelier.budget'))
 verifier('   l\'équipement aussi', await page.isVisible('.atelier.equipement'))
 

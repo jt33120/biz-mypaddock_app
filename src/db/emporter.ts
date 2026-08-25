@@ -151,10 +151,10 @@ export const composer = async (
   for (const m of portraits) {
     const f = await photoMachine(m.photo_chemin)
     if (f) portraitsLus.push({ nom: `machine-${m.id}.${f.name.split('.').pop()}`, fichier: f })
-    else manques.push(`la photo de la machine ${m.id} n'a pas de copie dans ce téléphone`)
+    else manques.push(`la photo de la moto ${m.id} n'a pas de copie dans ce téléphone`)
   }
   if (!avecPhotos && portraitsLus.length)
-    manques.push(`${portraitsLus.length} photo(s) de machine : emport demandé sans les images`)
+    manques.push(`${portraitsLus.length} photo(s) de moto : emport demandé sans les images`)
   if (!avecPhotos && presentes.length)
     manques.push(`${presentes.length} photo(s) : emport demandé sans les images`)
   if (absentes.length)

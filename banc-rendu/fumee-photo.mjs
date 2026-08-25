@@ -60,15 +60,27 @@ console.log('   servie depuis la copie locale (blob:) :', v.src === 'blob:' ? 'o
 console.log('   réduite sous le plafond canevas :', v.w * v.h < 16_777_216 ? `oui (${(v.w*v.h/1e6).toFixed(1)} Mpx)` : 'NON')
 
 // Le type du blob se vérifie APRÈS COUP, pas d'après le format demandé.
+//
+// ⚠ IL LISAIT `noms[0]` À L'AVEUGLE, et le dossier n'est plus à lui seul. C'est
+// là que l'épreuve du coffre dépose son témoin `.epreuve-ecriture`, et son
+// retrait est un `catch` muet — il DOIT l'être, une épreuve qui refuse de partir
+// ne justifie pas de refuser une photo. Le jour où ce retrait échoue, l'essai
+// lisait un fichier d'un octet à la place du cliché et racontait n'importe quoi
+// sur son type. On applique donc la règle du coffre : un nom qui commence par un
+// point n'appartient pas au pilote et n'entre dans aucun inventaire.
 const t = await page.evaluate(async () => {
   const r = await (await navigator.storage.getDirectory()).getDirectoryHandle('photos')
   const noms = []
-  for await (const [n] of r.entries()) noms.push(n)
+  for await (const [n] of r.entries()) if (!n.startsWith('.')) noms.push(n)
+  if (noms.length !== 1) return { noms, nom: '', type: '', ko: 0 }
   const f = await (await r.getFileHandle(noms[0])).getFile()
-  return { nom: noms[0], type: f.type, ko: Math.round(f.size / 1024) }
+  return { noms, nom: noms[0], type: f.type, ko: Math.round(f.size / 1024) }
 })
 console.log('③ copie locale dans l\'OPFS :', JSON.stringify(t))
-console.log('   extension conforme au type réel :', t.nom.endsWith(t.type.split("/")[1] === 'jpeg' ? 'jpg' : t.type.split("/")[1]) ? 'oui' : 'NON')
+console.log('   une seule photo rangée, aucun témoin compté :',
+  t.nom ? 'oui' : 'NON — ' + JSON.stringify(t.noms))
+console.log('   extension conforme au type réel :',
+  t.nom && t.nom.endsWith(t.type.split('/')[1] === 'jpeg' ? 'jpg' : t.type.split('/')[1]) ? 'oui' : 'NON')
 
 // Le geste — déclaratif, et sans photo obligatoire.
 await page.click('text=Déclarer un geste')

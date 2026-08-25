@@ -43,7 +43,7 @@ await page.fill('.champ[placeholder="CBR 1000 RR"]', 'R6')
 // l'essai, dont l'année était fausse — et invérifiable, puisqu'elle n'apparaissait
 // nulle part à l'écran.
 await page.fill('.champ[placeholder="2010"]', '2019')
-await page.click('text=Déclarer ma machine')
+await page.click('text=Déclarer ma moto')
 await page.waitForSelector('.garage .modele', { timeout: 20_000 })
 const titre = (await page.textContent('.garage-titre')).replace(/\s+/g, ' ')
 console.log('① machine déclarée :', titre)

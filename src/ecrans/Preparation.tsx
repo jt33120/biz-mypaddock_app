@@ -95,7 +95,7 @@ export function Preparation({ db, roulage, onAller }: {
                   onClick={() => void cocher(db, s.id, !s.cochee).then(charger)}>
             {s.libelle}
           </button>
-          <button className="lien" style={{ minHeight: 40 }}
+          <button className="lien destructif" style={{ minHeight: 40 }}
                   onClick={() => void retirer(db, s.id).then(charger)}>retirer</button>
         </label>
       ))}

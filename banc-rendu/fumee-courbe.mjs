@@ -38,7 +38,7 @@ console.log('   rien n\'annonce ce qui manque :',
 await page.click('nav.barre .onglet:has-text("GARAGE")')
 await page.fill('.champ[placeholder="Honda"]', 'Honda')
 await page.fill('.champ[placeholder="CBR 1000 RR"]', 'CBR 1000 RR · 83')
-await page.click('text=Déclarer ma machine')
+await page.click('text=Déclarer ma moto')
 await page.waitForSelector('.garage .modele', { timeout: 20_000 })
 await page.click('text=Reprendre la saison 2026 · Pau-Arnos')
 await page.waitForTimeout(1500)

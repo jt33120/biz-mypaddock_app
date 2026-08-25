@@ -26,7 +26,7 @@ export function Legal({ onFermer }: { onFermer: () => void }) {
       <h1 className="titre">Ce que fait cette application</h1>
       <p className="texte">
         {PRODUCT_NAME} est un carnet de roulage moto. Il enregistre tes journées de piste,
-        tes chronos, ce qu'elles coûtent et ce que tu fais sur ta machine. Il fonctionne
+        tes chronos, ce qu'elles coûtent et ce que tu fais sur ta moto. Il fonctionne
         entièrement hors ligne ; le compte ne sert qu'à ce que ta saison survive au téléphone.
       </p>
       <div className="bloc pile">
@@ -34,7 +34,7 @@ export function Legal({ onFermer }: { onFermer: () => void }) {
         <p className="texte">
           Le carnet d'entretien est <b>auto-déclaré</b> : il atteste ce que tu as consigné,
           jamais un historique certifié par un tiers. Rien ici ne certifie la sécurité d'une
-          machine, ne garantit une admission sur un circuit, ni ne dit ce qu'il faut faire.
+          moto, ne garantit une admission sur un circuit, ni ne dit ce qu'il faut faire.
         </p>
       </div>
 
@@ -49,7 +49,7 @@ export function Legal({ onFermer }: { onFermer: () => void }) {
         <div className="libelle">ce qui part au serveur, avec un compte</div>
         <p className="texte">
           Ton adresse e-mail et ton mot de passe (chiffré, jamais lisible par nous) ·
-          tes roulages, sessions et chronos · tes dépenses et ton budget · tes machines et
+          tes roulages, sessions et chronos · tes dépenses et ton budget · tes motos et
           leurs interventions · tes photos · la phrase que tu écris pour toi-même ·
           et les trois mesures ci-dessous, si tu les acceptes.
         </p>
@@ -113,7 +113,7 @@ export function Legal({ onFermer }: { onFermer: () => void }) {
       <div className="bloc pile">
         <p className="texte">
           Le service est fourni tel quel, gratuitement, sans garantie de disponibilité. Tu
-          restes responsable de ta machine, de ton équipement et de ta conduite ; rien de ce que
+          restes responsable de ta moto, de ton équipement et de ta conduite ; rien de ce que
           l'application affiche ne remplace un contrôle, un professionnel ou les règles d'un
           organisateur. Tu es responsable de ce que tu saisis et de ce que tu partages.
         </p>

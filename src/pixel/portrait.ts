@@ -66,6 +66,33 @@ export type Sujet =
   | { machineId: string; equipementId?: never }
   | { equipementId: string; machineId?: never }
 
+/**
+ * ⚠ CE QUI AUTORISE UNE FABRICATION, LU EN UN SEUL ENDROIT.
+ *
+ * Il y en avait deux, et ils ne se parlaient pas : la fabrique refusait sur
+ * « pas de serveur OU pas de jeton », pendant que l'écran d'annonce composait sa
+ * phrase sans rien regarder du tout. L'écran promettait « ce compte en a 3
+ * inclus, dont aucun n'a encore servi » à un pilote SANS COMPTE — et le geste
+ * suivant lui répondait « le portrait demande un compte ». Deux phrases
+ * contradictoires dans le même geste, sur le seul bouton qui dépense.
+ *
+ * Et ce n'est pas un cas de bord : le produit est local-first, ne pas avoir de
+ * compte est l'ÉTAT PAR DÉFAUT — c'est la phrase que lit la majorité.
+ *
+ * Le jeton, pas seulement l'identité : hors ligne, avec un jeton expiré, il n'y
+ * a plus de droit de parler au serveur même si l'identité tient (compte.ts). La
+ * fabrique refuserait ; l'annonce doit donc refuser aussi.
+ */
+const jetonDeFabrique = async (): Promise<string | null> => {
+  if (!import.meta.env.VITE_SUPABASE_URL) return null
+  try { return await jeton() } catch { return null }   // hors ligne : pas de droit
+}
+
+/** Vrai quand une fabrication PEUT partir. Ne sert qu'à ANNONCER — le serveur
+ *  reste seul juge, et cette fonction ne fait passer personne. */
+export const fabriqueOuverte = async (): Promise<boolean> =>
+  (await jetonDeFabrique()) !== null
+
 export const genererPortrait = async (
   _db: PowerSyncDatabase, sujet: Sujet | string, photo: Blob, piloteEnSelle = false,
 ): Promise<Issue> => {
@@ -73,10 +100,7 @@ export const genererPortrait = async (
   const s: Sujet = typeof sujet === 'string' ? { machineId: sujet } : sujet
   const machineId = s.machineId ?? null
   const base = import.meta.env.VITE_SUPABASE_URL
-  if (!base) return { ok: false, motif: 'sans_compte', message: dire('sans_compte') }
-
-  let jwt: string | null = null
-  try { jwt = await jeton() } catch { /* hors ligne : traité comme un réseau absent */ }
+  const jwt = await jetonDeFabrique()
   if (!jwt) return { ok: false, motif: 'sans_compte', message: dire('sans_compte') }
 
   // La photo part RÉDUITE. Le modèle n'a pas besoin de 48 Mpx pour reconnaître
@@ -120,11 +144,52 @@ export const genererPortrait = async (
   }
 }
 
-/** Ce qui reste au compte, lu depuis les lignes descendues. Le serveur reste
- *  l'autorité — ceci ne sert qu'à ANNONCER, jamais à autoriser. */
-export const portraitsRestants = async (
-  db: PowerSyncDatabase, quota: number,
-): Promise<number> => {
+/**
+ * ⚠ CE QUE COÛTE UN PORTRAIT, POUR POUVOIR LE DIRE AVANT D'APPELER.
+ *
+ * Ces deux nombres ne servent QU'À ANNONCER : le serveur reste seul juge, il
+ * réserve sous verrou avant d'appeler le modèle, et l'application n'a aucun
+ * moyen de dépenser toute seule (AD-15). Ils sont ici parce qu'un bouton nommé
+ * « Refaire », posé en haut d'un écran, transforme un tap accidentel en dépense
+ * — et qu'un produit qui prélève sans avoir dit ce qu'il prélève est un produit
+ * qu'on n'ouvre plus.
+ *
+ * ⚠ ILS PEUVENT MENTIR SI ON LES OUBLIE. `PORTRAITS_INCLUS` recopie le défaut de
+ * `pilote.quota_sprites` posé par la migration 20260819000010 ; le jour où ce
+ * défaut change là-bas, l'annonce d'ici devient fausse sans que rien ne casse.
+ * Un essai unitaire relit donc la migration et les confronte — c'est la seule
+ * chose qui relie deux dépôts que rien d'autre ne relie.
+ *
+ * Le coût, lui, vient de A-FAIRE §1 : ≈ 0,16 € par portrait chez le fournisseur
+ * d'images. Il est APPROXIMATIF et l'écran le dit — annoncer un prix exact qu'on
+ * ne facture pas serait pire que d'annoncer un ordre de grandeur vrai.
+ *
+ * ⚠ ET LE PRIX SE CONFRONTE COMME LE QUOTA. Il n'avait aucune garde alors qu'il
+ * est le seul des deux nombres à s'écrire EN EUROS à l'écran : le
+ * `cout_unitaire_centimes … default 16` du filet monétaire (migration
+ * 20260819000012) est ce qui décompte vraiment, et le jour où il bouge là-bas,
+ * l'écran d'ici annonce un prix que personne ne facture. Le même essai unitaire
+ * relit les deux.
+ */
+export const COUT_PORTRAIT_CENTIMES = 16
+export const PORTRAITS_INCLUS = 3
+
+/** Ce qui a déjà été fabriqué depuis ce compte, lu dans les lignes descendues.
+ *  La table `generation` descend et ne remonte jamais : c'est le serveur qui
+ *  l'écrit, et c'est ce qui rend ce compte crédible. Hors ligne ou sans compte
+ *  elle est vide, donc ce chiffre vaut zéro — il ne bloque rien, il énonce. */
+export const portraitsFaits = async (db: PowerSyncDatabase): Promise<number> => {
   const r = await db.get<{ n: number }>(`SELECT count(*) AS n FROM generation`)
-  return Math.max(0, quota - (r.n ?? 0))
+  return r.n ?? 0
 }
+
+/* ⚠ IL Y AVAIT ICI UN `portraitsRestants`, ET IL N'AVAIT AUCUN APPELANT.
+   Il soustrayait les portraits faits d'un quota SUPPOSÉ — or ce quota peut
+   avoir été relevé pour un compte (A-BRANCHER §7) sans que l'application le
+   voie. Il ne rendait donc pas « ce qui reste » mais « ce qui resterait si
+   personne n'avait rien changé », c'est-à-dire un chiffre faux au moment précis
+   où quelqu'un aurait voulu s'en servir.
+
+   Ce qui est GARDÉ, c'est ce qui se mesure : `portraitsFaits`, un décompte de
+   lignes descendues du serveur. Ce qui reste, seul le serveur le sait — et
+   quand il le dit, il le dit dans `Issue.reste`. */

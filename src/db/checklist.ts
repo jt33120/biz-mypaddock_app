@@ -69,8 +69,14 @@ export type Ligne = {
  */
 export const CHARGEMENT: readonly Categorie[] = ['machine', 'equipement', 'conformite']
 
+/* ⚠ LA CLÉ EST `machine`, LE MOT EST « moto », ET C'EST VOULU. La clé voyage
+   dans la base et dans les lignes déjà écrites — la renommer pour un libellé
+   rendrait muettes toutes les checklists existantes. Le mot, lui, ne vit qu'à
+   l'écran, et à l'écran le produit ne dit plus qu'un seul mot pour l'objet :
+   « SUR LA MOTO », « Photographier la moto », « Modifier la moto ». Deux mots
+   pour la même chose à trois lignes d'écart, c'est ce qui a déclenché ce lot. */
 export const NOM_CATEGORIE: Record<Categorie, string> = {
-  machine: 'La machine',
+  machine: 'La moto',
   equipement: 'Ce que tu portes',
   conformite: "Ce que l'organisateur publie",
   preparation: "Avant d'y aller",

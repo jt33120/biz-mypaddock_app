@@ -16,6 +16,10 @@ import { instantDeLId, SEUIL_H } from '../../src/db/mesures'
 import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
 import { formaterPoids, TABLES_EMPORTEES } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
+import {
+  capaciteLocale, ecrireLocale, effacerLocale, eprouverLeCoffre, fermerLaConnexionDuCoffre,
+  lireLocale, nomsBrutsDuCoffre, nomsDuCoffre, oublierLeMagasin, viderLeCoffre,
+} from '../../src/db/coffre'
 import { enFichier } from '../../src/recap/composer'
 import {
   avecLesDefauts, chargeDe, DEFAUTS_SERVEUR, DEPENDANCES, direCombien, LIEN_DIFFERE, NOM_TABLE,
@@ -45,6 +49,23 @@ import { direLAbri, type Abri } from '../../src/db/abri'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
+import { COUT_PORTRAIT_CENTIMES, PORTRAITS_INCLUS } from '../../src/pixel/portrait'
+// Les écrans et la feuille de style LUS À LA LETTRE — récit 21.3. Rien dans le
+// code ne relie un libellé de bouton à la classe qui l'habille : c'est du texte
+// dans du JSX, et un oubli n'y fait ni erreur de type ni écran cassé. Il rend
+// seulement un bouton qui détruit sans le dire, et ça ne se voit qu'en relisant.
+const ECRANS = import.meta.glob('../../src/**/*.tsx',
+  { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+// ⚠ ET LA COUCHE `db` AVEC EUX, MAINTENANT QUE LE GESTE COMPTE AUTANT QUE LE
+// MOT. Les fonctions qui détruisent vraiment vivent dans `src/db/*.ts` : lire
+// les seuls `.tsx` ferait un second témoin qui ne reconnaît aucun geste, donc
+// un témoin muet — et un témoin muet ressemble beaucoup à un témoin satisfait.
+const SOURCES = import.meta.glob('../../src/**/*.{ts,tsx}',
+  { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+import FEUILLE from '../../src/styles/systeme.css?raw'
+import {
+  appelleUneDestruction, boutonsDe, detruit, ditLaDestruction, gestesDestructifs,
+} from '../destructif.mjs'
 
 type Resultat = { titre: string; ok: boolean; detail: string }
 const resultats: Resultat[] = []
@@ -58,6 +79,55 @@ const egal = (obtenu: unknown, attendu: unknown, quoi = '') => {
   if (a !== b) throw new Error(`${quoi}${quoi ? ' : ' : ''}obtenu ${a}, attendu ${b}`)
 }
 const vrai = (c: boolean, quoi: string) => { if (!c) throw new Error(quoi) }
+
+/**
+ * ─── LIRE LES BOUTONS D'UN ÉCRAN, ET RIEN QUE LES BOUTONS ──────────────────
+ *
+ * Le récit 21.3 tient sur une équivalence : un bouton DÉTRUIT ⟺ il porte
+ * `destructif`. Les deux moitiés comptent. « Tout destructif est rouge » se
+ * satisfait d'un produit tout rouge ; « rien d'autre n'est rouge » se satisfait
+ * d'un produit sans rouge. Le seul endroit d'où l'on voit les deux ensemble, sur
+ * TOUS les écrans y compris ceux qui demandent un compte, c'est le texte source.
+ *
+ * ⚠ LA LECTURE VIT DANS `../destructif.mjs`, ET C'EST DÉLIBÉRÉ. Elle était ici,
+ * et `fumee-destructif.mjs` en avait une deuxième — la même règle écrite deux
+ * fois, donc deux règles à corriger et une seule qu'on pense à corriger. Elles
+ * décidaient toutes les deux qu'un bouton détruit si son LIBELLÉ le dit, jamais
+ * ce que son `onClick` appelle : la revue l'a prouvé sur un bouton « Vider la
+ * liste » qui exécute un vrai DELETE et passait la garde en gris. Le second
+ * témoin est là-bas, et il sert aux deux bancs.
+ */
+const DESTRUCTIVES = gestesDestructifs(SOURCES)
+
+/**
+ * SIMULER UN SAFARI D'AVANT LA 26 — on ne l'espère pas, on le fabrique.
+ *
+ * Ces essais tournent dans Chromium, où `createWritable` existe : attendre de
+ * tomber sur un iPhone pour éprouver le repli reviendrait à ne jamais
+ * l'éprouver. On retire donc la méthode du prototype, exactement comme un
+ * Safari 18 la laisse absente, et on la remet quoi qu'il arrive.
+ *
+ * `oublierLeMagasin()` encadre la manipulation des deux côtés : le coffre ne
+ * choisit qu'une fois par session, et un choix resté en mémoire ferait passer
+ * l'essai suivant pour ce qu'il n'est pas.
+ */
+const sansCreateWritable = async <T>(agir: () => Promise<T>): Promise<T> => {
+  const proto = FileSystemFileHandle.prototype
+  const descripteur = Object.getOwnPropertyDescriptor(proto, 'createWritable')!
+  Reflect.deleteProperty(proto, 'createWritable')
+  oublierLeMagasin()
+  try { return await agir() }
+  finally {
+    Object.defineProperty(proto, 'createWritable', descripteur)
+    oublierLeMagasin()
+  }
+}
+const octetsDe = async (f: File | null) => {
+  vrai(!!f, 'le fichier est absent du coffre')
+  return Array.from(new Uint8Array(await f!.arrayBuffer()))
+}
+const OCTETS_ESSAI = [0x4d, 0x79, 0x50, 0x00, 0xff, 0x2a]
+const blobDEssai = () => new Blob([new Uint8Array(OCTETS_ESSAI)], { type: 'image/webp' })
 
 const essais = [
 
@@ -668,6 +738,424 @@ const essais = [
     // Et le tirage lit bien la longueur de l'alphabet, pas un nombre écrit à côté.
     vrai(sql!.includes(`floor(random() * ${alphabet.length})`),
       "le tirage et l'alphabet ne parlent pas de la même longueur")
+  }),
+
+  /* ─── LE COFFRE — les octets d'un fichier survivent aux deux magasins ────
+     La base de production a compté ZÉRO photo et ZÉRO document depuis le premier
+     jour : `createWritable()` n'existe pas dans Safari avant la 26, et c'était le
+     seul chemin d'écriture. Ces essais tiennent l'invariant qui manquait —
+     écrire puis relire rend les mêmes octets, quel que soit le magasin, y compris
+     quand l'un a écrit et que l'autre est disponible à la relecture. */
+
+  doit('le coffre écrit et relit les mêmes octets quand createWritable existe', async () => {
+    oublierLeMagasin()
+    const c = await capaciteLocale()
+    // Chromium a l'API ET l'écriture aboutit : si ce n'est pas le cas, l'essai
+    // suivant éprouverait le repli en croyant éprouver l'OPFS.
+    egal(c.magasin, 'opfs', 'le navigateur des essais devrait écrire dans l\'OPFS')
+    vrai(c.ecritureEprouvee, "l'écriture OPFS n'a pas été éprouvée")
+    await ecrireLocale('essai-opfs.webp', blobDEssai())
+    egal(await octetsDe(await lireLocale('essai-opfs.webp')), OCTETS_ESSAI)
+    await effacerLocale('essai-opfs.webp')
+    egal(await lireLocale('essai-opfs.webp'), null, 'le fichier effacé se relit encore')
+  }),
+
+  doit('le coffre écrit et relit les mêmes octets SANS createWritable', async () => {
+    await sansCreateWritable(async () => {
+      const c = await capaciteLocale()
+      egal(c.magasin, 'indexeddb', 'sans createWritable, le coffre doit se replier')
+      egal(c.createWritable, false)
+      // C'est ici que le produit levait un TypeError et n'écrivait rien.
+      await ecrireLocale('essai-repli.webp', blobDEssai())
+      egal(await octetsDe(await lireLocale('essai-repli.webp')), OCTETS_ESSAI)
+      await effacerLocale('essai-repli.webp')
+      egal(await lireLocale('essai-repli.webp'), null, 'le fichier effacé se relit encore')
+    })
+  }),
+
+  doit('une photo versée sans createWritable reste lisible quand il revient', async () => {
+    // ⚠ LE VRAI PIÈGE DU CORRECTIF, et le seul qui perde des souvenirs déjà
+    // enregistrés : un pilote verse tout sur iOS 18 (donc en IndexedDB), met son
+    // téléphone à jour, l'OPFS devient le magasin en usage — et une lecture qui
+    // ne regarderait que le magasin courant rendrait ses photos INVISIBLES.
+    await sansCreateWritable(() => ecrireLocale('essai-avant-maj.webp', blobDEssai()))
+    const c = await capaciteLocale()
+    egal(c.magasin, 'opfs', "createWritable n'a pas été rendu au prototype")
+    egal(await octetsDe(await lireLocale('essai-avant-maj.webp')), OCTETS_ESSAI)
+    // Et l'effacement doit vider les DEUX magasins, sinon la photo retirée
+    // reviendrait toute seule au prochain affichage.
+    await effacerLocale('essai-avant-maj.webp')
+    egal(await lireLocale('essai-avant-maj.webp'), null, 'le fichier effacé se relit encore')
+    await sansCreateWritable(async () =>
+      egal(await lireLocale('essai-avant-maj.webp'), null,
+        "l'effacement a laissé la copie de l'autre magasin"))
+  }),
+
+  doit('une photo versée avec createWritable reste lisible sans lui', async () => {
+    // Le chemin inverse, qui est celui d'un même appareil relu par un moteur
+    // plus ancien — un WebView embarqué, par exemple. La lecture OPFS ne demande
+    // que `getFile()`, présent depuis Safari 15.2 : elle doit continuer de rendre
+    // les octets même quand l'écriture, elle, s'est repliée.
+    oublierLeMagasin()
+    await ecrireLocale('essai-apres-maj.webp', blobDEssai())
+    await sansCreateWritable(async () => {
+      egal(await octetsDe(await lireLocale('essai-apres-maj.webp')), OCTETS_ESSAI)
+      await effacerLocale('essai-apres-maj.webp')
+    })
+    egal(await lireLocale('essai-apres-maj.webp'), null, 'le fichier effacé se relit encore')
+  }),
+
+  /* ─── LE DROIT À L'EFFACEMENT — les deux magasins, ou rien ───────────────
+     ⚠ CES ESSAIS EXISTENT À CAUSE D'UN ÉCRAN QUI MENTAIT SUR UN DROIT.
+     `effacerLeTelephone` ne balayait que l'OPFS ; la base `mypaddock-coffre`
+     n'était touchée par personne. Sur tout iOS ≤ 18 — où pas un octet ne passe
+     par l'OPFS — le pilote qui exerçait son droit lisait « Il ne reste rien …
+     0 fichier » pendant que toutes ses photos restaient sur l'appareil. */
+
+  doit('vider le coffre emporte les DEUX magasins, et annonce ce qui est parti', async () => {
+    oublierLeMagasin()
+    // On part d'un coffre vide, sinon le nombre rendu n'est pas lisible.
+    await viderLeCoffre()
+
+    // Une pièce versée comme sur un iPhone d'avant Safari 26 : elle n'est QUE
+    // dans IndexedDB — c'est-à-dire exactement là où le balayage ne regardait pas.
+    await sansCreateWritable(() => ecrireLocale('essai-vidage-idb.webp', blobDEssai()))
+    // Et une autre par l'OPFS, pour que les deux magasins portent quelque chose.
+    oublierLeMagasin()
+    await ecrireLocale('essai-vidage-opfs.webp', blobDEssai())
+
+    const avant = await nomsDuCoffre()
+    egal(avant.indexeddb, ['essai-vidage-idb.webp'], 'la copie IndexedDB est introuvable')
+    egal(avant.opfs, ['essai-vidage-opfs.webp'], 'la copie OPFS est introuvable')
+
+    // LE NOMBRE ANNONCÉ EST LE NOMBRE PARTI. C'est lui qui s'écrit sur l'écran
+    // « Il ne reste rien », et c'est lui qui disait zéro.
+    egal(await viderLeCoffre(), 2, 'le compte annoncé au pilote')
+    egal(await nomsDuCoffre(), { opfs: [], indexeddb: [] },
+      'un magasin garde des fichiers après un effacement annoncé')
+    egal(await lireLocale('essai-vidage-idb.webp'), null, 'la copie IndexedDB se relit encore')
+    egal(await lireLocale('essai-vidage-opfs.webp'), null, 'la copie OPFS se relit encore')
+  }),
+
+  doit('un fichier présent dans les deux magasins ne compte qu\'une fois', async () => {
+    // Deux copies du même souvenir, ce n'est pas deux souvenirs — et un pilote
+    // qui a versé trois photos ne doit pas lire « 6 fichiers » parce qu'une
+    // mise à jour d'iOS a déplacé le magasin sous ses pieds.
+    oublierLeMagasin()
+    await viderLeCoffre()
+    await sansCreateWritable(() => ecrireLocale('essai-jumeau.webp', blobDEssai()))
+    // ⚠ ON ÉCRIT LE JUMEAU À LA MAIN, DANS L'AUTRE MAGASIN, sans passer par
+    // `ecrireLocale` : celui-ci efface justement le jumeau. Ce que l'essai
+    // fabrique ici, c'est l'appareil d'AVANT ce nettoyage.
+    oublierLeMagasin()
+    const dossier = await (await navigator.storage.getDirectory())
+      .getDirectoryHandle('photos', { create: true })
+    const h = await dossier.getFileHandle('essai-jumeau.webp', { create: true })
+    const w = await h.createWritable()
+    await w.write(blobDEssai())
+    await w.close()
+
+    const avant = await nomsDuCoffre()
+    egal(avant.opfs, ['essai-jumeau.webp'], 'le jumeau OPFS est introuvable')
+    egal(avant.indexeddb, ['essai-jumeau.webp'], 'le jumeau IndexedDB est introuvable')
+    egal(await viderLeCoffre(), 1, 'le même fichier compté deux fois')
+    egal(await nomsDuCoffre(), { opfs: [], indexeddb: [] }, 'un jumeau a survécu')
+  }),
+
+  /* ─── LA CONNEXION QUI MEURT EN COURS DE SESSION ─────────────────────────
+     WebKit ferme les connexions d'une page mise en cache arrière/avant —
+     c'est-à-dire après un simple aller-retour vers l'appareil photo. */
+
+  doit('le coffre écrit encore après une connexion fermée sous ses pieds', async () => {
+    await sansCreateWritable(async () => {
+      await ecrireLocale('essai-connexion.webp', blobDEssai())
+
+      // SENS 1 — LA CONNEXION EST VRAIMENT MORTE. Sans cette moitié, l'essai
+      // vert ne prouverait que d'avoir écrit deux fois sur une base en pleine
+      // forme, et il resterait vert le jour où la seconde chance disparaîtrait.
+      const morte = await fermerLaConnexionDuCoffre()
+      let leve = 'aucune'
+      // Le nom du rayon est écrit ici parce que c'est le handle du coffre qu'on
+      // interroge, pas le coffre : l'essai doit voir la panne telle qu'elle est.
+      try { morte.transaction('fichiers', 'readonly') } catch (e) { leve = (e as Error).name }
+      egal(leve, 'InvalidStateError', 'la connexion refermée accepte encore des transactions')
+
+      // SENS 2 — ET LE COFFRE ÉCRIT QUAND MÊME, sans rechargement de page. C'est
+      // ici que l'écran réaffichait « L'image n'a pas pu être préparée sur ce
+      // téléphone » pour tout le reste de la session.
+      await ecrireLocale('essai-connexion.webp', blobDEssai())
+      egal(await octetsDe(await lireLocale('essai-connexion.webp')), OCTETS_ESSAI)
+      await effacerLocale('essai-connexion.webp')
+    })
+  }),
+
+  /* ─── L'ÉPREUVE ÉPROUVE LE MAGASIN QU'ELLE ANNONCE ───────────────────────
+     Elle rendait `ecritureEprouvee: false` sur TOUS les chemins IndexedDB sans
+     avoir jamais tenté la moindre écriture IndexedDB : elle validait le magasin
+     qu'on n'utilise pas, et pas celui par lequel tout passe. */
+
+  doit('sans createWritable, l\'écriture IndexedDB est éprouvée pour de vrai', async () => {
+    oublierLeMagasin()
+    await viderLeCoffre()
+    await sansCreateWritable(async () => {
+      const c = await eprouverLeCoffre()
+      egal(c.magasin, 'indexeddb')
+      vrai(c.ecritureEprouvee, 'le repli est annoncé sans avoir été éprouvé')
+      vrai(/IndexedDB/.test(c.raison), `la raison ne nomme pas le magasin éprouvé : ${c.raison}`)
+      vrai(!/AUCUN MAGASIN/.test(c.raison), `une alerte pour un magasin qui écrit : ${c.raison}`)
+    })
+    // ET L'ÉPREUVE NE LAISSE RIEN DERRIÈRE ELLE, des deux côtés : un témoin
+    // compté ferait lire « 4 photos rangées » pour trois photos.
+    // ⚠ L'INVENTAIRE BRUT, PAS LE FILTRÉ. `nomsDuCoffre` écarte les noms qui
+    // commencent par un point — donc le témoin lui-même. Vérifier son absence à
+    // travers ce filtre, c'est le regarder par la lentille qui le cache : cette
+    // assertion ne pouvait pas rougir, et ne rougissait pas quand on retirait
+    // les deux effacements de témoin.
+    egal(await nomsBrutsDuCoffre(), { opfs: [], indexeddb: [] }, 'un témoin d\'épreuve est resté')
+  }),
+
+  doit('la sonde sait dire qu\'AUCUN MAGASIN N\'ÉCRIT', async () => {
+    // ⚠ C'EST LE SEUL CAS QUI MÉRITE UNE ALERTE, ET IL N'EXISTAIT PAS. Le repli
+    // était annoncé sans être éprouvé : un appareil où RIEN n'écrit rendait
+    // exactement le même écran gris qu'un appareil qui écrit très bien.
+    // ⚠ ON FAIT D'ABORD OUBLIER LA CONNEXION AU COFFRE, et par le chemin exact
+    // qu'emprunte WebKit : un événement `close` sur la connexion. Sans ça, le
+    // coffre ressortirait sa connexion mémorisée et n'appellerait jamais
+    // `indexedDB.open()` — l'essai serait vert sans avoir rien éprouvé. C'est
+    // aussi ce qui met sous garde l'autre moitié du correctif : `onclose`.
+    (await fermerLaConnexionDuCoffre()).dispatchEvent(new Event('close'))
+
+    const propre = Object.getOwnPropertyDescriptor(window, 'indexedDB')
+    const refus = { open: () => {
+      const d: { onerror?: () => void } = {}
+      // La panne réelle qu'on imite : le mode privé, ou un WebView bridé, qui
+      // refuse d'ouvrir la base. Elle arrive de façon asynchrone, comme la vraie.
+      setTimeout(() => d.onerror?.(), 0)
+      return d
+    } }
+    Object.defineProperty(window, 'indexedDB', { configurable: true, value: refus })
+    try {
+      const c = await sansCreateWritable(() => eprouverLeCoffre())
+      egal(c.ecritureEprouvee, false, 'un magasin qui refuse de s\'ouvrir est dit éprouvé')
+      vrai(c.raison.includes('AUCUN MAGASIN N\'ÉCRIT'),
+        `la sonde reste muette là où tout est perdu : ${c.raison}`)
+    } finally {
+      if (propre) Object.defineProperty(window, 'indexedDB', propre)
+      else Reflect.deleteProperty(window, 'indexedDB')
+      oublierLeMagasin()
+    }
+    // Et la vraie base revient : les essais qui suivent ne doivent rien hériter.
+    vrai((await eprouverLeCoffre()).ecritureEprouvee, 'IndexedDB n\'a pas été rendu au navigateur')
+  }),
+
+  /* ─── ÉPIQUE 21 — les mots, le rouge, et ce qui se dit deux fois ─────────
+     Ces essais lisent les SOURCES et la feuille de style telles qu'elles
+     partent. C'est le seul niveau où la règle est vérifiable en entier : un
+     essai de navigateur ne voit que les écrans qu'il sait atteindre, et
+     l'effacement du compte n'apparaît qu'avec une identité. Le banc de fumée
+     `fumee-destructif.mjs` fait l'autre moitié, celle qu'aucune lecture de
+     source ne peut faire — la couleur réellement calculée par le navigateur. */
+
+  doit('tout bouton qui détruit porte `destructif`, et lui seul', () => {
+    const fautifs: string[] = []
+    for (const [chemin, source] of Object.entries(ECRANS)) {
+      for (const b of boutonsDe(source)) {
+        const perd = detruit(b, DESTRUCTIVES)
+        if (perd === b.classe) continue
+        const par = ditLaDestruction(b) ? 'son libellé' : 'son gestionnaire'
+        fautifs.push(`${chemin.replace(/^.*\/src\//, 'src/')} · « ${b.libelles.join(' / ')} » `
+          + (perd ? `détruit (${par}) et ne porte pas la classe` : 'porte la classe sans détruire'))
+      }
+    }
+    egal(fautifs, [], 'boutons mal habillés')
+  }),
+
+  doit('la lecture des écrans voit bien des boutons, et des destructifs', () => {
+    // ⚠ L'ESSAI D'AU-DESSUS PASSE TOUT SEUL SI LA LECTURE REND ZÉRO BOUTON — un
+    // `import.meta.glob` qui ne résout plus, une balise réécrite autrement, et
+    // la garde devient un essai qui ne peut plus échouer. Celui-ci mesure la
+    // lecture elle-même : onze gestes destructifs ont été recensés au récit
+    // 21.3, plus celui de la sonde que le recensement avait manqué, moins les
+    // deux retraits de portrait supprimés au récit 21.2.
+    const tous = Object.values(ECRANS).flatMap(boutonsDe)
+    vrai(tous.length > 80, `seulement ${tous.length} boutons lus dans les écrans`)
+    vrai(tous.filter((b) => b.classe).length >= 10,
+      `seulement ${tous.filter((b) => b.classe).length} boutons destructifs trouvés`)
+  }),
+
+  doit('le second témoin reconnaît les gestes, et pas seulement les mots', () => {
+    // ⚠ LA MOITIÉ DE CET ESSAI EST DE VÉRIFIER QU'IL PEUT ENCORE ACCUSER. Le
+    // recensement des fonctions destructives se DÉDUIT des sources ; le jour où
+    // la lecture se casse — un `import.meta.glob` qui ne résout plus, une forme
+    // de déclaration nouvelle — elle rendrait une liste vide, et le témoin
+    // deviendrait muet sans que rien n'échoue. C'est déjà arrivé à l'envers :
+    // une première version accusait SOIXANTE fonctions, ce qui ne vaut pas
+    // mieux. On borne donc des deux côtés.
+    vrai(DESTRUCTIVES.size >= 8 && DESTRUCTIVES.size <= 25,
+      `${DESTRUCTIVES.size} fonctions destructives recensées : ${[...DESTRUCTIVES].join(', ')}`)
+    for (const attendu of ['supprimerRoulage', 'oublierEquipement', 'oublierDocument'])
+      vrai(DESTRUCTIVES.has(attendu), `${attendu} n'est plus reconnue comme destructive`)
+    // Et elle n'accuse pas ce qui ne détruit rien : `poserSprite` écrit une
+    // colonne, `verserPhotoMachine` range un fichier.
+    for (const innocent of ['poserSprite', 'verserPhotoMachine', 'ajouterSession'])
+      vrai(!DESTRUCTIVES.has(innocent), `${innocent} est accusée de détruire`)
+
+    // ⚠ ET LE CAS DE LA REVUE, ÉPROUVÉ ET NON SUPPOSÉ : un bouton dont le
+    // libellé ne dit RIEN et dont le geste détruit tout. C'est celui qui passait
+    // la garde en gris, et l'épique 22 arrive avec des languettes de
+    // suppression — la garde doit l'attraper avant elles.
+    const muet = boutonsDe(
+      '<button className="bouton" onClick={() => void supprimerRoulage(db, r.id)}>'
+      + 'Tout remettre à zéro</button>')[0]
+    vrai(!ditLaDestruction(muet), "le cas d'épreuve n'est plus muet : il dit la destruction")
+    vrai(appelleUneDestruction(muet, DESTRUCTIVES),
+      'un bouton qui appelle un DELETE passe encore la garde en gris')
+  }),
+
+  doit('le commentaire du destructif recompte juste', () => {
+    // ⚠ UN COMMENTAIRE EST LA MÉMOIRE DU DÉFAUT DANS CE DÉPÔT, donc il ne peut
+    // pas mentir. Celui de `.bouton.destructif` affirmait une « CONFIRMATION en
+    // deux temps » tenue pour TOUS les gestes rouges — elle ne l'est que pour la
+    // moitié. Il énonce maintenant des nombres, et ces nombres se recomptent :
+    // sans ça, la correction d'aujourd'hui redevient le mensonge de demain au
+    // premier bouton ajouté.
+    const compter = (forme: string) => Object.values(ECRANS)
+      .reduce((n, s) => n + (s.match(new RegExp(`className="${forme} destructif"`, 'g')) ?? []).length, 0)
+    const boutons = compter('bouton'), liens = compter('lien')
+    const cite = (quoi: RegExp) => Number(FEUILLE.match(quoi)?.[1])
+    egal(boutons + liens, cite(/(\d+) gestes rouges du produit/),
+      'gestes rouges annoncés par le commentaire vs comptés dans les écrans')
+    egal(boutons, cite(/(\d+) `\.bouton\.destructif`/), '.bouton.destructif annoncés vs comptés')
+    egal(liens, cite(/(\d+) `\.lien\.destructif`/), '.lien.destructif annoncés vs comptés')
+
+    // ⚠ ET LE SORTANT D'UNE CONFIRMATION EST UN LIEN, AUX TROIS ENDROITS.
+    // « Garder mon compte » portait `.bouton` — le dégradé plein, plus gros et
+    // plus voyant que le geste rouge d'à côté — pendant que les deux autres
+    // confirmations du produit mettent « Garder » en `.lien`. Trois formes pour
+    // un même geste sont trois choses à réapprendre, gants aux mains.
+    // Un sortant se reconnaît à ce qu'il FAIT — refermer la confirmation — et
+    // pas seulement à son mot : « Garder » sert aussi à enregistrer une chute,
+    // et ce bouton-là n'a rien d'un sortant.
+    const sortants = Object.values(ECRANS).flatMap(boutonsDe)
+      .filter((b) => b.libelles.some((l) => /^Garder( mon compte)?$/.test(l))
+        && /set(Confirme|Ouvert)\(false\)/.test(b.gestionnaire))
+    vrai(sortants.length === 3, `${sortants.length} sortants de confirmation trouvés`)
+    for (const s of sortants)
+      egal(s.className, 'lien', `« ${s.libelles.join(' / ')} » ne sort pas en lien`)
+  }),
+
+  doit('« revenir » nomme ce qui reprend vraiment la scène', () => {
+    // ⚠ LE BOUTON DISAIT « Revenir à la photo » ET NE REVENAIT PAS À LA PHOTO.
+    // La scène retombe sur `sprite ?? photo` : quand un portrait était déjà
+    // gardé, refuser le candidat rendait la place à L'ANCIEN PORTRAIT — celui
+    // qu'on voulait remplacer. Le pilote en concluait que le bouton n'avait rien
+    // fait, et retapait « Refaire » : 0,16 € et un crédit pour un libellé.
+    // Avant que « Refaire » existe, le cas était impossible ; il est devenu le
+    // cas courant, et c'est pour ça que la garde arrive maintenant.
+    for (const nom of ['/Garage.tsx', '/Budget.tsx']) {
+      const source = Object.entries(ECRANS).find(([c]) => c.endsWith(nom))?.[1] ?? ''
+      vrai(source.length > 0, `${nom} introuvable`)
+      const revenirs = boutonsDe(source)
+        .flatMap((b) => b.libelles).filter((l) => /^Revenir/.test(l)).sort()
+      egal(revenirs, ['Revenir au portrait actuel', 'Revenir à la photo'],
+        `${nom} : les deux issues du refus`)
+      // Et les deux mots pendent bien à la CONDITION DE LA SCÈNE, pas à autre
+      // chose : c'est `sprite` qui décide de ce qu'on voit, donc de ce qu'on dit.
+      vrai(/sprite \? 'Revenir au portrait actuel' : 'Revenir à la photo'/.test(source),
+        `${nom} : le libellé ne dépend pas du portrait gardé`)
+    }
+  }),
+
+  doit('la dépense ne s\'offre que si la photo est vraiment là', () => {
+    // ⚠ LE BOUTON S'AFFICHAIT SUR UNE COLONNE. `photo_chemin` se synchronise ;
+    // les octets, eux, ne quittent jamais le téléphone qui a pris la photo —
+    // `verserPhotoMachine` et `verserPhotoEquipement` n'écrivent qu'en local.
+    // Sur un second appareil ou après une réinstallation, le pilote validait une
+    // dépense annoncée à 0,16 € devant un écran qui ne bougeait pas d'un pixel.
+    // Un chemin qui ne peut pas aboutir ne doit pas s'offrir.
+    for (const nom of ['/Garage.tsx', '/Budget.tsx']) {
+      const source = Object.entries(ECRANS).find(([c]) => c.endsWith(nom))?.[1] ?? ''
+      const sansCommentaires = source.replace(/\/\*[\s\S]*?\*\//g, ' ')
+      const avant = sansCommentaires.slice(0, sansCommentaires.indexOf('<Refaire'))
+      const condition = avant.slice(avant.lastIndexOf('{'))
+      vrai(/photoUrl/.test(condition), `${nom} : la fabrication ne dépend pas de la photo relue`)
+      vrai(!/photo_chemin/.test(condition), `${nom} : la fabrication dépend encore de la colonne`)
+      // Et l'autre sens : si l'on y arrive quand même, ça se DIT. Le `return`
+      // était muet, et un geste payant qui ne répond rien se retape.
+      vrai(/if \(!f\) \{\s*\n?\s*setSouci/.test(sansCommentaires),
+        `${nom} : la fabrication sort en silence quand le fichier manque`)
+    }
+  }),
+
+  doit('le rouge vient du jeton, et ne sert qu\'aux endroits déclarés', () => {
+    // Les sélecteurs qui ont le DROIT de teindre en `--alerte`. Toute règle
+    // nouvelle qui l'emploie fait échouer cet essai jusqu'à ce qu'elle soit
+    // inscrite ici — c'est le seul moyen d'empêcher le rouge de redevenir
+    // décoratif. Les deux premiers sont des MESSAGES et non des gestes : un
+    // refus qui s'énonce n'est pas un bouton qui détruit, et il porte déjà son
+    // mot (`.mot-erreur` a son propre dessin, filet à gauche).
+    const AUTORISES = ['.alerte', '.mot-erreur', '.bouton.destructif', '.lien.destructif']
+    const teintes = [...FEUILLE.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((r) => r[2].includes('var(--alerte)'))
+      .map((r) => r[1].replace(/\/\*[\s\S]*?\*\//g, ' ').trim())
+    egal(teintes.sort(), [...AUTORISES].sort(), 'sélecteurs qui emploient var(--alerte)')
+
+    // Et le rouge n'existe qu'en un seul endroit du fichier : le jeton. Une
+    // valeur écrite à la main réintroduirait un deuxième rouge que rien ne suit.
+    const rouge = FEUILLE.match(/--alerte:\s*(#[0-9a-fA-F]{6})/)?.[1]
+    vrai(!!rouge, 'le jeton --alerte a disparu de la feuille')
+    egal(FEUILLE.split(rouge!).length - 1, 1, `${rouge} écrit ailleurs qu'au jeton`)
+
+    // La jauge de budget est nommée parce que c'est elle qu'on a envie de faire
+    // rougir : « dépasser son budget n'est pas une faute » (systeme.css).
+    const jauge = FEUILLE.match(/\.jauge\s*\{[^}]*\}[\s\S]{0,200}?\.jauge span\s*\{[^}]*\}/)?.[0]
+    vrai(!!jauge && !jauge.includes('alerte'), 'la jauge de budget a pris du rouge')
+  }),
+
+  doit('« effacer mon compte » ne s\'écrit qu\'une fois, et sur le bouton', () => {
+    const source = Object.entries(ECRANS).find(([c]) => c.endsWith('/Compte.tsx'))?.[1] ?? ''
+    vrai(source.length > 0, 'Compte.tsx introuvable')
+    // Les commentaires citent le libellé pour expliquer le défaut : ils ne
+    // s'affichent pas, on les retire avant de compter.
+    const affiche = source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    egal((affiche.match(/effacer mon compte/gi) ?? []).length, 1,
+      'occurrences de « effacer mon compte » dans l\'écran du compte')
+    const porteurs = boutonsDe(source)
+      .filter((b) => b.libelles.some((l) => /effacer mon compte/i.test(l)))
+    egal(porteurs.length, 1, 'boutons qui portent le mot')
+    vrai(porteurs[0].classe, 'le bouton qui efface le compte ne porte pas le rouge')
+
+    // ⚠ ET LE TEXTE LÉGAL CITE CE BOUTON PAR SON NOM, EN GRAS. Il dit au pilote
+    // où exercer son droit d'effacement : si le libellé bouge sans la citation,
+    // le texte légal désigne un bouton qui n'existe pas.
+    const legal = Object.entries(ECRANS).find(([c]) => c.endsWith('/Legal.tsx'))?.[1] ?? ''
+    vrai(legal.includes('<b>Effacer mon compte</b>'),
+      'Legal.tsx ne cite plus le bouton par son nom exact')
+  }),
+
+  doit('l\'annonce du coût d\'un portrait dit le vrai quota du serveur', () => {
+    // Deux dépôts que rien ne relie : le nombre ANNONCÉ avant de dépenser vit
+    // dans portrait.ts, le nombre qui AUTORISE vraiment vit dans une migration
+    // Postgres. Le jour où l'un bouge, l'écran se met à mentir sans que rien ne
+    // casse — et c'est un mensonge sur de l'argent.
+    const migration = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('portrait_et_quota'))?.[1] ?? ''
+    const defaut = migration.match(/quota_sprites\s+smallint\s+not null\s+default\s+(\d+)/i)?.[1]
+    vrai(!!defaut, 'le défaut de quota_sprites est introuvable dans la migration')
+    egal(PORTRAITS_INCLUS, Number(defaut), 'portraits inclus annoncés vs défaut serveur')
+
+    // ⚠ ET LE PRIX N'AVAIT AUCUNE GARDE, alors qu'il est celui des deux nombres
+    // qui s'affiche EN EUROS. `vrai(COUT_PORTRAIT_CENTIMES > 0)` ne disait qu'une
+    // chose — que le portrait n'est pas annoncé gratuit — et laissait passer
+    // n'importe quel montant faux. Ce qui décompte vraiment est
+    // `plafond.cout_unitaire_centimes`, dans le filet monétaire : c'est lui que
+    // l'écran promet au pilote avant qu'il tape.
+    const filet = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('filet_monetaire'))?.[1] ?? ''
+    const cout = filet.match(/cout_unitaire_centimes\s+integer\s+not null\s+default\s+(\d+)/i)?.[1]
+    vrai(!!cout, 'le défaut de cout_unitaire_centimes est introuvable dans la migration')
+    egal(COUT_PORTRAIT_CENTIMES, Number(cout), 'prix annoncé en euros vs coût unitaire du serveur')
+    vrai(COUT_PORTRAIT_CENTIMES > 0, 'un portrait annoncé gratuit est un portrait qui surprend')
   }),
 ]
 

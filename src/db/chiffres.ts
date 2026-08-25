@@ -50,6 +50,11 @@ export const DEFAUT: Cle[] = ['roulages', 'circuits', 'meilleur']
  *  d'être. FR-15 dit « trois ou quatre » — la borne est dans l'exigence. */
 export const MAX = 4
 
+/* ⚠ LA CLÉ `machines` NE BOUGE PAS, SON ÉTIQUETTE SI. Les clés sont rangées
+   dans le stockage du navigateur (`mypaddock.chiffres`) : en renommer une pour
+   corriger un mot d'écran ferait retomber tout pilote qui avait choisi ce
+   chiffre sur la disposition par défaut, sans qu'il comprenne pourquoi. Le mot
+   affiché, lui, n'a aucune mémoire — il se corrige sans rien casser. */
 export const ETIQUETTES: Record<Cle, string> = {
   roulages: 'roulages',
   circuits: 'circuits',
@@ -57,7 +62,7 @@ export const ETIQUETTES: Record<Cle, string> = {
   sessions: 'sessions',
   tours: 'tours chronométrés',
   depense_saison: 'dépensé cette saison',
-  machines: 'machines',
+  machines: 'motos',
   interventions: 'gestes consignés',
 }
 

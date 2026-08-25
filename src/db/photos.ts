@@ -2,6 +2,7 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { supabase } from './supabase'
 import { marquerSaisie } from './mesures'
+import { ecrireLocale, effacerLocale, lireLocale } from './coffre'
 
 /**
  * LA PHOTO — récit 3.1.
@@ -85,35 +86,22 @@ export const reduire = async (fichier: Blob, cote = COTE_LONG): Promise<Reduite>
   return { blob, largeur: c.width, hauteur: c.height, extension }
 }
 
-/* ─── LA COPIE LOCALE — dans l'OPFS, protégé par persist() ─────────────────
+/* ─── LA COPIE LOCALE — dans le coffre, protégé par persist() ───────────────
    §5.1 : les photos de la journée sont ce que le produit ne peut pas se
    permettre de perdre entre le paddock et le retour du réseau. Elles ne peuvent
    donc pas vivre en mémoire, ni dans une URL d'objet sur un `File` volatil, ni
-   dans une file de requêtes de Service Worker — AD-4 l'interdit explicitement. */
+   dans une file de requêtes de Service Worker — AD-4 l'interdit explicitement.
 
-const dossierPhotos = async () => {
-  const racine = await navigator.storage.getDirectory()
-  return racine.getDirectoryHandle('photos', { create: true })
-}
+   ⚠ CES TROIS FONCTIONS ONT DÉMÉNAGÉ DANS `coffre.ts`, ET CE N'EST PAS UN
+   RANGEMENT DE CONFORT. Elles écrivaient par `createWritable()`, absent de tout
+   Safari antérieur à la 26 : sur iOS 18 l'appel levait un TypeError et AUCUNE
+   photo, AUCUN document ne pouvait être versé — la base de production en
+   comptait zéro depuis le premier jour. Le coffre choisit son magasin par
+   capacité éprouvée et relit dans les deux ; le raisonnement complet est là-bas.
+   Elles restent exposées ici parce que tout le produit les appelle par ce
+   chemin, et qu'un deuxième chemin vers le stockage ramènerait le défaut. */
 
-export const ecrireLocale = async (nom: string, blob: Blob) => {
-  const dossier = await dossierPhotos()
-  const h = await dossier.getFileHandle(nom, { create: true })
-  const w = await h.createWritable()
-  await w.write(blob)
-  await w.close()
-}
-
-export const lireLocale = async (nom: string): Promise<File | null> => {
-  try {
-    const dossier = await dossierPhotos()
-    return await (await dossier.getFileHandle(nom)).getFile()
-  } catch { return null }
-}
-
-export const effacerLocale = async (nom: string) => {
-  try { (await dossierPhotos()).removeEntry(nom) } catch { /* déjà partie */ }
-}
+export { ecrireLocale, effacerLocale, lireLocale }
 
 /* ─── LE MODÈLE ────────────────────────────────────────────────────────────── */
 

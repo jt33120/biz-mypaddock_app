@@ -56,7 +56,7 @@ await prendre('garage-vide')
 // une moto à qui rattacher les journées.
 await page.fill('.champ[placeholder="Honda"]', 'Honda')
 await page.fill('.champ[placeholder="CBR 1000 RR"]', 'CBR 1000 RR · 83')
-await page.click('text=Déclarer ma machine')
+await page.click('text=Déclarer ma moto')
 await page.waitForSelector('.garage .modele', { timeout: 20_000 })
 await prendre('garage-declaree')
 await page.click('text=Reprendre la saison 2026 · Pau-Arnos')

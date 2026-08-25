@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { jeton, seDeconnecter } from './compte'
+import { viderLeCoffre } from './coffre'
 
 /**
  * EFFACER SON COMPTE — NFR-6, FR-27. Le jumeau de l'emport.
@@ -78,22 +79,29 @@ export const effacerAuServeur = async (): Promise<Issue> => {
   return { ok: true, objets: corps.objets ?? 0 }
 }
 
-/** ÉTAPE 2 — ce téléphone. Trois stockages, et aucun n'est facultatif : en
- *  oublier un laisse une trace derrière un effacement annoncé, ce qui est pire
- *  que de ne pas l'avoir annoncé. */
+/** ÉTAPE 2 — ce téléphone. Trois stockages, et le premier en compte deux à lui
+ *  seul : le coffre écrit dans l'OPFS ou dans IndexedDB selon l'appareil. Aucun
+ *  n'est facultatif — en oublier un laisse une trace derrière un effacement
+ *  annoncé, ce qui est pire que de ne pas l'avoir annoncé. */
 export const effacerLeTelephone = async (
   db: PowerSyncDatabase,
 ): Promise<{ photos: number; cles: number }> => {
-  // ① Les octets des photos, dans l'OPFS. Ils ne sont dans aucune base : rien
-  //    d'autre ne les emporterait.
-  let photos = 0
-  try {
-    const racine = await navigator.storage.getDirectory()
-    const dossier = await racine.getDirectoryHandle('photos')
-    for await (const [nom] of (dossier as unknown as {
-      entries: () => AsyncIterable<[string, unknown]>
-    }).entries()) { await dossier.removeEntry(nom); photos++ }
-  } catch { /* aucun dossier de photos : rien à retirer */ }
+  // ① Les octets des fichiers — DANS LES DEUX MAGASINS. Ils ne sont dans aucune
+  //    base : rien d'autre ne les emporterait.
+  //
+  //    ⚠ CE BALAYAGE NE REGARDAIT QUE L'OPFS, ET C'ÉTAIT UN ÉCRAN QUI MENTAIT
+  //    SUR UN DROIT. La base IndexedDB `mypaddock-coffre` n'était touchée par
+  //    personne : ni par `disconnectAndClear()`, ni par `effacerLesReglages()`,
+  //    ni ici. Sur tout iOS ≤ 18 — la population même pour laquelle le coffre
+  //    existe, puisque rien n'y passe par l'OPFS — le pilote qui exerçait son
+  //    droit à l'effacement lisait « Il ne reste rien … 0 fichier » pendant que
+  //    TOUTES ses photos, tous ses portraits et tous ses manuels restaient sur
+  //    l'appareil.
+  //
+  //    Le comptage ET le retrait viennent maintenant de `coffre.ts`, seul
+  //    endroit du produit qui sache qu'il y a deux magasins. Le nombre affiché
+  //    est celui qu'il a réellement retiré.
+  const photos = await viderLeCoffre()
 
   // ② La base locale ET sa file d'envoi. `disconnectAndClear` coupe la
   //    synchronisation avant de vider : sans la coupure, le moteur réécrirait

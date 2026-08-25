@@ -297,7 +297,8 @@ function LigneDocument({ db, d, onEcrit }: {
           <button className="lien" disabled={occupe} onClick={() => void ouvrir()}>
             {occupe ? 'ouverture…' : 'ouvrir'}
           </button>
-          <button className="lien" disabled={efface} onClick={() => void retirer()}>retirer</button>
+          <button className="lien destructif" disabled={efface}
+                  onClick={() => void retirer()}>retirer</button>
         </span>
       </div>
       {absent && (

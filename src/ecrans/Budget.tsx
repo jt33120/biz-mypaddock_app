@@ -11,6 +11,7 @@ import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import { enCentimes, formaterEuros, type Cible } from '../db/depot'
 import { useGeste } from './geste'
+import { Refaire } from './Refaire'
 
 /**
  * LE BUDGET ET L'ÉQUIPEMENT — deux modules demandés par Julian, dans le garage.
@@ -308,7 +309,17 @@ function LigneMateriel({ db, e, onEcrit }: {
   }
   const fabriquer = async () => {
     const f = await photoEquipement(e.photo_chemin)
-    if (!f) return
+    // ⚠ MÊME DÉFAUT QU'AU GARAGE, ET IL SE PAIE PAREIL. `e.photo_chemin` est une
+    // colonne qui se synchronise ; les octets, eux, ne quittent jamais le
+    // téléphone qui a pris la photo (`verserPhotoEquipement` n'écrit qu'en
+    // local). Sur un second appareil, ce `return` muet laissait le pilote
+    // valider une dépense annoncée à 0,16 € devant un écran qui ne bougeait pas.
+    if (!f) {
+      setSouci("La photo de cette pièce n'est pas sur ce téléphone — elle a été prise ailleurs. "
+        + 'Elle se repose ici avec « Remplacer la photo », et le portrait se fabrique '
+        + 'à partir d\'elle.')
+      return
+    }
     setEnCours(true); setSouci(null); setCandidat(null)
     const issue = await genererPortrait(db, { equipementId: e.id }, f)
     setEnCours(false)
@@ -368,25 +379,40 @@ function LigneMateriel({ db, e, onEcrit }: {
                     .then(() => { setCandidat(null); onEcrit() })}>
             Garder ce portrait
           </button>
-          <button className="lien" onClick={() => setCandidat(null)}>Revenir à la photo</button>
+          {/* ⚠ LE LIBELLÉ DIT VERS QUOI ON REVIENT. Il annonçait la photo dans
+              les deux cas, alors que la scène retombe sur `e.sprite ?? photoUrl`
+              : quand un portrait était déjà gardé, c'est lui qui reprenait la
+              place — celui qu'on voulait justement remplacer. Le pilote croyait
+              le bouton sans effet et retapait « Refaire », à 0,16 € le
+              malentendu. */}
+          <button className="lien" onClick={() => setCandidat(null)}>
+            {e.sprite ? 'Revenir au portrait actuel' : 'Revenir à la photo'}
+          </button>
         </div>
       ) : (
+        /* ⚠ LA MÊME RÈGLE QU'AU GARAGE, ET C'EST DÉLIBÉRÉ. Le couple
+           « fabriquer » / « retirer le portrait » s'excluait ici exactement comme
+           sur la moto : refaire un skin raté demandait de l'effacer d'abord. Un
+           seul bouton les remplace, il annonce son coût avant d'appeler, et le
+           retrait disparaît — il ne posait que `sprite = NULL`, la photo réelle
+           n'a jamais dépendu de lui. Une différence entre les deux écrans aurait
+           été une règle à retenir de plus, pour rien.
+
+           « Retirer » tout court, lui, reste et détruit vraiment : il oublie la
+           pièce d'équipement. Il porte donc le rouge, et pas ses voisins. */
         <div className="rang actions-materiel">
           <button className="lien" onClick={() => fichier.current?.click()}>
             {e.photo_chemin ? 'Remplacer la photo' : 'Photographier'}
           </button>
-          {e.photo_chemin && !e.sprite && (
-            <button className="lien" disabled={enCours} onClick={() => void fabriquer()}>
-              {enCours ? 'fabrication…' : 'En faire un portrait pixel'}
-            </button>
+          {/* ⚠ LA PHOTO RELUE, PAS LA COLONNE — même règle qu'au garage. La
+              colonne descend sur tous les appareils, le fichier reste sur un
+              seul : conditionner la dépense sur la colonne, c'est offrir un
+              chemin qui ne peut pas aboutir. */}
+          {photoUrl && (
+            <Refaire db={db} aUnPortrait={!!e.sprite} enCours={enCours}
+                     onFabriquer={() => void fabriquer()} />
           )}
-          {e.sprite && (
-            <button className="lien"
-                    onClick={() => void poserSpriteEquipement(db, e.id, null).then(onEcrit)}>
-              Retirer le portrait
-            </button>
-          )}
-          <button className="lien" disabled={occupe}
+          <button className="lien destructif" disabled={occupe}
                   onClick={() => void retirer()}>retirer</button>
         </div>
       )}

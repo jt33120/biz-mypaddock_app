@@ -939,14 +939,21 @@ function LigneRoulage({ db, r, onOuvrir, onEcrit }: {
               : <>Cette journée ne contient rien d'autre : elle part seule.</>}
           </p>
           <div className="rang">
-            <button className="bouton secondaire" disabled={occupe} onClick={() => void retirer()}>
+            {/* ⚠ CE BOUTON ET « AJOUTER À ENTRETIEN » PORTAIENT LE MÊME DESSIN.
+                `.bouton.secondaire` servait indifféremment à ajouter et à
+                détruire : gants aux mains, on tape la forme reconnue avant
+                d'avoir fini de lire. Le destructif a maintenant sa forme à lui,
+                et elle ne se confond avec rien. */}
+            <button className="bouton destructif" disabled={occupe} onClick={() => void retirer()}>
               {occupe ? 'suppression…' : 'Retirer définitivement'}
             </button>
             <button className="lien" onClick={() => setConfirme(false)}>Garder</button>
           </div>
         </div>
       ) : (
-        <button className="lien" onClick={() => setConfirme(true)}>Retirer cette journée</button>
+        <button className="lien destructif" onClick={() => setConfirme(true)}>
+          Retirer cette journée
+        </button>
       )}
     </div>
   )
@@ -1039,7 +1046,7 @@ function Nouveau({ db, onValider, onAnnuler }: {
           sans machine reste valide, donc la sélection se dé-sélectionne. */}
       {machines.length > 1 && (
         <div className="pile">
-          <div className="libelle">Machine</div>
+          <div className="libelle">Moto</div>
           <div className="puces">
             {machines.map((m) => (
               <button key={m.id} className="puce" data-actif={machineId === m.id ? '1' : '0'}

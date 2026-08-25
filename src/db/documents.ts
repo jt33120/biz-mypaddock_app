@@ -119,7 +119,7 @@ export type IssueManuel =
 const MOT: Record<string, string> = {
   sans_compte: 'La recherche se fait sur le serveur, donc elle demande un compte.',
   cle_absente: "La recherche n'est pas encore branchée. Rien n'a été cherché, rien n'a coûté.",
-  machine_inconnue: 'Cette machine est introuvable sur le serveur. Sauvegarde d’abord.',
+  machine_inconnue: 'Cette moto est introuvable sur le serveur. Sauvegarde d’abord.',
   introuvable: "Aucun manuel en PDF n'a été trouvé pour cette moto. Tu peux en verser un toi-même.",
   pas_un_pdf: "Ce qui a été trouvé n'est pas un PDF. Rien n'a été gardé.",
   url_refusee: "L'adresse trouvée n'a pas été jugée sûre. Rien n'a été téléchargé.",

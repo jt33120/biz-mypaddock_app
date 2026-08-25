@@ -147,7 +147,7 @@ function UneChute({ db, c, ouverte, onEcrit }: {
             elles ont eu lieu.
           </p>
           <div className="rang">
-            <button className="bouton secondaire" disabled={efface} onClick={() => void retirer()}>
+            <button className="bouton destructif" disabled={efface} onClick={() => void retirer()}>
               {efface ? 'suppression…' : 'Retirer'}
             </button>
             <button className="lien" onClick={() => setConfirme(false)}>Garder</button>
@@ -158,7 +158,12 @@ function UneChute({ db, c, ouverte, onEcrit }: {
           <button className="lien" onClick={() => setEdite(true)}>
             {c.endroit || c.recit ? 'Corriger' : 'Écrire ce qui s\'est passé'}
           </button>
-          <button className="lien" onClick={() => setConfirme(true)}>Retirer</button>
+          {/* LES DEUX TEMPS PORTENT LE ROUGE, celui qui ouvre comme celui qui
+              fait. Le premier tap n'efface rien, mais il annonce l'effacement :
+              lui laisser la couleur d'un lien ordinaire, c'est cacher la moitié
+              du geste. La confirmation, elle, ne bouge pas — la couleur ne
+              remplace jamais le deuxième tap (UX-DR8). */}
+          <button className="lien destructif" onClick={() => setConfirme(true)}>Retirer</button>
         </div>
       )}
     </div>

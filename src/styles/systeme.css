@@ -151,6 +151,53 @@ body {
   min-height: var(--cible-min); font-weight: 500; letter-spacing: .06em;
 }
 
+/* ─── CE QUI DÉTRUIT — sa propre forme, pas une nuance du secondaire ───────
+   `.bouton.secondaire` portait aussi bien « Retirer définitivement » que
+   « Ajouter à entretien » : deux gestes opposés dans un seul dessin. Gants aux
+   mains, on tape la forme qu'on reconnaît avant d'avoir fini de lire la phrase
+   — et c'est ainsi qu'on efface une journée en croyant fermer un panneau.
+
+   Le rouge vient de `--alerte`, jamais d'une valeur écrite ici, ET IL NE SERT
+   QU'À ÇA dans tout le produit : la jauge de budget ne rougit pas au
+   dépassement (dépasser son budget n'est pas une faute), l'horloge au-delà de
+   son intervalle porte le jaune de `.plus-lent`, et rien ne porte de pastille.
+   Un rouge qui sert à deux choses ne sert plus à rien.
+
+   ⚠ ET LA COULEUR N'EST JAMAIS SEULE (UX-DR8). Deux signes la doublent PARTOUT,
+   sur les 12 gestes rouges du produit : le MOT dit ce qui part — retirer,
+   supprimer, effacer, oublier — et la FORME — filet plein sur tout le tour,
+   texte de la même teinte — se distingue du secondaire même pour un œil qui ne
+   sépare pas les rouges des gris. Retirer l'un des deux ramène le défaut que
+   l'autre couvrait.
+
+   ⚠ CE COMMENTAIRE AJOUTAIT UN TROISIÈME SIGNE, « la CONFIRMATION en deux temps
+   reste entière », ET C'ÉTAIT FAUX POUR LA MOITIÉ D'ENTRE EUX. Les deux temps
+   existent pour 3 gestes — une journée de roulage et tout ce qu'elle emporte,
+   une chute, le compte entier — soit 6 boutons rouges sur 12, l'ouvrant et le
+   confirmant. Les 6 autres partent au premier tap : « Retirer ce que la sonde a
+   écrit », et cinq « retirer » au bout d'une ligne de liste (une horloge, un
+   document, une pièce d'équipement, deux lignes de checklist). La règle réelle
+   est là : les deux temps gardent ce qui ne se retape pas, pas ce qui se retape
+   en cinq secondes.
+
+   Ces 12 se répartissent en 4 `.bouton.destructif` et 8 `.lien.destructif`, et
+   un essai unitaire recompte les trois nombres écrits ici. Un commentaire est la
+   mémoire du défaut dans ce dépôt : celui-ci décrivait une garde qu'on croyait
+   tenue et qui ne tenait qu'à moitié, et c'est pire qu'une garde absente, parce
+   qu'on cesse de regarder. */
+.bouton.destructif {
+  background: transparent; color: var(--alerte);
+  border: 1px solid var(--alerte); box-shadow: none;
+  min-height: var(--cible-min); font-weight: 600; letter-spacing: .06em;
+}
+/* Le même geste posé en lien — « retirer » au bout d'une ligne de liste. Il
+   n'a pas de cadre à teindre : le trait sous le mot le porte, sinon le rouge
+   se lirait comme un lien visité et non comme une perte. */
+.lien.destructif {
+  color: var(--alerte); text-decoration-color: var(--alerte);
+  text-underline-offset: 2px;
+}
+
 /* ─── LES MOLETTES — le geste ne change pas, seule la peau s'allège ───────── */
 .molettes { display: flex; gap: 10px; align-items: stretch; }
 .molette { flex: 1; display: flex; flex-direction: column; }
@@ -342,6 +389,16 @@ body {
 .garage-titre .modele {
   font-size: 26px; font-weight: 600; line-height: 1.1; margin-top: 2px; letter-spacing: -.01em;
 }
+/* Les deux gestes de la tête du garage tiennent sur une ligne quand ils
+   peuvent, et passent à la ligne quand le nom de la moto est long — un libellé
+   ne doit jamais sortir par la droite d'un écran de 390 px, défaut déjà payé
+   une fois sur la ligne d'équipement. Le panneau qui s'ouvre sous eux prend la
+   largeur entière : une annonce de coût qui se lit en colonne de 120 px ne se
+   lit pas. */
+.garage-titre .actions-titre {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin-top: 2px;
+}
+.garage-titre .actions-titre > .bloc { flex: 1 0 100%; margin-top: 6px; }
 
 /* La scène : une seule ligne d'horizon lumineuse, à hauteur du contact des pneus,
    pour que la machine soit POSÉE et non flottante. Le fond n'est jamais noir plat. */
@@ -698,3 +755,8 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
    de l'écran : elles sont deux, trois ou quatre selon qu'il y a une photo et un
    portrait, et trois liens en une seule rangée débordent sur 390 px. */
 .actions-materiel { flex-wrap: wrap; gap: 4px 16px; }
+/* L'annonce de coût du portrait s'ouvre SOUS la ligne d'actions et non dedans :
+   comprimée entre « Photographier » et « retirer », elle rendait une colonne de
+   texte de 90 px — c'est-à-dire une annonce qu'on ne lit pas, donc pas une
+   annonce. Même règle qu'en tête de garage. */
+.actions-materiel > .bloc { flex: 1 0 100%; margin-top: 6px; }

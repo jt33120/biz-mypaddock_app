@@ -64,9 +64,29 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
    *  instruments de bord soient LISIBLES, pas seulement calculés. */
   onSonde: () => void
 }) {
+  /**
+   * ⚠ L'ÉCRAN « IL NE RESTE RIEN » ÉTAIT DÉTRUIT PAR L'EFFACEMENT LUI-MÊME, et
+   * personne ne l'avait vu parce qu'aucun essai n'allait jusqu'au bout du geste.
+   *
+   * La section n'apparaissait qu'`identite &&`. Or `effacerLeTelephone` finit par
+   * `seDeconnecter()`, l'abonnement d'App rend l'identité nulle, et la section se
+   * démonte AVANT que son `setFini` n'affiche quoi que ce soit. Le pilote qui
+   * venait de tout effacer ne lisait donc jamais ce qui était parti : il
+   * retombait sur « Que la saison survive au téléphone », c'est-à-dire une
+   * invitation à créer un compte, trois cent millisecondes après avoir supprimé
+   * le sien. Et le décompte des fichiers — celui-là même que ce lot vient de
+   * rendre honnête — ne s'affichait jamais.
+   *
+   * `engage` bascule au POINT DE NON-RETOUR, quand le serveur a confirmé et
+   * qu'on s'apprête à toucher au téléphone. À partir de là, cet écran ne parle
+   * plus que de l'effacement : l'emport n'a plus rien à emporter et le
+   * formulaire n'a plus rien à proposer.
+   */
+  const [engage, setEngage] = useState(false)
+
   return (
     <>
-      {!supabaseConfigure ? (
+      {engage ? null : !supabaseConfigure ? (
         <section className="compte">
           <p className="libelle">compte</p>
           <h1 className="titre">Sauvegarde non configurée</h1>
@@ -80,18 +100,21 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
 
       {/* HORS DES TROIS BRANCHES, et c'est tout l'intérêt : l'emport ne dépend
           ni d'un compte, ni d'un serveur, ni même d'une configuration. Il est
-          le dernier filet précisément quand les autres ont cédé. */}
-      <section className="compte"><Emporter db={db} /></section>
+          le dernier filet précisément quand les autres ont cédé.
+          Il s'efface tout de même une fois l'effacement engagé : proposer
+          d'emporter une saison qui n'existe plus serait une fausse promesse, et
+          les nombres qu'il affiche datent d'avant. */}
+      {engage ? null : <section className="compte"><Emporter db={db} /></section>}
 
       {/* Hors des branches aussi, et pour la même famille de raisons : la mesure
           démarre à la première ouverture, donc le refus doit être atteignable
           sans compte. Un consentement qu'il faut mériter n'en est pas un. */}
-      <section className="compte"><Mesures /></section>
+      {engage ? null : <section className="compte"><Mesures /></section>}
 
       {/* EN DERNIER, et seulement avec un compte : c'est le geste le plus
           destructeur de l'application, et il n'a rien à faire sur le chemin de
           quelqu'un qui n'a rien à effacer. */}
-      <section className="compte">
+      {engage ? null : <section className="compte">
         <button className="lien" onClick={onLegal}>
           Ce que fait cette application, tes données, qui écrire
         </button>
@@ -105,9 +128,15 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
             comme absente une fonctionnalité déjà livrée. Sans ce numéro, ce
             genre de malentendu se débogue comme un fantôme. */}
         <p className="note">version {__BUILD__}</p>
-      </section>
+      </section>}
 
-      {identite && <section className="compte"><Effacer db={db} /></section>}
+      {/* ⚠ `identite || engage`, ET L'ORDRE DES DEUX COMPTE. Une fois l'effacement
+          engagé, l'identité tombe à zéro pendant le geste : sans `engage`, la
+          section qui porte le résultat disparaît au moment exact où elle a
+          quelque chose à dire. */}
+      {(identite || engage) && (
+        <section className="compte"><Effacer db={db} onEngager={() => setEngage(true)} /></section>
+      )}
     </>
   )
 }
@@ -120,7 +149,13 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
        ET avec son compte.
      · CE QUI PART EST NOMMÉ AVANT, pas résumé après. « Es-tu sûr ? » ne dit
        rien ; une liste de ce qui disparaît dit tout. */
-function Effacer({ db }: { db: PowerSyncDatabase }) {
+function Effacer({ db, onEngager }: {
+  db: PowerSyncDatabase
+  /** Prévenir l'écran que le point de non-retour est franchi. Sans ce signal,
+   *  l'identité qui tombe pendant l'effacement démonte cette section avant
+   *  qu'elle n'ait rendu son résultat — voir le commentaire de `Compte`. */
+  onEngager: () => void
+}) {
   const [ouvert, setOuvert] = useState(false)
   const [occupe, setOccupe] = useState(false)
   const [souci, setSouci] = useState<string | null>(null)
@@ -133,6 +168,12 @@ function Effacer({ db }: { db: PowerSyncDatabase }) {
     setOccupe(true); setSouci(null)
     const serveur = await effacerAuServeur()
     if (!serveur.ok) { setSouci(serveur.message); setOccupe(false); return }
+    // ⚠ LE POINT DE NON-RETOUR EST ICI, ET IL SE DIT AVANT D'AGIR. Le compte
+    // n'existe plus côté serveur : le pilote est engagé, et cet écran ne parle
+    // plus que de ça. Le signal part MAINTENANT parce que l'étape suivante
+    // déconnecte — donc rend l'identité nulle — et démonterait cette section au
+    // milieu de son propre travail.
+    onEngager()
     // Et SEULEMENT MAINTENANT le local. Le serveur a confirmé.
     const local = await effacerLeTelephone(db)
     setFini({ objets: serveur.objets, ...local })
@@ -144,10 +185,17 @@ function Effacer({ db }: { db: PowerSyncDatabase }) {
       <>
         <p className="libelle">compte effacé</p>
         <h1 className="titre">Il ne reste rien</h1>
+        {/* ⚠ CE NOMBRE A MENTI, ET SUR UN DROIT. Il ne comptait que l'OPFS —
+            donc zéro sur tout iPhone d'avant Safari 26, pendant que les photos
+            restaient dans IndexedDB. Il vient maintenant de `viderLeCoffre()`,
+            qui retire des DEUX magasins et rend ce qu'il a retiré. Et le mot
+            suit le compte : le coffre range aussi les portraits, les manuels et
+            les factures, pas seulement des photos de roulage. */}
         <p className="texte">
           Le compte et sa saison sont supprimés du serveur, avec {fini.objets} photo
           {fini.objets > 1 ? 's' : ''}. Sur ce téléphone : la base locale, {fini.photos} fichier
-          {fini.photos > 1 ? 's' : ''} de photo et {fini.cles} réglage{fini.cles > 1 ? 's' : ''}.
+          {fini.photos > 1 ? 's' : ''} de photos et de documents et {fini.cles} réglage
+          {fini.cles > 1 ? 's' : ''}.
         </p>
         <button className="bouton" onClick={() => location.reload()}>Repartir de zéro</button>
       </>
@@ -158,9 +206,18 @@ function Effacer({ db }: { db: PowerSyncDatabase }) {
 
   return (
     <>
-      <p className="libelle">effacer mon compte</p>
+      {/* ⚠ LE MOT NE S'ÉCRIT QU'UNE FOIS, ET C'EST LE BOUTON QUI LE PORTE.
+          « Effacer mon compte » était le libellé de la section ET le bouton deux
+          lignes plus bas : à la lecture, deux gestes possibles là où il n'y en a
+          qu'un. Le libellé cède le mot parce que c'est le bouton qui agit — et
+          parce que Legal.tsx cite ce bouton par son nom exact pour dire au
+          pilote où exercer son droit d'effacement. Un nom de bouton cité dans un
+          texte légal ne peut pas désigner un bouton qui n'existe pas. */}
+      <p className="libelle">ton droit d'effacement</p>
       {!ouvert ? (
-        <button className="lien" onClick={() => setOuvert(true)}>Effacer mon compte</button>
+        <button className="lien destructif" onClick={() => setOuvert(true)}>
+          Effacer mon compte
+        </button>
       ) : (
         <div className="bloc pile">
           <div className="libelle">ce qui part, et ne revient pas</div>
@@ -175,10 +232,24 @@ function Effacer({ db }: { db: PowerSyncDatabase }) {
             pas un. L'emport est plus haut sur cet écran, et c'est le moment de s'en servir.
           </p>
           {souci && <p className="mot-erreur">{souci}</p>}
-          <button className="bouton" disabled={occupe} onClick={() => void effacer()}>
+          {/* ⚠ LE ROUGE PASSE AU DESTRUCTIF, ET LE SORTANT REPREND LE DESSIN
+              PRIMAIRE. C'était l'inverse : « Effacer définitivement » portait le
+              dégradé néon du bouton principal — le dessin qui, partout ailleurs
+              dans le produit, dit « enregistrer », « continuer », « garder ce
+              portrait ». Le geste qui détruit tout avait la forme du geste qu'on
+              tape sans lire. */}
+          <button className="bouton destructif" disabled={occupe} onClick={() => void effacer()}>
             {occupe ? 'effacement…' : 'Effacer définitivement'}
           </button>
-          <button className="bouton secondaire" disabled={occupe} onClick={() => setOuvert(false)}>
+          {/* ⚠ LE SORTANT EST UN `.lien`, COMME AUX DEUX AUTRES CONFIRMATIONS.
+              Il portait `.bouton` — le dégradé néon, plein, plus gros et plus
+              voyant que le geste rouge posé juste au-dessus. Sur les deux autres
+              confirmations du produit (une journée, une chute), « Garder » est
+              un lien discret : ici, la sortie criait plus fort que l'entrée, et
+              trois formes différentes pour un même geste sont trois choses à
+              réapprendre. Le geste qu'on tape sans lire ne doit pas être celui
+              qui décide. */}
+          <button className="lien" disabled={occupe} onClick={() => setOuvert(false)}>
             Garder mon compte
           </button>
         </div>

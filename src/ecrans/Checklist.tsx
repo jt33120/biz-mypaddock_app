@@ -84,7 +84,8 @@ export function Checklist({ db, roulageId, jour }: {
                   <span className="texte">{ligne.libelle}</span>
                 </button>
                 {!ligne.source_url && (
-                  <button className="lien" onClick={() => void retirer(db, ligne.id).then(charger)}>
+                  <button className="lien destructif"
+                          onClick={() => void retirer(db, ligne.id).then(charger)}>
                     retirer
                   </button>
                 )}

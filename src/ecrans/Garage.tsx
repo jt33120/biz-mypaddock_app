@@ -13,6 +13,7 @@ import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import { Atelier } from './Atelier'
 import { Poste } from './Poste'
+import { Refaire } from './Refaire'
 import type { Categorie } from '../db/atelier'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
 
@@ -87,7 +88,20 @@ export function Garage({ db, onEcrit }: {
   const fabriquer = async () => {
     if (!machine) return
     const f = await photoMachine(machine.photo_chemin)
-    if (!f) return
+    // ⚠ CE `return` ÉTAIT MUET, et c'était le pire endroit du produit pour se
+    // taire. `machine.photo_chemin` est une COLONNE : elle se synchronise, donc
+    // elle est vraie sur le second téléphone et après une réinstallation. Les
+    // OCTETS, eux, ne partent jamais au stockage objet — `verserPhotoMachine`
+    // n'écrit qu'en local. Le pilote validait donc une dépense annoncée à
+    // 0,16 €, et l'écran ne bougeait pas d'un pixel. Il retapait.
+    // Le bouton ne s'offre plus dans ce cas (voir plus bas), et si l'on y
+    // arrive quand même, l'écran dit ce qui manque et où le reprendre.
+    if (!f) {
+      setSouci("La photo de cette moto n'est pas sur ce téléphone — elle a été prise ailleurs. "
+        + 'Elle se repose ici avec « Remplacer la photo de la moto », et le portrait se '
+        + 'fabrique à partir d\'elle.')
+      return
+    }
     setEnCours(true); setSouci(null); setCandidat(null)
     const issue = await genererPortrait(db, machine.id, f)
     setEnCours(false)
@@ -153,10 +167,10 @@ export function Garage({ db, onEcrit }: {
     return (
       <section className="garage vide">
         <p className="libelle">garage</p>
-        <h1 className="titre">Aucune machine</h1>
+        <h1 className="titre">Aucune moto</h1>
         <p className="texte">
           Le garage est le centre du produit : le roulage s'y rattache, l'entretien s'y rattache,
-          l'usure s'y lit. Une machine se crée sans photo — le portrait vient après, s'il vient.
+          l'usure s'y lit. Une moto se crée sans photo — le portrait vient après, s'il vient.
         </p>
         {/* ⚠ LE SEUL BOUTON D'ICI CRÉAIT LA HONDA DE JULIAN, EN DUR. Un inconnu
             n'avait aucun moyen d'entrer sa propre moto : le garage restait vide
@@ -210,7 +224,7 @@ export function Garage({ db, onEcrit }: {
         <p className="libelle">garage</p>
         <button className="lien tete-inventaire"
                 onClick={() => setVersEquipement((n) => n + 1)}>
-          <b>{machines.length}</b> machine{machines.length > 1 ? 's' : ''} · équipement ›
+          <b>{machines.length}</b> moto{machines.length > 1 ? 's' : ''} · équipement ›
         </button>
       </header>
 
@@ -241,9 +255,34 @@ export function Garage({ db, onEcrit }: {
             {machine.achetee_le ? ` · ${machine.achetee_le.replace('-', '/')}` : ''}
           </p>
         )}
-        <button className="lien" onClick={() => setCorriger(!corriger)}>
-          {corriger ? 'Annuler la correction' : machine.annee ? 'Corriger la machine' : "Ajouter l'année"}
-        </button>
+        {/* ⚠ DEUX GESTES CÔTE À CÔTE, ET ILS N'ONT PAS LE MÊME PRIX. Modifier
+            est gratuit et réversible ; refaire un portrait appelle le serveur et
+            se paie. Ils voisinent parce que c'est le même endroit qu'on ouvre
+            quand on veut corriger sa moto — « le bouton refaire à côté de
+            modifier la moto » — mais le second passe par une annonce de coût, et
+            c'est cette annonce, pas la place, qui empêche le tap accidentel.
+
+            ⚠ ET LE BOUTON DU PORTRAIT NE S'AFFICHE QUE S'IL Y A UNE PHOTO : la
+            fabrique part d'elle. Sans photo, c'est « Photographier la moto »,
+            sous la scène, qui est le geste suivant — et lui ne coûte rien.
+
+            ⚠ UNE PHOTO RELUE, PAS UNE COLONNE. Il s'affichait sur
+            `machine.photo_chemin`, qui SE SYNCHRONISE — alors que les octets,
+            eux, restent sur le téléphone qui a pris la photo. Sur un second
+            appareil ou après une réinstallation, la colonne dit « il y a une
+            photo » et le fichier n'existe pas : le bouton proposait de payer
+            0,16 € pour fabriquer à partir de rien. `photoUrl` est la photo
+            réellement lue ici, et un chemin qui ne peut pas aboutir ne doit pas
+            s'offrir. */}
+        <div className="actions-titre">
+          <button className="lien" onClick={() => setCorriger(!corriger)}>
+            {corriger ? 'Annuler la modification' : machine.annee ? 'Modifier la moto' : "Ajouter l'année"}
+          </button>
+          {photoUrl && (
+            <Refaire db={db} aUnPortrait={!!machine.sprite} enCours={enCours}
+                     onFabriquer={() => void fabriquer()} />
+          )}
+        </div>
       </div>
 
       {corriger && (
@@ -273,7 +312,7 @@ export function Garage({ db, onEcrit }: {
                  Et les deux objets restent nommés séparément, comme Julian l'a
                  demandé une fois déjà : la PHOTO est la sienne et ne dépend de
                  rien, le PORTRAIT PIXEL se fabrique à partir d'elle. */
-              <div className="silhouette" aria-label="machine sans portrait">
+              <div className="silhouette" aria-label="moto sans portrait">
                 <p className="absente">
                   <b>pas encore d'image</b>
                   Sa photo prendra cette place — elle reste sur ce téléphone.
@@ -351,9 +390,18 @@ export function Garage({ db, onEcrit }: {
           </p>
           <button className="bouton" onClick={() => void garder()}>Garder ce portrait</button>
           {/* Le quatrième critère du récit, et il n'a rien de cosmétique : le
-              refus ne détruit rien, la photo réelle était toujours là. */}
+              refus ne détruit rien — ce qui tenait la scène la reprend.
+
+              ⚠ ET LE LIBELLÉ DIT LEQUEL DES DEUX. Il disait « Revenir à la
+              photo » dans tous les cas, alors que la scène retombe sur
+              `machine.sprite ? sprite : photoUrl` : quand un portrait était déjà
+              gardé, c'est LUI qui revenait — celui-là même qu'on voulait
+              remplacer. Le pilote concluait que le bouton n'avait rien fait et
+              retapait « Refaire » : 0,16 € et un crédit partis pour un
+              malentendu de libellé. Avant que « Refaire » existe, ce cas était
+              impossible ; il est devenu le cas courant. */}
           <button className="bouton secondaire" onClick={() => setCandidat(null)}>
-            Revenir à la photo
+            {machine.sprite ? 'Revenir au portrait actuel' : 'Revenir à la photo'}
           </button>
         </div>
       ) : (
@@ -373,23 +421,30 @@ export function Garage({ db, onEcrit }: {
                 que ça coûte de l'argent réel et un crédit sur trois.
 
               · « Retirer sa forme de jeu » → « je n'ai pas compris, pas clair ce
-                que fait ce bouton ». Il dit maintenant à quoi l'on revient, ce
-                qui est le seul point du bouton. */}
+                que fait ce bouton ». Il disait à quoi l'on revient — et il n'y
+                revient plus, voir ci-dessous.
+
+              ⚠ « RETIRER LE PORTRAIT PIXEL » N'EXISTE PLUS — « aucun intérêt de
+              le retirer ». Ce qu'il faisait exactement, pour que la perte soit
+              écrite et non subie : il posait `sprite = NULL` sur la moto et RIEN
+              d'autre. La photo réelle n'a jamais été touchée par lui, et c'est
+              elle qui reprenait alors la scène.
+
+              Ce qui n'est donc plus atteignable : revenir à la photo réelle
+              quand un portrait a été gardé. La photo, elle, n'est pas perdue —
+              elle reste dans le téléphone, elle repart à l'emport (emporter.ts),
+              et « Remplacer la photo de la moto » la remplace toujours. Seule sa
+              PLACE SUR LA SCÈNE est prise tant qu'un portrait existe, et refaire
+              le portrait est désormais le geste qui la reprend.
+
+              ⚠ ET LES DEUX BOUTONS S'EXCLUAIENT : le retrait n'apparaissait
+              qu'avec un sprite, la fabrication qu'avec une photo ET sans sprite.
+              Refaire un portrait raté demandait donc de l'effacer d'abord. Un
+              seul bouton les remplace, en tête d'écran, et il annonce son coût
+              avant d'appeler. */}
           <button className="lien" onClick={() => fichier.current?.click()}>
             {machine.photo_chemin ? 'Remplacer la photo de la moto' : 'Photographier la moto'}
           </button>
-          {machine.photo_chemin && !machine.sprite && (
-            <button className="bouton secondaire" disabled={enCours} onClick={() => void fabriquer()}>
-              {enCours ? 'fabrication…' : 'En faire un portrait pixel'}
-            </button>
-          )}
-          {machine.sprite && (
-            <button className="lien" onClick={() => void poserSprite(db, machine.id, null).then(charger)}>
-              {machine.photo_chemin
-                ? 'Retirer le portrait pixel et remontrer la photo'
-                : 'Retirer le portrait pixel'}
-            </button>
-          )}
         </>
       )}
       {souci && <p className="mot-erreur">{souci}</p>}
@@ -493,7 +548,7 @@ function Declarer({ machine, onValider }: {
         prixAchatCentimes: prix.trim() ? enCentimes(prix) : null,
         acheteeLe: /^\d{4}-\d{2}$/.test(achat) ? achat : null,
       })}>
-        {occupe ? 'enregistrement…' : machine ? 'Corriger' : 'Déclarer ma machine'}
+        {occupe ? 'enregistrement…' : machine ? 'Modifier' : 'Déclarer ma moto'}
       </button>
     </div>
   )

@@ -89,7 +89,13 @@ export function Usure({ db, machineId, onEcrit }: {
                       .then(charger).then(() => onEcrit?.())}>
               C'est fait aujourd'hui
             </button>
-            <button className="lien" onClick={() => void oublierHorloge(db, h.id).then(charger)}>
+            {/* ⚠ LE ROUGE EST ICI ET NULLE PART AILLEURS DANS CE BLOC. Une
+                horloge au-delà de son intervalle garde le jaune de `.plus-lent`
+                et sa phrase — « Au-delà de l'intervalle transcrit » : le produit
+                dit OÙ EN EST la moto, il ne la déclare pas en faute. Le seul
+                geste rouge de l'usure est celui qui fait disparaître le suivi. */}
+            <button className="lien destructif"
+                    onClick={() => void oublierHorloge(db, h.id).then(charger)}>
               Retirer cette horloge
             </button>
           </div>

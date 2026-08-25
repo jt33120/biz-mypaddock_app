@@ -3,12 +3,23 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from '../db/ids'
 import { NOM_BASE, VFS_DEMANDE, opfsDisponible, ouvrirBase, vfsReel } from '../db/powersync'
 import { SEUIL_H, tableauDeBord, type Tableau } from '../db/mesures'
+import { capaciteLocale, inventaireDuCoffre } from '../db/coffre'
 
 type Etat = { cle: string; val: string; ton?: 'oui' | 'non' | 'attente' }
 
-/** La sonde du récit 0.1, conservée comme instrument. Elle a déjà rendu son
- *  verdict — OPFS confirmé, persist() accordé sur PWA installée — mais elle
- *  reste le seul endroit où l'on voit ce que l'appareil fait réellement. */
+/**
+ * La sonde du récit 0.1, conservée comme instrument. Elle reste le seul endroit
+ * où l'on voit ce que l'appareil fait réellement.
+ *
+ * ⚠ SON « OPFS CONFIRMÉ » NE COUVRAIT PAS L'ÉCRITURE DES FICHIERS, et ce
+ * malentendu a coûté cher. Elle mesure `navigator.storage.getDirectory()` et le
+ * VFS de PowerSync, qui écrit par `createSyncAccessHandle` — disponible depuis
+ * Safari 15.2. Les photos et les documents, eux, passaient par
+ * `createWritable()`, absent de tout Safari antérieur à la 26 : la sonde
+ * affichait un feu vert franc pendant que pas un seul octet ne pouvait
+ * s'écrire. Une sonde qui valide une API pendant que le code en utilise une
+ * autre est pire qu'aucune sonde — elle fait chercher la panne ailleurs.
+ */
 export function Sonde({ db, onFermer }: { db: PowerSyncDatabase; onFermer: () => void }) {
   const [etats, setEtats] = useState<Etat[]>([])
   const [journal, setJournal] = useState<string[]>([])
@@ -37,7 +48,38 @@ export function Sonde({ db, onFermer }: { db: PowerSyncDatabase; onFermer: () =>
     l.push({ cle: '② VFS RÉEL', val: reel, ton: reel.startsWith('OPFS confirmé') ? 'oui' : reel.startsWith('REPLI') ? 'non' : 'attente' })
     l.push({ cle: '   (demandé)', val: VFS_DEMANDE, ton: 'attente' })
     l.push({ cle: 'OPFS', val: await opfsDisponible(), ton: 'attente' })
-    l.push({ cle: '③ RÉSEAU', val: navigator.onLine ? 'en ligne' : 'MODE AVION', ton: navigator.onLine ? 'attente' : 'oui' })
+
+    // ⚠ ELLE INTERROGE LE CHOIX RÉELLEMENT EN USAGE, pas une nouvelle épreuve.
+    // Le coffre peut avoir rétrogradé en cours de session après un refus
+    // d'écriture ; une sonde qui referait sa propre mesure dans son coin
+    // pourrait annoncer l'OPFS pendant que les photos partent en IndexedDB.
+    const coffre = await capaciteLocale()
+    // ⚠ CE N'EST PLUS UNE PANNE, DONC CE N'EST PLUS UNE COULEUR D'ALERTE.
+    // « createWritable ABSENT » portait le jaune de « ce qui attend » : c'était
+    // juste tant que le produit n'avait qu'un chemin d'écriture. Depuis le
+    // repli, un Safari d'avant la 26 n'a rien qui attend — il écrit ailleurs, et
+    // il écrit. La ligne redevient ce qu'elle est : un renseignement.
+    l.push({
+      cle: '③ ÉCRIRE UN FICHIER',
+      val: coffre.createWritable
+        ? 'createWritable présent'
+        : 'createWritable absent (Safari < 26) — sans conséquence',
+      ton: coffre.createWritable ? 'oui' : 'attente',
+    })
+    // ⚠ ET C'EST CETTE LIGNE-LÀ QUI PORTE L'ALERTE, parce qu'elle est la seule
+    // qui puisse dire quelque chose de grave : `ecritureEprouvee` est désormais
+    // renseignée par une écriture RÉELLE dans le magasin en usage, IndexedDB
+    // compris. Fausse, elle ne veut plus dire « on n'a pas vérifié » — elle veut
+    // dire AUCUN MAGASIN N'ÉCRIT, et le mot le dit en toutes lettres (UX-DR8).
+    l.push({ cle: '   magasin en usage', val: coffre.raison, ton: coffre.ecritureEprouvee ? 'oui' : 'non' })
+    // Les deux comptes côte à côte rendent visible le seul vrai piège du repli :
+    // des fichiers rangés d'un côté pendant qu'on écrit de l'autre. Tant qu'ils
+    // se lisent tous les deux, un nombre non nul dans le magasin inactif est
+    // normal — c'est l'avant-mise à jour d'iOS, pas une perte.
+    const inv = await inventaireDuCoffre()
+    l.push({ cle: '   fichiers rangés', val: `OPFS ${inv.opfs} · IndexedDB ${inv.indexeddb}`, ton: 'attente' })
+
+    l.push({ cle: '④ RÉSEAU', val: navigator.onLine ? 'en ligne' : 'MODE AVION', ton: navigator.onLine ? 'attente' : 'oui' })
     l.push({ cle: 'Build', val: __BUILD__, ton: 'attente' })
     setEtats(l)
   }, [])
@@ -115,7 +157,11 @@ export function Sonde({ db, onFermer }: { db: PowerSyncDatabase; onFermer: () =>
         {occupe ? 'écriture…' : 'Écrire 40 tours'}
       </button>
       <button className="bouton secondaire" onClick={() => void compter()}>Compter ce qui a survécu</button>
-      <button className="bouton secondaire" onClick={() => void ouvrir()
+      {/* ⚠ L'ÉPIQUE N'AVAIT PAS RECENSÉ CELUI-CI, et c'est le plus large de
+          tous : il exécute quatre DELETE sur des roulages, sessions et tours
+          réels. Qu'il ne détruise « que » ce que la sonde a écrit ne change rien
+          au dessin qu'il doit porter — un instrument qui efface efface. */}
+      <button className="bouton destructif" onClick={() => void ouvrir()
         .then(effacerLesMesures).then(() => dire('les écritures de sonde sont retirées'))
         .then(compter)}>
         Retirer ce que la sonde a écrit
