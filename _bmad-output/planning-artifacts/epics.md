@@ -2099,7 +2099,32 @@ En tant que **pilote**, je veux **que le produit ne compte comme roulé que ce q
 
 **La porte.** Le tableau écrit « avant le premier roulage encadré de la saison ». **Elle est fausse deux fois.** D'abord c'est une date déguisée, alors que le mouvement 3 pose que chaque épique s'allume sur une condition observable (epics.md:200-206) et que FR-53 interdit tout comportement piloté par le calendrier. Ensuite le mot « encadré » ne désigne rien dans le produit : un roulage ne porte ni organisateur saisi ni rattachement au référentiel, aucun écran ne propose de choisir un organisateur, et la table `organisateur` compte 0 ligne — rien ne distingue un roulage encadré d'un autre. La porte juste est en deux temps, et il faut les séparer parce qu'elles n'ouvrent pas les mêmes récits. ① Le chargement s'allume quand **un roulage à venir est saisi** — il ne lui faut rien d'autre, et cette porte-là est déjà ouverte. ② La conformité s'allume quand **le référentiel porte au moins une règle publiée rattachée au circuit ou à l'organisateur de ce roulage** — c'est celle qui compte, parce que sans elle l'épique ne livre qu'une liste de camion générique et que FR-50 comme FR-51 n'ont plus rien à décrire. Cette seconde porte est fermée aujourd'hui, et mesurablement : `regle_organisateur` 0 ligne, `organisateur` 0 ligne, 0 roulage sur 4 rattaché à un circuit, `source_recolte` 5 lignes dont 0 active (requête du 25 août 2026 sur le projet mypaddock).
 
-*4 récits · 22 critères · 12 tenus · 7 non tenus.*
+*4 récits · 23 critères · 17 tenus · 5 non tenus.*
+
+> **RELECTURE DU 25 AOÛT 2026.** Cette épique est la première relue une par une,
+> et la relecture a produit plus que des verdicts corrigés.
+>
+> ⚠ **Un défaut BLOQUANT que aucun récit ne décrivait, parce qu'il ne vit dans
+> aucun des deux écrans mais ENTRE EUX.** « Avant d'y aller » (23 août) et le
+> chargement partagent la table `checklist_ligne` sur le même roulage. L'écran du
+> chargement lisait toutes les catégories, et s'en servait pour décider s'il était
+> déjà composé. Une seule tâche de préparation — « payer l'engagement », le geste
+> que Julian décrit lui-même — et le chargement de ce roulage devenait
+> **définitivement incomposable** : plus de bouton, une liste vide, et un en-tête
+> qui annonçait « 1 chargé » alors que le camion était vide. Deux jours de vie,
+> aucun essai capable de le voir : aucun n'exerçait les deux listes sur le même
+> roulage. Corrigé, et l'essai qui le reproduit a été vérifié dans les deux sens
+> (banc-rendu/fumee-preparation.mjs ⑥).
+>
+> ⚠ **La porte de l'épique était fermée par UN DÉCLENCHEUR MANQUANT, pas par une
+> fonctionnalité manquante.** src/db/depot.ts:605-610 explique pourquoi la PWA ne
+> pose pas `circuit_id` — le raisonnement est juste — et conclut : « la
+> normalisation se fait côté serveur ». Elle n'a jamais été écrite : `roulage` ne
+> portait aucun déclencheur, et 4 roulages sur 4 étaient sans circuit, depuis le
+> premier jour. C'est ce qui rendait FR-49, FR-50 et FR-51 inatteignables, avec
+> 32 circuits pourtant en base. Écrit, appliqué, vérifié : **4 roulages sur 4
+> rattachés**, un nom inconnu n'attache rien, et un renvoi à NULL par l'adoption
+> se répare tout seul (migration 20260825000003).
 
 
 ### Récit 13.1 : Le chargement se compose depuis ce qui est déjà saisi
@@ -2121,7 +2146,7 @@ En tant que **pilote**, je veux **que la liste de chargement se compose seule de
 **Quand** la liste se compose  
 **Alors** ces règles **y figurent comme lignes de conformité**, à côté du chargement (FR-49, UJ-5)
 
-> ❌ **NON TENU** — src/db/depot.ts:243-246 — la création d'un roulage n'écrit ni `circuit_id` ni `organisateur_id` ; le choix est assumé et documenté (depot.ts:605-609 : « `circuit_id` RESTE NUL »), et la normalisation censée le poser plus tard n'existe nulle part. La requête de checklist.ts:98-104 rend donc toujours une liste vide, quelles que soient les données du référentiel. Requête : 0 roulage sur 4 avec `circuit_id`, 0 avec `organisateur_id`.
+> ❌ **NON TENU** — mais **le verrou nommé ici est levé depuis le 25 août**. La normalisation « censée le poser plus tard » n'existait nulle part : `roulage` ne portait aucun déclencheur. Elle existe maintenant (migration 20260825000003, `roulage_trouve_son_circuit`), et **4 roulages sur 4 sont rattachés** — un nom tapé « pau arnos » trouve Pau-Arnos, un nom inconnu n'attache rien, et le renvoi à NULL de l'adoption se répare de lui-même. Ce qui reste bloquant est ailleurs, et c'est le récit 13.4 : `regle_organisateur` est vide et n'a **aucun semeur**. La requête de checklist.ts rend donc encore une liste vide — faute de règles, non plus faute de rattachement.
 
 
 **Étant donné** des lignes cochées au fur et à mesure du chargement du camion  
@@ -2152,6 +2177,15 @@ En tant que **pilote**, je veux **que la liste de chargement se compose seule de
 > ✅ **tenu** — src/App.tsx:1182 rend `<Checklist>` sur la fiche d'un roulage sans aucune condition sur les sessions ni sur le chrono ; la fiche est atteinte depuis le bloc « Prochain roulage » (src/App.tsx:665-671).
 
 
+**Étant donné** que j'ai noté le jeudi soir ce qu'il me reste à faire — « payer l'engagement », « passer chercher le bidon »
+**Quand** j'ouvre ensuite le chargement du même roulage
+**Alors** je peux **toujours le composer**, et l'en-tête **ne compte que le camion** : ce que je fais AVANT d'y aller n'est pas ce que j'emporte (FR-49)
+
+> ✅ **tenu depuis le 25 août** — **ce critère manquait, et son absence a laissé vivre un défaut bloquant.** Les deux listes partagent `checklist_ligne` sur le même roulage depuis le 23 août ; l'écran du chargement lisait toutes les catégories et s'en servait pour décider s'il était déjà composé. Une seule tâche de préparation rendait le chargement **définitivement incomposable** — plus de bouton, une liste vide — et l'en-tête annonçait « 1 chargé » pour un camion vide. Aucun essai ne pouvait le voir : aucun n'exerçait les deux listes sur le même roulage, et c'est pourtant l'ordre naturel des gestes. Le chargement lit maintenant `CHARGEMENT` et rien d'autre (src/db/checklist.ts, `lignesDuChargement`, garde de `composer`). Trois essais nouveaux : le reproducteur de bout en bout, vérifié dans les deux sens (fumee-preparation ⑥), et deux unitaires qui empêchent une cinquième catégorie d'apparaître sans être rangée d'un côté, ou d'exister dans le produit sans être acceptée par le serveur.
+
+> ⚠ **UNE CONTRADICTION RESTE OUVERTE ENTRE LE PREMIER ET LE CINQUIÈME CRITÈRE, et elle n'est pas de rédaction.** Le premier veut que la liste se compose depuis *mon* équipement déclaré ; le cinquième veut que rien ne se recompose jamais. Les deux sont justes séparément et incompatibles ensemble : la dorsale achetée en mars n'apparaîtra jamais sur une liste composée en février, en silence, et le pilote partira sans elle en croyant sa liste à jour. La règle qui manque est une troisième : **un équipement déclaré après coup s'ajoute comme ligne non cochée, et aucune coche existante ne bouge.** À trancher avant d'implémenter le premier critère, sans quoi on livrera le défaut avec la fonctionnalité.
+
+
 ### Récit 13.2 : Ce que l'organisateur publie, avec sa source et sa date
 
 En tant que **pilote**, je veux **que chaque ligne venue d'un organisateur me dise qui l'a publiée et quand**, afin de **savoir ce que je lis, et ne jamais croire que l'application m'a autorisé à entrer**.
@@ -2164,7 +2198,7 @@ En tant que **pilote**, je veux **que chaque ligne venue d'un organisateur me di
 **Quand** elle s'affiche  
 **Alors** elle dit **qui l'a publiée et à quelle date**, en clair — « publié par l'organisateur le 12 mars 2026 » (FR-50)
 
-> 🟡 **partiel** — src/ecrans/Checklist.tsx:70-73 affiche « publié le 2026-03-12 » : la date brute au format machine, **sans nommer l'organisateur**, et `source_url` n'est jamais rendue ni atteignable — elle ne sert qu'à décider si la ligne est effaçable (Checklist.tsx:62-66). Un formateur de date française existe pourtant dans le dépôt (src/recap/composer.ts:50-51).
+> ✅ **tenu depuis le 25 août** — l'était « partiellement » : « publié le 2026-03-12 », la date au format machine, et personne. `regle_organisateur` SAIT pourtant qui — elle porte `organisateur_id` et `circuit_id` — mais la composition ne recopiait que trois colonnes. Deux colonnes ajoutées (`publie_par`, migration 20260825000002), recopiées à la composition depuis un `LEFT JOIN` sur l'organisateur puis le circuit (src/db/checklist.ts), et rendues par `direPublication` : « publié par le Moto Club de Pau le 12 mars 2026 ». Dénormalisées à dessein — une trace dit ce qui était vrai le jour où elle a été prise. Essai unitaire : « une règle publiée dit QUI, et le dit en clair ».
 
 
 **Étant donné** n'importe quel endroit de l'écran  
@@ -2185,14 +2219,14 @@ En tant que **pilote**, je veux **que chaque ligne venue d'un organisateur me di
 **Quand** elle s'affiche au pilote  
 **Alors** elle **le dit** — une extraction n'est pas une transcription, et ce texte-là engage le passage au contrôle technique (FR-50 ; garde-fou QO-6, PRD §11)
 
-> ❌ **NON TENU** — recolte/index.mjs:154-158 pose `extrait_par_ia: true` sur tout ce qu'il écrit ; la colonne existe sur `regle_organisateur` (migration ligne 26) et descend sur le téléphone (src/db/schema.ts:340-349, powersync/sync-config.yaml:59). Mais `composer` ne la lit pas (src/db/checklist.ts:99-103), `checklist_ligne` n'a aucune colonne pour l'accueillir (migration lignes 33-46), et src/ecrans/Checklist.tsx ne la mentionne jamais. La mention se perd exactement au moment où elle atteint un humain.
+> ✅ **tenu depuis le 25 août** — c'était le manque le plus grave de l'épique : la mention existait dans le référentiel depuis le 19 août et se perdait **exactement au moment où elle atteint un humain**, sur un texte qui engage le passage au contrôle technique (garde-fou QO-6). `checklist_ligne.extrait_par_ia` ajoutée (20260825000002), recopiée à la composition, affichée en clair — « relevé automatiquement sur la page ». Et la contrainte serveur `conformite_porte_sa_source` l'exige désormais au même titre que la source et la date : une règle extraite ne peut plus entrer en se présentant, par le silence, comme une transcription.
 
 
 **Étant donné** un roulage dont on ne connaît aucune règle publiée  
 **Quand** j'ouvre le chargement  
 **Alors** le produit **dit qu'il ne sait rien** des règles de cet organisateur, au lieu de faire disparaître la section sans un mot — une absence se dit (FR-50 ; règle de fond du projet)
 
-> ❌ **NON TENU** — src/ecrans/Checklist.tsx:36-38 — `.filter(([, l]) => l.length)` retire purement et simplement la catégorie vide, et la note d'avertissement (lignes 78-86) est elle-même conditionnée à l'existence de lignes. C'est l'état de tout le monde aujourd'hui : `regle_organisateur` 0 ligne, `checklist_ligne` de catégorie `conformite` 0 ligne (requête du 25 août 2026).
+> ✅ **tenu depuis le 25 août** — la catégorie `conformite` survit désormais à son vide, seule des trois : « Aucune règle publiée n'est connue pour ce roulage. Ça ne veut pas dire qu'il n'y en a pas — l'organisateur reste la seule source. » Faire disparaître la section laissait lire « l'organisateur n'exige rien » là où la vérité est « le produit ne sait rien ». Le garde-fou du banc a été resserré en même temps plutôt qu'assoupli : il vérifiait l'absence de la SECTION, il vérifie maintenant l'absence de toute LIGNE sans source, et la présence de la phrase (banc-rendu/fumee-checklist.mjs ④).
 
 
 ### Récit 13.3 : Une fiche vieille de plus d'un an le dit
@@ -2207,7 +2241,7 @@ En tant que **pilote**, je veux **qu'une règle publiée il y a longtemps m'affi
 **Quand** j'ouvre le chargement  
 **Alors** la ligne **affiche son âge** et une note **invite à vérifier auprès de l'organisateur** (FR-51)
 
-> ⬜ **non vérifiable** — Le rendu est écrit — src/ecrans/Checklist.tsx:72 pour l'âge de la ligne, 78-86 pour la note — mais aucun jeu de données ne peut produire une telle ligne : `regle_organisateur` compte 0 ligne et aucun roulage ne porte de `circuit_id` ni d'`organisateur_id` (src/db/depot.ts:243-246). Le critère n'a jamais pu être ni tenu ni mis en échec sur le produit qui tourne, et le banc de fumée ne l'exerce pas non plus (banc-rendu/fumee-checklist.mjs:62-64 constate seulement l'absence de section conformité).
+> ⬜ **non vérifiable** — et il reste le seul de l'épique dans cet état. Le rendu est écrit, et il est meilleur qu'au 24 août (`direLAge`, la note d'invitation à vérifier). Des deux raisons qui l'empêchaient d'être éprouvé, une est tombée le 25 : les roulages sont désormais rattachés à leur circuit. L'autre tient : `regle_organisateur` compte 0 ligne, faute de semeur (récit 13.4). Le jour où une seule règle entre, ce critère devient vérifiable **sans une ligne de code de plus** — c'est la meilleure raison de traiter 13.4 en premier.
 
 
 **Étant donné** une règle récente  
@@ -2228,7 +2262,7 @@ En tant que **pilote**, je veux **qu'une règle publiée il y a longtemps m'affi
 **Quand** son âge s'affiche  
 **Alors** il est **lisible et exploitable** — « il y a 18 mois » — et non arrondi à une unité qui écrase l'écart (FR-51)
 
-> 🟡 **partiel** — src/ecrans/Checklist.tsx:72 rend `il y a ${Math.floor(mois / 12)} an(s)` : de treize à vingt-trois mois, tout s'affiche « il y a 1 an(s) » — une fiche de treize mois et une fiche de vingt-trois mois se lisent identiquement, et le « an(s) » est une forme de machine, pas une phrase.
+> ✅ **tenu depuis le 25 août** — `direLAge` remplace l'arrondi : « il y a 18 mois » jusqu'à vingt-trois, puis « il y a 2 ans et 6 mois ». L'arrondi écrasait précisément l'écart que FR-51 demande de rendre exploitable — treize mois, on vérifie par acquit ; vingt-trois, la saison entière a changé de règlement. Essai unitaire : « l'âge d'une fiche n'écrase jamais l'écart », qui exige aussi qu'aucune forme de machine (« an(s) ») ne subsiste.
 
 
 **Étant donné** une fiche périmée  
@@ -2285,7 +2319,7 @@ En tant que **porteur du projet**, je veux **que les règles publiées par les c
 **Quand** on regarde ce qu'elles ont produit  
 **Alors** **au moins une ligne de conformité existe** chez un pilote ayant préparé un roulage sur l'un de ces trois circuits (FR-49, FR-50)
 
-> ❌ **NON TENU** — Requête du 25 août 2026 sur le projet mypaddock : `regle_organisateur` 0, `organisateur` 0, `source_recolte` actives 0 sur 5, `checklist_ligne` 0 dont `conformite` 0, `roulage` 4 dont 0 apparié à un circuit. Bout en bout, l'épique 13 n'a jamais produit une seule ligne de conformité — et trois verrous indépendants l'en empêchent : pas de semeur (recolte/index.mjs:152), pas de rattachement du roulage (src/db/depot.ts:243-246), pas de source active (A-FAIRE.md:96-98).
+> ❌ **NON TENU** — Requête du 25 août 2026 : `regle_organisateur` 0, `organisateur` 0, `source_recolte` actives 0 sur 5, `checklist_ligne` 0 dont `conformite` 0. Bout en bout, l'épique 13 n'a jamais produit une seule ligne de conformité. Trois verrous indépendants l'en empêchaient ; **l'un est levé le même jour** — le rattachement du roulage à son circuit (4 sur 4). Restent les deux qui demandent une décision et non un correctif : **pas de semeur** pour `regle_organisateur` (recolte/index.mjs:152 n'a que deux branches pour trois genres déclarés) et **aucune source active** (A-FAIRE.md:96-98, la clé d'extraction n'est pas posée). Ce sont eux, et eux seuls, qui tiennent maintenant FR-49 à FR-51 fermés.
 
 
 ## Épique 14 : Le cercle et le carnet partagé
