@@ -30,6 +30,7 @@ import { niveauDuGroupe } from '../../src/db/usure'
 import { CHARGEMENT_EMBARQUE, MOIS_AVANT_DOUTE, moisDepuis } from '../../src/db/checklist'
 import { nouveauCode } from '../../src/db/cercle'
 import { lireEnvironnement } from '../../src/product'
+import { direLAbri, type Abri } from '../../src/db/abri'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
@@ -292,6 +293,37 @@ const essais = [
     // sur l'hôte, donc sur le défaut prudent.
     egal(lireEnvironnement('prod', 'mypaddock-recette.vercel.app'), 'recette')
     egal(lireEnvironnement('', 'mypaddock.vercel.app'), 'production')
+  }),
+
+  /* ─── OÙ VIT LA SAISON ─────────────────────────────────────────────────── */
+  // Le silence est un CRITÈRE, pas un défaut d'affichage : un bloc qui reste
+  // après que le stockage est devenu persistant devient une publicité pour
+  // l'installation, et on cesse de le lire — donc on ne le lira pas non plus le
+  // jour où il dit quelque chose.
+  doit('rien ne s\'affiche quand le stockage est persistant', () => {
+    const abri: Abri = { persistant: true, installee: false, proposable: true, systeme: 'ios', menace: false }
+    egal(direLAbri(abri), null)
+    egal(direLAbri({ ...abri, installee: true, systeme: 'autre' }), null)
+  }),
+  doit('la menace nommée est celle du système, pas une menace générique', () => {
+    const base: Abri = { persistant: false, installee: false, proposable: false, systeme: 'ios', menace: true }
+    // iOS PLAFONNE DANS LE TEMPS — sept jours sans visite — et c'est le seul cas
+    // qui tombe tout seul sur un carnet ouvert onze fois par an.
+    const ios = direLAbri(base)
+    vrai(!!ios && /sept jours/.test(ios.texte), 'iOS doit nommer les sept jours')
+    vrai(!!ios && /écran d’accueil/.test(ios.geste ?? ''), 'iOS doit décrire le geste Safari')
+    // Ailleurs, l'éviction se fait sous pression de place : dire « sept jours »
+    // serait faux, et une menace fausse est une menace qu'on cesse de croire.
+    const autre = direLAbri({ ...base, systeme: 'autre' })
+    vrai(!!autre && /manque de place/.test(autre.texte), 'ailleurs, c’est la place')
+    vrai(!!autre && !/sept jours/.test(autre.texte), 'ailleurs, PAS les sept jours')
+  }),
+  doit('installée mais non persistante : le produit le dit quand même', () => {
+    // Le raccourci « installée donc protégée » n'est garanti nulle part. On
+    // énonce l'état réel, même quand aucun geste ne le règle.
+    const m = direLAbri({ persistant: false, installee: true, proposable: false, systeme: 'ios', menace: true })
+    vrai(!!m && /refusé/.test(m.titre), 'le refus doit être nommé')
+    egal(m?.geste, null)
   }),
 
   /* ─── LES CORPUS EMBARQUÉS ─────────────────────────────────────────────── */

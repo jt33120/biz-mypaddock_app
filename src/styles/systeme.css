@@ -291,6 +291,13 @@ body {
 .pile { display: flex; flex-direction: column; gap: 10px }
 .rang { display: flex; justify-content: space-between; align-items: baseline; gap: 12px }
 
+/* ─── CE QUI MENACE LA SAISON ──────────────────────────────────────────────
+   Le liseré est AMBRE et non rouge : rien n'est cassé, rien n'est perdu, et
+   dramatiser une information vraie est le meilleur moyen qu'on cesse de la
+   lire. Il porte le même jaune que « ce qui attend », parce que c'est ce que
+   c'est — quelque chose qui attend un geste. */
+.bloc.abri { border-left: 3px solid var(--plus-lent); }
+
 /* ─── LE BANDEAU D'ENVIRONNEMENT ───────────────────────────────────────────
    Il doit se voir sans rien coûter au produit : une bande fine, jaune, en haut,
    qui ne se referme pas et ne se scrolle pas. Le jaune est déjà la couleur de

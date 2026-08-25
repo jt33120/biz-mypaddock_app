@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ENVIRONNEMENT, EST_PRODUCTION, MOT_ENVIRONNEMENT, PRODUCT_NAME } from './product'
 import { demanderPersistance, ouvrirBase } from './db/powersync'
+import { direLAbri, lireAbri, proposerInstallation, surAbri, type Abri } from './db/abri'
 import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
   listerMachines, type Machine,
@@ -71,6 +72,9 @@ const GROUPES = ['Initiation', 'Intermédiaire', 'Confirmé', 'Expert']
 
 export default function App() {
   const [db, setDb] = useState<Db | null>(null)
+  /* NFR-1, seconde moitié : l'état de la persistance se LIT quelque part. Il
+     était demandé à chaque démarrage et le booléen était jeté. */
+  const [abri, setAbri] = useState<Abri | null>(null)
   const [panne, setPanne] = useState<string | null>(null)
   const [ecran, setEcran] = useState<Ecran>('accueil')
   const [liste, setListe] = useState<Liste>([])
@@ -153,6 +157,15 @@ export default function App() {
     setConseil(await conseilDuJour(base, aujourdhui()))
   }, [])
   useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
+
+  /* L'abri se relit au retour au premier plan et quand l'invitation arrive :
+     l'événement `beforeinstallprompt` est tiré une fois, tôt, et il ne repasse
+     pas — l'écran doit pouvoir se mettre à jour après coup. */
+  useEffect(() => {
+    const relire = () => { void lireAbri().then(setAbri) }
+    relire()
+    return surAbri(relire)
+  }, [])
 
   /**
    * ⚠ ET ELLE SE RECOMPOSE CHAQUE FOIS QU'ON OUVRE LA LISTE.
@@ -328,9 +341,10 @@ export default function App() {
           {MOT_ENVIRONNEMENT[ENVIRONNEMENT as Exclude<typeof ENVIRONNEMENT, 'production'>]}
         </p>
       )}
-      <div className="ecran" data-environnement={ENVIRONNEMENT}>
+      <div className="ecran" data-environnement={ENVIRONNEMENT}
+           data-abri={abri ? (abri.menace ? 'menace' : 'persistant') : 'inconnu'}>
         {ecran === 'accueil' && (
-          <Accueil db={db} src={src} conseil={conseil}
+          <Accueil db={db} src={src} conseil={conseil} abri={abri}
                    onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan}
                    onLegal={() => setEcran('legal')}
                    onAller={(vers, roulageId) => {
@@ -455,8 +469,8 @@ export default function App() {
    FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
    échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
    rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
-function Accueil({ db, src, conseil, onNouveau, onOuvrir, onLegal, onAller }: {
-  db: Db; src: Source | null; conseil: string | null
+function Accueil({ db, src, conseil, abri, onNouveau, onOuvrir, onLegal, onAller }: {
+  db: Db; src: Source | null; conseil: string | null; abri: Abri | null
   onNouveau: () => void; onOuvrir: (id: string) => void
   onLegal: () => void
   /** Chaque tâche de préparation MÈNE QUELQUE PART. Une liste de rappels dont
@@ -476,6 +490,11 @@ function Accueil({ db, src, conseil, onNouveau, onOuvrir, onLegal, onAller }: {
         </nav>
       </header>
       <ZoneTemporelle src={src} onNouveau={onNouveau} onOuvrir={onOuvrir} />
+      {/* ⚠ IL EST ICI, ET PAS DANS L'ÉCRAN DU COMPTE. Celui que ça menace est
+          justement celui qui n'a pas de compte : un inconnu venu d'une publicité
+          qui saisit sa première journée dans un onglet. Le mettre derrière le
+          compte, c'est le montrer à ceux qui sont déjà protégés. */}
+      <Abrite abri={abri} />
       {/* ⚠ LA PRÉPARATION N'APPARAÎT QUE SUR UN ROULAGE À VENIR, et jamais sur
           le dernier vécu. « Ce qui reste à faire » sur une journée déjà passée
           serait un reproche, et le produit ne reproche rien.
@@ -505,6 +524,41 @@ function Conseil({ texte }: { texte: string }) {
     <div className="conseil">
       <p className="libelle">Une chose à la fois</p>
       <p className="texte">{texte}</p>
+    </div>
+  )
+}
+
+/**
+ * CE QUI MENACE LA SAISON, DIT UNE FOIS, SANS INSISTER.
+ *
+ * Trois règles tiennent ce bloc, et elles sont plus importantes que son contenu :
+ *   ① Il DISPARAÎT dès que le stockage est persistant. Ce n'est pas une campagne
+ *     d'installation, c'est l'énoncé d'un état.
+ *   ② Il dit la CONSÉQUENCE avant le geste — « sept jours sans visite », pas
+ *     « installez notre application ».
+ *   ③ Il ne promet rien qu'il ne tienne : sur iOS il n'y a aucun bouton à
+ *     offrir, parce que Safari n'a jamais implémenté l'invitation. Un bouton qui
+ *     ouvrirait un menu système inexistant serait pire que la phrase.
+ */
+function Abrite({ abri }: { abri: Abri | null }) {
+  const [issue, setIssue] = useState<string | null>(null)
+  if (!abri) return null
+  const mot = direLAbri(abri)
+  if (!mot) return null
+
+  return (
+    <div className="bloc pile abri">
+      <div className="libelle">{mot.titre}</div>
+      <p className="texte">{mot.texte}</p>
+      {abri.proposable ? (
+        <button className="bouton secondaire" onClick={() => void proposerInstallation().then((i) => {
+          // Un refus ne se commente pas : c'est un choix, pas une erreur.
+          if (i === 'impossible') setIssue("Ce navigateur n'a pas ouvert l'installation.")
+        })}>
+          Poser {PRODUCT_NAME} sur l'écran d'accueil
+        </button>
+      ) : mot.geste ? <p className="note">{mot.geste}</p> : null}
+      {issue && <p className="note">{issue}</p>}
     </div>
   )
 }

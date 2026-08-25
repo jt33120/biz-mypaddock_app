@@ -76,6 +76,24 @@ console.log('   hors production, le bandeau est là :',
 console.log('   et il dit la conséquence, pas seulement le nom :',
   bandeau && /vraie base/.test(bandeau) ? 'oui' : env === 'production' ? 'sans objet' : 'NON')
 
+// ⚠ NFR-1, SECONDE MOITIÉ : L'ÉTAT DU STOCKAGE SE LIT QUELQUE PART.
+// `persist()` était demandé à chaque démarrage et le booléen JETÉ. Sur iOS,
+// Safari plafonne à sept jours le stockage d'un site qu'on ne revient pas
+// visiter — sur un carnet ouvert onze fois par an, la saison disparaît toute
+// seule, sans un message. Le produit ne peut pas l'empêcher ; il doit le DIRE.
+// Et se taire dès que le stockage est persistant : c'est un état énoncé, pas
+// une campagne d'installation.
+const abri = await page.getAttribute('.ecran', 'data-abri')
+const bloc = await page.isVisible('.bloc.abri')
+  ? (await page.textContent('.bloc.abri')).replace(/\s+/g, ' ').trim() : null
+console.log('abri :', abri, '· bloc :', bloc ? bloc.slice(0, 70) + '…' : 'aucun')
+console.log('   l\'état est lisible :', abri === 'menace' || abri === 'persistant' ? 'oui' : `NON (${abri})`)
+console.log('   menace dite / silence quand protégé :',
+  abri === 'menace' ? (bloc ? 'oui' : 'NON — MENACE TUE')
+    : bloc ? 'NON — IL HARCÈLE ALORS QUE C\'EST PROTÉGÉ' : 'oui')
+console.log('   la conséquence vient avant le geste :',
+  !bloc || /sept jours|manque de place/.test(bloc) ? 'oui' : 'NON')
+
 // 1. Une machine dans le garage.
 await onglet('GARAGE')
 await page.click('text=Reprendre la CBR 83')
