@@ -18,9 +18,13 @@ import { formaterPoids, TABLES_EMPORTEES } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
 import {
-  chargeDe, DEPENDANCES, direCombien, LIEN_DIFFERE, NOM_TABLE, ORDRE, PORTE_PROPRIETAIRE,
-  sansLesNuls,
+  chargeDe, DEPENDANCES, direCombien, LIEN_DIFFERE, MINES_A_ECRIRE, NOM_TABLE, ORDRE,
+  PORTE_PROPRIETAIRE, sansLesNuls,
 } from '../../src/db/sauvegarde'
+// Toutes les migrations telles qu'elles sont appliquées. Comme le YAML de
+// synchronisation : rien ne les relie au schéma local, et c'est le problème.
+const MIGRATIONS = import.meta.glob('../../supabase/migrations/*.sql',
+  { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 import { AppSchema, REFERENTIEL } from '../../src/db/schema'
 // Le fichier de règles tel qu'il est déployé, lu à la lettre. C'est un YAML et
 // non du code : rien ne le relie au schéma, et c'est précisément le problème.
@@ -570,6 +574,41 @@ const essais = [
       `${LIEN_DIFFERE.colonne} part au premier passage, donc en clé étrangère morte`)
     egal(differes, [{ id: 'i1', valeur: 'ph1' }])
     egal(charge[0].libelle, 'Vidange', 'le reste de la ligne a été perdu')
+  }),
+
+  doit('aucune colonne à défaut serveur ne peut apparaître sans écrivain', () => {
+    // ⚠ LE MÊME MOTIF QUE LE YAML DE SYNCHRONISATION : deux vérités séparées,
+    // dont une prend du retard. `chrono_visible` et `partage` sont arrivées au
+    // serveur le 19 août en `not null default false` ; personne ne les a écrites
+    // en local, et le défaut a vécu six jours sans qu'aucun essai puisse le voir.
+    // Cet essai reconstruit la liste au lieu de la croire.
+    const auServeur = new Set<string>()
+    for (const sql of Object.values(MIGRATIONS)) {
+      const net = sql.replace(/--[^\n]*/g, '')
+      for (const m of net.matchAll(/create table (?:if not exists )?(\w+)\s*\(([\s\S]*?)\n\)\s*;/gi))
+        for (const l of m[2].split('\n')) {
+          const c = l.match(/^\s*(\w+)\s+[\w[\]() ]+?\s+not null default/i)
+          if (c) auServeur.add(`${m[1]}.${c[1]}`)
+        }
+      for (const m of net.matchAll(/alter table (\w+)\s+add column (?:if not exists )?(\w+)[^;]*?not null default/gi))
+        auServeur.add(`${m[1]}.${m[2]}`)
+    }
+    vrai(auServeur.size > 25, `le lecteur de migrations n'a trouvé que ${auServeur.size} colonnes`)
+
+    // Seules comptent celles que le schéma local porte ET que l'adoption monte.
+    // Le référentiel est au schéma local mais ne remonte jamais (AD-12, `ORDRE`
+    // ne le contient pas) : une colonne à défaut y est sans conséquence.
+    const montees = new Set<string>(ORDRE)
+    const mines: string[] = []
+    for (const t of AppSchema.tables)
+      if (montees.has(t.name))
+        for (const c of t.columns)
+          if (auServeur.has(`${t.name}.${c.name}`)) mines.push(`${t.name}.${c.name}`)
+
+    const declarees = Object.entries(MINES_A_ECRIRE)
+      .flatMap(([t, cs]) => cs.map((c) => `${t}.${c}`))
+    egal(mines.sort(), declarees.sort(),
+      'une colonne à défaut serveur est au schéma local sans être déclarée : décide où elle s\'écrit')
   }),
 
   /* ─── LE CODE DE CERCLE — il se donne DE VIVE VOIX ────────────────────── */

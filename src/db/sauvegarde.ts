@@ -209,6 +209,37 @@ export const sansLesNuls = (ligne: Record<string, unknown>): Record<string, unkn
  * ça vivait au milieu d'un appel réseau. Le défaut des colonnes nulles a vécu
  * là, invisible, parce qu'il n'y avait rien à interroger.
  */
+/**
+ * LES MINES CONNUES — les colonnes que le serveur déclare `not null default …`
+ * ET que le schéma local porte, donc que le produit peut envoyer à nul.
+ *
+ * Le compte n'est PAS celui qu'on croit, et je l'ai su en le faisant compter par
+ * la machine plutôt qu'à la main : sur les cinquante-huit colonnes à défaut
+ * serveur, vingt-quatre sont au schéma local — mais quatorze appartiennent au
+ * RÉFÉRENTIEL, que la PWA lit sans jamais l'écrire (AD-12) et que `ORDRE` ne
+ * monte pas. Restent celles-ci, qui partent réellement.
+ *
+ * Chacune doit être ÉCRITE EXPLICITEMENT par son écrivain — la liste dit où.
+ * `sansLesNuls` est le filet ; ceci est la source, et une source qui dit la règle
+ * vaut mieux qu'un filet silencieux.
+ *
+ * ⚠ UN ESSAI UNITAIRE RECONSTRUIT CETTE LISTE depuis les migrations et le schéma
+ * local, et échoue si elle diverge. Une neuvième colonne ajoutée demain ne peut
+ * donc plus arriver sans qu'on décide où elle s'écrit. Les deux dernières sont
+ * arrivées comme ça — ajoutées au serveur le 19 août, jamais écrites en local,
+ * découvertes le 25.
+ */
+export const MINES_A_ECRIRE: Readonly<Record<string, readonly string[]>> = {
+  checklist_ligne: ['cochee'],              // src/db/checklist.ts — 0 dans les trois INSERT
+  document: ['genre'],                      // src/db/documents.ts:84-87
+  geste: ['partage'],                       // src/db/gestes.ts — à faux, explicitement
+  horloge: ['extrait_par_ia'],              // src/db/usure.ts:170-171
+  intervention: ['etat'],                   // src/db/usure.ts:208-210, src/db/atelier.ts:119-121, :143-145
+  mesure: ['valeur'],                       // src/db/mesures.ts:102-103
+  photo: ['etat', 'genre'],                 // src/db/photos.ts:169-172
+  roulage: ['chrono_visible', 'etat'],      // src/db/depot.ts — les deux dans le même INSERT
+}
+
 export const chargeDe = (
   table: string, lignes: Record<string, unknown>[], piloteId: string,
 ): { charge: Record<string, unknown>[]; differes: { id: string; valeur: unknown }[] } => {
