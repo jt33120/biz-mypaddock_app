@@ -3006,3 +3006,1074 @@ Racine : `/Users/juliantalou/Documents/PRO/03-PROJECTS/MyPaddock3` (chemins rela
 - **La pièce non montée comme état de première classe : 8.3-1 et 10.2-5**, mêmes lignes d'`atelier.ts`, tous deux tenus.
 - **Chevauchement de portes 8/9** : la porte de 9 exige les objets de 8, et les deux épiques revendiquent « refermer le vide saisonnier ». Il faut trancher laquelle porte les sources de l'accueil — sinon aucune rétrospective ne peut conclure sur l'une sans rouvrir l'autre.
 - **Référence fausse à corriger** : 8.1-5 cite **FR-38** (carnet partagé par lien) pour la distinction facture/photo. C'est FR-4 + la migration `20260819000018_preuve_atelier.sql`.
+
+
+---
+
+# Les récits des retours du 25 août 2026
+
+Douze retours de Julian après un usage réel, restructurés, challengés un par un,
+puis découpés. La méthode a été la sienne : *« un agent qui restructure, un agent
+qui critique et challenge, un agent qui planifie, un agent qui implémente, un
+agent qui fait la revue »*, et *« au maximum, cherche des librairies déjà
+existantes »*.
+
+**Ce que la relecture a d'abord établi : la moitié de ces demandes n'est pas une
+fonctionnalité manquante, mais un CHEMIN manquant.** Saisir une journée à venir
+marche déjà, l'accueil sait l'afficher, la préparation existe, la checklist
+existe — et pourtant, après validation, l'application demande le meilleur tour
+d'une journée qui n'a pas eu lieu. Ce n'est pas du code qui manque, c'est un
+enchaînement qui ment.
+
+**Trois demandes contredisent une règle écrite du produit.** Elles sont marquées
+⚠ dans les récits concernés, avec la ligne exacte qu'elles lèvent. Aucune n'est
+tranchée ici : lever une règle est une décision de Julian, et elle se date comme
+celles du 18 et du 23 août.
+
+## Épique 17 : Le roulage à venir — un chemin, pas une fonctionnalité
+
+**Objectif.** Faire qu'une journée annoncée s'ouvre sur ce qui la prépare, et jamais sur ce qui la raconte. Les quatre morceaux de R2 sont déjà écrits — la date future s'accepte (App.tsx:1056), l'accueil sait dire « Prochain roulage · dans N jours » (accueil.ts:98-120, App.tsx:664-693), « Avant d'y aller » se dérive (preparation.ts:64-138), la liste modifiable est livrée (Preparation.tsx:105-121) — et aucun n'est atteignable, parce que le tap sur le bloc de l'accueil ouvre un post-mortem (App.tsx:669 → ouvrirBilan → BilanEcran:1115-1202). Cette épique ne construit presque rien : elle raccorde, et elle répare les quatre endroits où une journée qui n'a pas eu lieu se compte déjà comme vécue.
+
+**La porte.** Un roulage dont `date_jour` est postérieure au jour courant existe en base. Cette porte est OUVERTE depuis le premier jour — la saison de démonstration en sème un (Garage.tsx:145-148, daté du 19 septembre 2026, pas du 12 comme Julian). Ce qui est fermé n'est pas la porte, c'est ce qu'il y a derrière.
+
+**Ce qu'elle refuse.** Certifier une préparation — aucun « prêt », aucun « 4 sur 7 », aucun pourcentage, aucune barre. Réclamer — rien ne relance, rien n'échoit, rien ne se décoche tout seul. Compter par avance — une journée annoncée n'entre dans aucun total, aucune moyenne, aucune horloge d'usure, aucune « dernière journée sur ce circuit ». Embarquer un intervalle — une ligne d'entretien identique pour tout le monde se coche sans être lue dès la deuxième fois, et cocher une ligne de frein donne le sentiment d'avoir fait le travail (Preparation.tsx:16-21).
+
+*5 récits · 40 critères · aucun tenu — rien n'est écrit.*
+
+
+### Récit 17.1 : Une journée annoncée est un projet, jamais un vécu
+
+En tant que pilote, je veux que la journée que j'annonce reste un projet tant que je n'y suis pas allé, afin que mes compteurs ne mentent pas et qu'on ne me demande pas le meilleur tour d'une journée qui n'a pas eu lieu.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** le 12 septembre saisi le 25 août  
+**Quand** je valide le formulaire  
+**Alors** l'application ne m'emmène PAS sur « Meilleur tour de la session » — App.tsx:364 enchaîne aujourd'hui `setEcran('session')` et App.tsx:1100 demande un chrono sur une journée qui n'existe pas encore
+
+**Étant donné** cette journée annoncée  
+**Quand** l'accueil affiche « X roulages » et « Y circuits »  
+**Alors** elle n'y est pas comptée — chiffres.ts:92-95 fait `count(*) FROM roulage` sans filtre de date ni d'état, et l'accueil annonce 6 pour 5 vécus
+
+**Étant donné** le bilan de saison  
+**Quand** il énonce sa complétude  
+**Alors** le 12 septembre n'est pas compté parmi les journées « sans chrono » — bilan.ts:57 filtre `etat = 'usage'`, ce qui ne sert à rien puisque creerRoulage écrit `usage` en dur (depot.ts:249-252), et FR-55 se retourne contre elle-même en annonçant un trou qui n'en est pas un
+
+**Étant donné** « Ce que tu sais de ce circuit »  
+**Quand** il affiche `sien.journees` et `derniere`  
+**Alors** la dernière journée n'est jamais une date à venir — circuits.ts:88-92
+
+**Étant donné** la première session, la première photo ou la première dépense rattachée à cette journée  
+**Quand** elle est saisie  
+**Alors** la journée devient vécue sans que rien ne me le demande : aucune case, aucune confirmation, aucune relance — FR-61 le permet déjà (« confirmé par le pilote OU par une mesure », prd.md:1244)
+
+**Étant donné** une cinquième lecture qui compterait des roulages, écrite après ce récit  
+**Quand** elle est ajoutée sans le prédicat partagé `etat='usage' AND date_jour <= :jour`  
+**Alors** un essai unitaire échoue — usure.ts:127,136 a la bonne discipline, bilan.ts en a la moitié, chiffres.ts et circuits.ts aucune : corriger les quatre requêtes une par une est exactement la manière dont le défaut est né
+
+**Étant donné** n'importe quel écran  
+**Quand** une journée à venir s'affiche  
+**Alors** rien ne dit combien de jours il « reste pour préparer » : « dans 23 jours » est un fait, « il te reste 23 jours » est une échéance déguisée (EXPERIENCE.md:105-108)
+
+> *Touche :* src/App.tsx, src/db/depot.ts, src/db/chiffres.ts, src/db/bilan.ts, src/db/circuits.ts, src/db/schema.ts, banc-rendu/unite/essais.ts
+
+
+### Récit 17.2 : Le tap sur « Prochain roulage » ouvre la préparation, pas le post-mortem
+
+En tant que pilote, je veux qu'un tap sur ma prochaine journée m'ouvre ce qui la prépare, afin de ne pas me voir proposer de déclarer une chute sur une journée qui n'a pas eu lieu.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** un roulage à venir  
+**Quand** je tape le bloc de l'accueil (App.tsx:669)  
+**Alors** je n'obtiens ni « Meilleur tour du jour · — », ni « Sessions · 0 », ni le bloc des chutes, ni « Saisir une session » en bouton primaire pleine largeur (App.tsx:1144-1200)
+
+**Étant donné** ce même écran  
+**Quand** il se rend  
+**Alors** il porte ce qui prépare : « Avant d'y aller » (dérivée, non cochable), le chargement (composé, cochable) et ce que j'ajoute — et son bouton primaire est « Ajouter une chose à faire »
+
+**Étant donné** que le chargement vit aujourd'hui DANS le bilan, derrière un tap (App.tsx:1178, Checklist.tsx:37)  
+**Quand** le bilan sort du chemin d'un roulage à venir  
+**Alors** le chargement reste atteignable : le composant se déplace, il ne se duplique pas — sinon on supprime la seule chose de R2 qui était déjà construite
+
+**Étant donné** le matin du 12 septembre à 6 h, en chargeant le camion  
+**Quand** j'ouvre l'application  
+**Alors** « Avant d'y aller » est encore là — accueil.ts:99 filtre `date_jour > ?` en strict, et App.tsx:505 ne rend `<Preparation>` que si `genre === 'a_venir'` : la liste disparaît le jour même où l'on s'en sert
+
+**Étant donné** ce même matin, une fois la première session saisie  
+**Quand** je rouvre  
+**Alors** la journée montre son chrono et ses sessions, et le basculement tient à un fait observable (une session existe), jamais à une heure ni à un réglage
+
+**Étant donné** l'écran d'une journée à venir  
+**Quand** je cherche où j'en suis — « 4 sur 7 », un pourcentage, une barre qui se remplit  
+**Alors** il n'y en a aucun : la liste énonce ce qui est fait, jamais ce qui manque
+
+**Étant donné** une journée déjà passée  
+**Quand** je l'ouvre  
+**Alors** aucune liste de préparation ne s'y affiche — « ce qui reste à faire sur une journée déjà passée serait un reproche » (App.tsx:498-505), et la symétrie doit tenir dans les deux sens
+
+> *Touche :* src/App.tsx, src/db/accueil.ts, src/ecrans/Preparation.tsx, src/ecrans/Checklist.tsx
+
+
+### Récit 17.3 : La liste d'avant d'y aller cesse d'être structurellement vide
+
+En tant que pilote, je veux que « vérifier l'huile » et « prendre l'assurance » apparaissent parce que le produit sait quelque chose sur MA moto, afin de ne pas cocher une liste générique que je cesserai de lire à la deuxième journée.
+
+*Taille : gros.*
+
+
+**Critères d'acceptation**
+
+
+⚠ CONTRADICTION NON TRANCHÉE, ET C'EST ELLE QUI FIXE LA TAILLE —
+**Étant donné** que preparation.ts:10-16 et checklist.ts:101-104 écrivent « un fait dérivé ne se stocke pas », et que Julian réclame huile / consommables / assurance en liste de base  
+**Quand** on choisit entre embarquer et dériver  
+**Alors** rien de ce récit ne s'écrit avant sa réponse : la contre-proposition ci-dessous est une proposition, pas une décision
+
+**Étant donné** que sa liste est aujourd'hui structurellement vide — preparation.ts:98 fait `if (!h.intervalle) continue`, la table `horloge` compte 0 ligne, aucun semeur n'existe dans corpus.ts et A-FAIRE §5 dit qu'aucune source de barème constructeur ne sera proposée  
+**Quand** la liste se dérive  
+**Alors** elle ne peut porter qu'UNE ligne, « L'engagement » : Julian ne demande pas une liste embarquée par paresse, il la demande parce que la sienne est vide
+
+**Étant donné** une moto sans aucune horloge  
+**Quand** j'ouvre l'état vide de la préparation (Preparation.tsx:60-70)  
+**Alors** on me propose de poser les postes de CETTE moto en un geste — vidange, plaquettes, chaîne, liquide de frein, pneus, filtre à air — tous avec `intervalle = null`, ce que poserHorloge accepte déjà (usure.ts:163-174)
+
+**Étant donné** une horloge posée sans intervalle  
+**Quand** elle compte  
+**Alors** elle ne produit AUCUNE ligne d'avant-roulage et n'invente aucun verdict : sans barème elle compte sans jamais échoir (FR-44)
+
+**Étant donné** une saison sans aucune dépense de poste `assurance` (budget.ts:31)  
+**Quand** la liste se dérive  
+**Alors** elle porte une ligne qui DIT le fait et mène au budget, exactement comme « L'engagement » (preparation.ts:117-135) — et cette ligne disparaît dès que la dépense existe, au lieu de rester cochable à côté d'une donnée que le produit détient déjà
+
+**Étant donné** la même horloge de la même moto  
+**Quand** elle s'affiche au garage et dans l'avant-roulage  
+**Alors** les deux écrans donnent le même nombre et le même seuil — aujourd'hui usure.ts:143 additionne des coefficients, preparation.ts:101 fait un `count(*)` brut, et le seuil est `ponderes >= intervalle` d'un côté (Usure.tsx:49) contre `n > intervalle` de l'autre (preparation.ts:106)
+
+**Étant donné** que ces deux erreurs se compensent EXACTEMENT aujourd'hui (n vaut pondérés + 1, donc `n > i` équivaut à `pondérés >= i`)  
+**Quand** on en corrige une seule  
+**Alors** toute la liste se décale d'un roulage : les deux se corrigent dans le même geste ou aucune
+
+**Étant donné** le roulage qu'on prépare  
+**Quand** l'horloge compte  
+**Alors** il ne se compte pas lui-même — preparation.ts:99-104 compte `date_jour <= ?` avec la date DU roulage préparé, et le commentaire qui le surplombe (preparation.ts:90-93) décrit un code qui n'existe pas
+
+**Étant donné** un chiffre d'usure affiché dans l'avant-roulage  
+**Quand** il s'affiche  
+**Alors** sa complétude est dans le même écran, à côté de lui, comme au garage (Usure.tsx:59-67) — FR-40 et l'interdiction n°2 du §6 du PRD n'ont pas d'exception d'écran
+
+**Étant donné** une ligne d'entretien quelconque  
+**Quand** elle est cochable  
+**Alors** elle ne l'est pas : ce qui est dérivé s'énonce et ne se coche jamais — cocher une ligne de plaquettes donne le sentiment d'avoir fait le travail sans l'avoir fait
+
+> *Touche :* src/db/preparation.ts, src/db/usure.ts, src/db/checklist.ts, src/db/budget.ts, src/ecrans/Preparation.tsx, src/ecrans/Usure.tsx, A-FAIRE.md
+
+
+### Récit 17.4 : Ce que j'ajoute moi-même, et ce que le circuit a publié
+
+En tant que pilote, je veux ajouter « réserver la remorque » et « réparer le sabot » à la main, et que les règles publiées par Pau-Arnos arrivent sans effacer mes coches, afin que ma liste soit la mienne et qu'elle ne se retourne jamais contre moi.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** l'ajout libre, déjà livré (Preparation.tsx:105-121, checklist.ts:194-206)  
+**Quand** j'ouvre l'écran du roulage à venir  
+**Alors** le champ d'ajout est en bas de cet écran, et non enfoui dans un bloc de l'accueil — rien à construire, seulement à rendre atteignable
+
+**Étant donné** une ligne que j'ai ajoutée  
+**Quand** elle s'affiche  
+**Alors** elle se coche, et ce qui est dérivé ne se coche pas : l'asymétrie est déjà juste et ne bouge pas
+
+**Étant donné** le lien « retirer » (Preparation.tsx:97-99)  
+**Quand** il s'affiche  
+**Alors** il est en rouge et dit ce qui part — R12 s'applique ici aussi, et il supprime aujourd'hui sans confirmation ni couleur
+
+**Étant donné** que je tape « assurance » alors que la ligne dérivée « L'assurance » est déjà là  
+**Quand** la liste se rend  
+**Alors** le produit ne me montre pas deux fois la même chose sans le dire — `memeTache` (preparation.ts:145) ne rapproche que les libellés strictement identiques à plat, et `ajouter()` ne dé-doublonne pas
+
+**Étant donné** un chargement composé le jeudi soir hors ligne, et les règles de Pau-Arnos qui redescendent le vendredi  
+**Quand** je rouvre la liste  
+**Alors** ces règles s'ajoutent comme lignes de conformité NON COCHÉES et aucune coche existante ne bouge — aujourd'hui `composer` rend 0 dès qu'une ligne existe (checklist.ts:137-141) et les règles sont perdues pour ce roulage, définitivement, sans un mot
+
+**Étant donné** un pilote sans compte — le mode par défaut du produit — dont `circuit_id` restera nul pour toujours (depot.ts:249-252, résolution serveur seule : migration 20260825000003)  
+**Quand** la section conformité s'affiche  
+**Alors** elle distingue « aucune règle publiée » de « je n'ai pas pu lire les règles » : le texte d'absence actuel dit que le produit ne sait rien, alors qu'il sait et n'a pas pu lire
+
+**Étant donné** une ligne venue d'un organisateur ou d'un circuit  
+**Quand** elle s'affiche  
+**Alors** elle porte sa source et sa date, et aucun écran ne dit « conforme », « validé » ou « admis » (FR-50)
+
+> *Touche :* src/db/checklist.ts, src/db/preparation.ts, src/ecrans/Preparation.tsx, src/ecrans/Checklist.tsx, src/db/depot.ts, supabase/migrations/20260825000003_le_roulage_trouve_son_circuit.sql
+
+
+### Récit 17.5 : Ce que je vais chercher ce jour-là
+
+En tant que pilote, je veux poser avant la journée ce que je vais y chercher, afin de le relire le soir sans que personne me note.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+⚠ LA RÈGLE QUI S'Y OPPOSAIT EST TOMBÉE, ET C'EST JULIAN QUI L'A LEVÉE —
+prd.md:1022-1026 : « Séries, objectifs et caps annoncés redeviennent possibles… FR-6bis tombe avec elle », et la quatrième prohibition d'écran de l'épine UX tombe également. Ce récit n'est donc pas interdit. Trois choses résistent malgré tout, et deux sont des contradictions internes
+
+⚠ LE MOT RESTE INTERDIT —
+**Étant donné** EXPERIENCE.md:114 (« jamais performance, jamais objectif »), non levé le 18 août  
+**Quand** l'écran nomme la chose  
+**Alors** soit le lexique est levé par une décision datée, soit elle porte un autre nom — le produit ne peut pas afficher un mot que sa propre épine interdit
+
+⚠ LE PRÉCÉDENT QUI DOIT INQUIÉTER —
+**Étant donné** que Julian a DÉJÀ rejeté un champ de texte libre à remplir avant de rouler, verbatim dans le code (App.tsx:566-570 : « ça fait un peu gamin, personne va prendre le temps de le remplir… c'est quoi cette merde »), et que c'était le plan si-alors, l'intervention la mieux établie du dossier  
+**Quand** on ouvre un champ vide « tes objectifs »  
+**Alors** c'est le même objet sous un autre nom et il finira pareil
+
+**Étant donné** la journée du 12 septembre  
+**Quand** je veux dire ce que j'y cherche  
+**Alors** le produit PROPOSE d'abord ce qu'il sait déjà — les virages de la fiche circuit (circuits.ts:78-82), les caps de `discipline` (gestes.ts:23-31), le fait « Jamais roulé ici » déjà calculé (App.tsx:695) — et le texte libre vient en dernier
+
+**Étant donné** ce que j'ai visé  
+**Quand** la journée est passée  
+**Alors** rien ne se coche, rien ne dit « atteint », rien ne dit « 2 sur 3 » : un objectif non coché le soir est un échec affiché sans qu'aucun libellé ait à le dire
+
+**Étant donné** la courbe de progression  
+**Quand** un chrono visé existerait  
+**Alors** aucune cible n'apparaît sur le tracé et aucun écart ne se calcule — courbe.ts:14-20 et epics.md:1815-1834 refusent la tendance, la droite et le « à ce rythme », et un chrono visé fabrique un verdict le soir même
+
+**Étant donné** les caps de `bravoure`  
+**Quand** je choisis ce que je vais chercher  
+**Alors** seuls les caps de `discipline` sont proposés — `partageableAutomatiquement` (gestes.ts:60-61) sait déjà faire la distinction, coût nul : viser « genou gauche posé » est littéralement l'enchaînement de la chute fondatrice, et lever ça demande une décision datée comme celle du 18 août
+
+**Étant donné** le stockage  
+**Quand** on choisit où vit ce que je vise  
+**Alors** c'est une 5e catégorie `objectif` sur `checklist_ligne` — un mot dans `Categorie` (checklist.ts:28), un dans `NOM_CATEGORIE`, une ligne dans le `check` serveur (migration 20260823000001:20), et `CHARGEMENT` l'exclut déjà par construction — et non une table neuve, qui coûterait schema.ts + migration + ORDRE + DEPENDANCES + DEFAUTS_SERVEUR + les règles PowerSync + l'essai unitaire : facteur dix
+
+**Étant donné** une cinquième catégorie ajoutée  
+**Quand** elle n'est rangée ni du côté du chargement ni du côté de la préparation  
+**Alors** l'essai unitaire écrit le 25 août échoue — c'est exactement le défaut bloquant qui a rendu un chargement définitivement incomposable (epics.md:2184)
+
+> *Touche :* src/db/checklist.ts, src/db/gestes.ts, src/db/circuits.ts, src/db/courbe.ts, src/App.tsx, supabase/migrations/20260823000001_preparation_et_skin_equipement.sql, _bmad-output/planning-artifacts/ux-designs/ux-MyPaddock-2026-08-18/EXPERIENCE.md
+
+## Épique 18 : Les photos — l'album, et ce qui ne quitte jamais le téléphone
+
+**Objectif.** Faire d'une journée un album qu'on regarde, et dire une bonne fois ce que le produit garde et ce qu'il n'a jamais pris. R4b n'est pas « dur » ni « con » : c'est impossible — aucune API navigateur ne donne accès à la pellicule, File System Access est absent de Safari, les handles persistables aussi, et Web Share Target est ouvert chez WebKit depuis février 2019 (bug 194593, toujours NEW). Mais ce que Julian cherche, le produit le fait DÉJÀ : `reduire` ramène le côté long à 1600 px en WebP q0,82 (photos.ts:63-86), son original 48 Mpx n'est jamais lu ni envoyé. Il y a une phrase à lui dire, pas une architecture à inventer.
+
+**La porte.** Un roulage porte au moins deux photos ET le versement d'image aboutit sur l'appareil de Julian. La seconde moitié de cette porte est aujourd'hui FERMÉE, et personne ne le sait : `ecrireLocale` appelle `h.createWritable()` (photos.ts:100-105), livré dans Safari 26 seulement.
+
+**Ce qu'elle refuse.** Prétendre atteindre la pellicule — aucun tag, aucun pointeur vers un fichier de l'appareil, un pointeur ment dès la première suppression et serait un fait dérivé stocké. Mélanger un cliché et un justificatif — le genre `facture` existe sur la même table (photos.ts:123). Charger soixante photos d'un coup — l'onglet meurt sans erreur rattrapable (photos.ts:54). Classer, noter, élire « la meilleure ».
+
+*4 récits · 24 critères · aucun tenu — rien n'est écrit.*
+
+
+### Récit 18.1 : Le versement d'image marche sur le téléphone qu'on a
+
+En tant que pilote sur un iPhone qui n'est pas à jour, je veux qu'une photo versée au paddock soit gardée, afin de ne pas découvrir au retour que rien n'a été enregistré.
+
+*Taille : gros.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** un iPhone sous iOS 18 ou antérieur  
+**Quand** je verse une photo  
+**Alors** elle est gardée — aujourd'hui `h.createWritable` est `undefined` (livré dans Safari 26.0, septembre 2025) et l'appel lève un TypeError : photos.ts:100-105
+
+**Étant donné** cet échec  
+**Quand** il se produit  
+**Alors** il emporte TOUT le chemin média — `verserPhoto`, `verserPhotoMachine`, `verserPhotoEquipement` et `verserDocument` (documents.ts:74, qui importe `ecrireLocale`) : pas d'album, pas de portrait de moto, pas de manuel d'atelier, pas de facture
+
+**Étant donné** le message affiché  
+**Quand** le versement échoue pour un défaut d'API  
+**Alors** il ne dit pas « L'image n'a pas pu être préparée sur ce téléphone » (Photos.tsx:53) : il dit ce qui manque, ce qui est gardé et ce qui va se passer
+
+**Étant donné** la sonde qui affirme « OPFS confirmé, persist() accordé » (Sonde.tsx:10)  
+**Quand** elle rend son verdict  
+**Alors** elle a réellement ÉCRIT un octet et l'a relu, pas seulement obtenu un répertoire — une sonde qui ne mesure pas ce qui casse est pire qu'aucune sonde
+
+**Étant donné** un chemin de repli  
+**Quand** il est écrit  
+**Alors** aucune photo ne se perd en silence : soit elle est gardée, soit le pilote le sait tout de suite
+
+**Étant donné** le banc  
+**Quand** ce récit est déclaré fini  
+**Alors** un essai exerce le versement sur un navigateur sans `createWritable` et échoue si le repli manque
+
+> *Touche :* src/db/photos.ts, src/db/documents.ts, src/ecrans/Sonde.tsx, src/ecrans/Photos.tsx
+
+
+### Récit 18.2 : L'album d'une journée
+
+En tant que pilote, je veux revoir les photos d'un roulage en album, afin de retrouver ma journée plutôt qu'une bande de vignettes qui défile.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** un roulage avec quinze photos  
+**Quand** j'ouvre son album  
+**Alors** c'est une grille, et un tap ouvre une photo en grand avec la navigation d'une photo à l'autre — aujourd'hui il n'y a qu'une bande horizontale (Photos.tsx:70-74) et aucune ouverture en grand
+
+**Étant donné** le commentaire de systeme.css:503 qui a tranché la bande contre la grille (« au paddock on en verse une ou deux, pas vingt, et une grille à trous fait vide »)  
+**Quand** la grille arrive  
+**Alors** la décision est explicitement retournée et datée, pas contournée en silence — et elle ne tient que si 18.3 la précède
+
+**Étant donné** `.vignette` déclaré DEUX FOIS au premier niveau de systeme.css — ligne 507 (`height:96px; width:auto`) et ligne 606 (`width:84px; height:84px; overflow:hidden`), la seconde gagnant par cascade  
+**Quand** l'album hérite de la collision  
+**Alors** la vignette a la taille que son commentaire annonce, ou la seconde règle est renommée : elle ne sert qu'aux pièces d'atelier (Poste.tsx)
+
+**Étant donné** soixante photos de saison  
+**Quand** je fais défiler l'album  
+**Alors** l'onglet ne meurt pas : `charger()` (Photos.tsx:28) crée un `URL.createObjectURL` par photo et ne révoque l'ancien lot qu'au setState suivant — chargement paresseux, révocation à la sortie de vue
+
+**Étant donné** une facture d'atelier versée sur le même roulage (genre `facture`, photos.ts:123, schema.ts:240-243)  
+**Quand** l'album des clichés s'affiche  
+**Alors** elle n'y est pas : « la photo MONTRE un état, la facture PROUVE une dépense »
+
+**Étant donné** une photo que je ne veux plus  
+**Quand** je la supprime  
+**Alors** elle part seule, en rouge, sans emporter les autres — aujourd'hui seule `supprimerRoulage` les efface, en masse (depot.ts:323-345)
+
+**Étant donné** l'album  
+**Quand** je le regarde  
+**Alors** rien n'est classé, noté, mis en avant ni élu « la meilleure » : il énonce ce qui a été pris
+
+**Étant donné** le choix technique  
+**Quand** on cherche une bibliothèque  
+**Alors** on n'en prend aucune : PhotoSwipe (~45 Ko) et yet-another-react-lightbox (~30 Ko) apportent coins arrondis, flèches SF-Symbols et fondus, qu'il faudrait désécrire à coups de `!important` contre le pixel 16 bits — une grille `repeat(auto-fill, minmax(96px,1fr))` plus un plein écran font 40 lignes
+
+> *Touche :* src/ecrans/Photos.tsx, src/db/photos.ts, src/styles/systeme.css, src/db/depot.ts
+
+
+### Récit 18.3 : Verser plusieurs photos d'un coup
+
+En tant que pilote, je veux choisir dix photos d'un seul geste, afin que l'album se remplisse au lieu de rester à trois vignettes.
+
+*Taille : petit.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** le sélecteur iOS  
+**Quand** je choisis mes photos  
+**Alors** je peux en prendre plusieurs — Photos.tsx:104 passe `e.target.files?.[0]` et l'input n'a pas l'attribut `multiple` : vingt photos, c'est vingt allers-retours, et l'album ne se remplira jamais
+
+**Étant donné** dix photos choisies d'un coup  
+**Quand** elles se versent  
+**Alors** elles se versent EN SÉRIE : `reduire()` alloue un canevas de 1600 px, et dix en vol tuent l'onglet (photos.ts:54, « l'onglet meurt sans erreur rattrapable »)
+
+**Étant donné** que la neuvième échoue  
+**Quand** le versement s'arrête  
+**Alors** les huit premières restent versées et le produit dit laquelle a manqué
+
+**Étant donné** le versement en cours  
+**Quand** il dure  
+**Alors** ce qui est déjà versé s'affiche au fur et à mesure, et aucun compteur ne dit « 4 sur 10 »
+
+> *Touche :* src/ecrans/Photos.tsx, src/db/photos.ts
+
+
+### Récit 18.4 : Ce que le produit garde, dit une fois pour toutes
+
+En tant que pilote, je veux savoir exactement ce qui quitte mon téléphone, afin de décider en connaissance de cause au lieu d'imaginer un cloud qui avale mes photos.
+
+*Taille : petit.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** la question de Julian (« on ne sauvegarde pas les photos dans notre cloud »)  
+**Quand** le produit répond  
+**Alors** il dit ce qu'il fait vraiment : une vignette de 1600 px en WebP q0,82, ~200 à 400 Ko, et l'original 48 Mpx en HEIC n'est jamais lu en entier, jamais téléversé, jamais touché (photos.ts:26, 63-86)
+
+**Étant donné** qu'aucune API navigateur ne donne accès à la photothèque, n'y écrit un tag ni ne rouvre un fichier après rechargement  
+**Quand** on cherche à « taguer les photos de l'appareil »  
+**Alors** on ne stocke AUCUN pointeur : iOS ne rend pas de nom stable (une capture arrive en `image.jpg`), aucune API ne rouvre le fichier sans que l'utilisateur le repointe, et l'album afficherait des cases vides avec un bouton « retrouve-la toi-même »
+
+**Étant donné** un pilote qui ne veut rien envoyer  
+**Quand** il ouvre le compte  
+**Alors** un réglage coupe l'envoi cloud et les photos restent visibles hors ligne — aujourd'hui il n'existe aucun réglage : dès qu'il y a un compte et du réseau, ça part (photos.ts:269-300, App.tsx:252-266)
+
+**Étant donné** qu'on discute de couper le cloud  
+**Quand** on tranche  
+**Alors** le coût du stockage est chiffré quelque part : il n'est écrit nulle part dans le dépôt, et c'est ce chiffre qui devrait décider
+
+**Étant donné** que le stockage devienne un jour le problème  
+**Quand** on cherche le levier  
+**Alors** c'est `COTE_LONG` et la qualité WebP — 1600/0,82 vers 1200/0,75 divise le poids par ~2,2 sans changer une ligne d'architecture — et jamais la pellicule
+
+**Étant donné** la page légale (Legal.tsx)  
+**Quand** elle décrit ce qui est envoyé  
+**Alors** elle dit la vignette, pas « vos photos »
+
+> *Touche :* src/db/photos.ts, src/ecrans/Compte.tsx, src/ecrans/Legal.tsx, src/App.tsx
+
+## Épique 19 : L'argent — au mois comme à la saison
+
+**Objectif.** Que le budget dise sa période, qu'une dépense porte sa date, qu'on la saisisse d'où on est, et que ce qu'on en montre reste un constat. Le budget n'est pas « faux » : il est ANNUEL et l'a toujours été (`budget_saison`, schema.ts:176-179, une ligne par année). Ce qui est faux, c'est que rien n'a empêché la lecture mensuelle — le libellé « Budget de la saison {annee} » (App.tsx:1258) est loin du champ, le placeholder dit « 0 », et rien ne réaffiche la période une fois le montant posé.
+
+**La porte.** Une dépense existe et son montant est lu quelque part — ouverte depuis le premier jour. Ce qui est fermé, c'est le mois : `depense` n'a AUCUNE date (schema.ts:125-138), et `creerDepense` comme `depenserSur` ne gardent que l'année via `anneeSaison(d.date)` (depot.ts:419). Un total mensuel est aujourd'hui impossible à calculer sur les données existantes.
+
+**Ce qu'elle refuse.** La tendance, la projection, le « à ce rythme », le reste-à-dépenser. Le verdict au dépassement — la jauge ne change pas de couleur en approchant du plafond, délibérément (systeme.css:453-455 : « dépasser son budget n'est pas une faute »). Deux chemins d'écriture qui produisent des lignes incompatibles. Une barre qui se remplit vers un plafond mensuel.
+
+*4 récits · 23 critères · aucun tenu — rien n'est écrit.*
+
+
+### Récit 19.1 : Le budget dit sa période, à la saisie et à la lecture
+
+En tant que pilote, je veux voir la période à côté du chiffre que je tape et du chiffre que je relis, afin de ne plus saisir 500 en pensant « par mois ».
+
+*Taille : petit.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** le champ de budget  
+**Quand** je tape 500  
+**Alors** la période est écrite À CÔTÉ du champ — aujourd'hui elle est dans un `<label>` au-dessus et le placeholder dit « 0 » (App.tsx:1258-1266)
+
+**Étant donné** 500 posés  
+**Quand** le chiffre se relit plus tard  
+**Alors** sa période est encore là, à l'écran des chiffres comme dans le bilan de saison (App.tsx:1245-1254, Saison.tsx:91-96)
+
+**Étant donné** un consommé de 2180 € sur un budget de 500 €  
+**Quand** la jauge s'affiche  
+**Alors** le dépassement est dit en clair : la jauge est bornée à 100 % par `Math.min` (App.tsx:1253) et une barre pleine ne distingue pas 501 € de 2180 €
+
+**Étant donné** ce dépassement  
+**Quand** il s'affiche  
+**Alors** rien ne devient rouge, rien ne dit « dépassé », rien ne reproche — systeme.css:453-455 est une décision écrite, et la lever demande une réponse de Julian, pas une initiative
+
+**Étant donné** une réponse « c'était bien 6000 € pour l'année »  
+**Quand** ce récit est fini  
+**Alors** il n'a coûté aucune migration : c'est un libellé, et 19.2 reste indépendant
+
+> *Touche :* src/App.tsx, src/ecrans/Saison.tsx, src/styles/systeme.css, src/db/depot.ts, src/db/schema.ts
+
+
+### Récit 19.2 : Une dépense porte sa date
+
+En tant que pilote, je veux savoir ce que j'ai dépensé en juillet, afin de suivre mon argent au mois et pas seulement à la saison.
+
+*Taille : gros.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** une dépense saisie le 12 septembre  
+**Quand** je regarde septembre  
+**Alors** elle y est — aujourd'hui `depense` n'a aucune date et les deux fonctions d'écriture jettent le jour et le mois (depot.ts:421-437, budget.ts:89-105)
+
+**Étant donné** une dépense de cible `machine` ou `saison` — l'assurance, les pneus, la remorque  
+**Quand** on cherche son mois  
+**Alors** il existe : seules les dépenses de cible `roulage` pourraient être datées indirectement par `roulage.date_jour`, et tout le reste n'a aucun mois, ni stocké ni reconstituable
+
+**Étant donné** les dépenses déjà saisies, qui resteront sans mois pour toujours  
+**Quand** elles s'affichent  
+**Alors** l'écran le DIT, exactement comme « Sans poste » le dit déjà (Budget.tsx:116-126) — la colonne `poste` a créé le même précédent et remonte à `null` plutôt que d'être rangée d'office (budget.ts:70-76)
+
+**Étant donné** la nouvelle colonne  
+**Quand** elle est ajoutée  
+**Alors** elle l'est des deux côtés (SQLite + Postgres) et passe par `ORDRE`, `DEPENDANCES` et `DEFAUTS_SERVEUR` (sauvegarde.ts:52, 63, 197-215) — l'ordre d'envoi a déjà été faux quatre fois sur ce produit, deux fois découvert des jours plus tard
+
+**Étant donné** cette colonne oubliée dans l'un des trois  
+**Quand** le banc tourne  
+**Alors** l'essai unitaire qui confronte la carte à `ORDRE` échoue
+
+**Étant donné** les totaux mensuels  
+**Quand** ils s'affichent  
+**Alors** aucun mois ne se compare au précédent, aucun « + 40 % », aucune couleur sur un mois cher, aucun reste-à-dépenser
+
+> *Touche :* src/db/schema.ts, src/db/depot.ts, src/db/budget.ts, src/db/sauvegarde.ts, supabase/migrations, banc-rendu/unite/essais.ts
+
+
+### Récit 19.3 : Un seul chemin d'écriture, et le raccourci depuis l'accueil
+
+En tant que pilote, je veux noter une dépense depuis l'accueil en un tap, afin de ne pas devoir ouvrir une journée pour dire que j'ai payé mes pneus.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** les deux saisies existantes  
+**Quand** chacune écrit une ligne  
+**Alors** elles écrivent la même chose — aujourd'hui `Depense.tsx` est le seul à proposer la cible `roulage` (Depense.tsx:84-87) et appelle `creerDepense`, qui n'écrit JAMAIS de `poste` (depot.ts:429-431), tandis que `Budget.tsx` appelle `depenserSur`, qui écrit le poste mais ne propose que `machine` et `saison` (Budget.tsx:146, 166-173)
+
+**Étant donné** la tâche dérivée « L'engagement », qui cherche `cible='roulage' AND poste='engagement'` (preparation.ts:126-127)  
+**Quand** je paie mon engagement dans l'application  
+**Alors** la tâche disparaît — aujourd'hui aucune saisie possible dans le produit ne peut produire cette ligne, donc elle ne disparaît jamais de la préparation
+
+**Étant donné** l'accueil  
+**Quand** je veux noter une dépense sans roulage ouvert  
+**Alors** le raccourci y est en un tap, et n'exige ni journée ni machine — aujourd'hui l'écran `depense` n'est monté que si `courant && bilan` (App.tsx:399-403) et le seul chemin depuis l'accueil est conditionnel à un roulage à venir sans engagement saisi
+
+**Étant donné** ce raccourci  
+**Quand** il s'affiche  
+**Alors** il ne réclame rien : aucun « tu n'as rien saisi ce mois-ci », aucune pastille, aucun rappel
+
+**Étant donné** une dépense saisie par le raccourci  
+**Quand** elle est écrite  
+**Alors** elle porte son poste, sa cible et sa date : un raccourci qui produit une ligne incomplète recrée le défaut qu'on vient de corriger
+
+> *Touche :* src/App.tsx, src/ecrans/Depense.tsx, src/ecrans/Budget.tsx, src/db/depot.ts, src/db/budget.ts, src/db/preparation.ts
+
+
+### Récit 19.4 : Ce que l'argent a le droit de montrer
+
+En tant que pilote, je veux voir où part mon argent, par poste et par mois, afin de comprendre ma saison sans qu'on me dise si j'ai bien fait.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** les huit postes déjà calculés par `parPoste` (budget.ts:77-85)  
+**Quand** ils s'affichent  
+**Alors** c'est un tracé lisible et non une liste de texte repliée derrière un tap (Budget.tsx:60-111)
+
+**Étant donné** les mois de la saison  
+**Quand** ils s'affichent  
+**Alors** chaque mois porte son total et la part de chaque poste — et ce récit ne peut pas commencer avant 19.2 : la donnée n'existe pas
+
+**Étant donné** le graphe  
+**Quand** je le regarde  
+**Alors** il ne porte aucune droite de tendance, aucune projection, aucun « à ce rythme », aucune cible — la règle du chrono (epics.md:1815-1834, « une fiction qui fixe un objectif que personne n'a choisi ») s'applique telle quelle à l'argent, ou Julian la lève explicitement
+
+**Étant donné** un mois plus cher que le précédent  
+**Quand** il s'affiche  
+**Alors** rien ne le colore, rien ne le compare, rien ne le juge : un graphe de coût qui monte est très près d'un verdict
+
+**Étant donné** le tracé  
+**Quand** on cherche la bibliothèque qui le dessine  
+**Alors** il n'y en a aucune : `Courbe.tsx:46` est un `<svg>` écrit à la main en `crispEdges`, package.json n'a aucune dépendance d'UI, et NFR-4 interdit tout CDN
+
+**Étant donné** la maquette  
+**Quand** elle propose une jauge pour l'argent  
+**Alors** elle est refusée : le portefeuille énonce, une jauge jugerait
+
+⚠ « Plein d'analytiques intéressantes » n'est pas énumérable en l'état —
+**Étant donné** qu'aucune liste n'existe  
+**Quand** on cadre ce récit  
+**Alors** la liste vient de Julian d'abord, sinon il n'y a rien à mettre en échec et le récit ne vaut rien
+
+> *Touche :* src/ecrans/Budget.tsx, src/ecrans/Courbe.tsx, src/db/budget.ts, src/db/bilan.ts, src/ecrans/Saison.tsx
+
+## Épique 20 : Le produit a une figure — l'ouverture et les icônes
+
+**Objectif.** Qu'on reconnaisse MyPaddock à la première seconde, et qu'un écran d'atelier se lise sans se lire. Aujourd'hui le produit s'ouvre sur deux mots gris de 12 px (App.tsx:289, `.libelle` en --encre-faible, systeme.css:119) sur une page qui n'est même pas peinte, et son écran le plus dense — Entretien / Amélioration / Bricoles — ne se distingue que par un liseré gauche de 3 px (systeme.css:222-225). La chaîne pixel existe et n'est jamais mobilisée à ces deux endroits.
+
+**La porte.** Deux conditions observables, et elles n'ouvrent pas les mêmes récits. ① L'ouverture : au tout premier repaint, le fond est peint — fermée aujourd'hui, index.html:22-24 ne sert qu'un `<div id="root">` vide et le fond --nuit n'arrive qu'avec le bundle (main.tsx:3). ② Les icônes : un écran porte au moins deux entrées de même forme qu'il faut distinguer — ouverte, l'atelier en a trois depuis l'épique 8.
+
+**Ce qu'elle refuse.** L'emoji — rendu par la police du système, doré sur iOS, plat sur Android, absent d'un WebView pauvre (Trophee.tsx ①). Une icône à la place d'un fait mesuré — la courbe du chrono est tracée, elle ne s'illustre pas. Une pastille qui relance sur ce qui attend (FR-48). Une bibliothèque qui apporte son propre langage visuel, ou une fonte d'icônes de 53 Ko pour 1029 glyphes inutilisés alors que NFR-4 interdit tout CDN. La couleur seule pour porter le sens (UX-DR8).
+
+*4 récits · 25 critères · aucun tenu — rien n'est écrit.*
+
+
+### Récit 20.1 : L'écran de chargement, peint avant React
+
+En tant que pilote qui ouvre l'application, je veux voir tout de suite quelque chose qui ressemble au produit, afin de ne pas croire qu'il est cassé pendant que le worker OPFS démarre.
+
+*Taille : petit.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** le tout premier repaint, avant que le bundle soit exécuté  
+**Quand** la page s'affiche  
+**Alors** le fond --nuit est déjà là et rien n'est blanc — aujourd'hui index.html:22-24 ne sert qu'un `<div id="root">` vide et le décor `.sol` (systeme.css:73-84) arrive avec le bundle
+
+**Étant donné** un téléphone lent où SQLite passe par un worker OPFS  
+**Quand** j'attends  
+**Alors** ce que je vois est dans le thème, en pixels, et pas « chargement… » en 12 px gris (App.tsx:289)
+
+**Étant donné** un ordinateur où tout est prêt en 80 ms  
+**Quand** la page s'ouvre  
+**Alors** l'écran de chargement ne rallonge pas l'ouverture — sauf si Julian accepte une durée minimale garantie, auquel cas le chiffre est écrit dans le code avec son motif
+
+**Étant donné** `prefers-reduced-motion` actif  
+**Quand** l'écran s'affiche  
+**Alors** l'animation ne joue pas et le fond reste (UX-DR8, UX-DR11)
+
+**Étant donné** un échec d'ouverture — OPFS refusé, worker interdit, stockage plein  
+**Quand** il survient  
+**Alors** on tombe sur l'écran de PANNE, qui existe déjà et qui est soigné (App.tsx:272-287), et jamais sur un chargement éternel
+
+⚠ CONTRADICTION AVEC UNE RÈGLE ÉCRITE —
+**Étant donné** UX-DR10 (epics.md:161) et EXPERIENCE.md:212 (« Chargement — il n'y en a pas au noyau ; tout est local, un indicateur de chargement au paddock est un aveu »)  
+**Quand** on ajoute un écran d'ouverture  
+**Alors** la règle est relue et datée : un décor peint n'est pas un spinner, mais la distinction doit être écrite, pas supposée
+
+**Étant donné** le prompt Claude Design demandé par Julian  
+**Quand** on le cherche dans le dépôt  
+**Alors** il existe, et il nomme la grille (GRILLE=128), le plafond de couleurs (COULEURS_MAX=26) et la palette du produit — pixel/reglages.ts, pixel/spritifier.ts, sprite-cbr83.ts
+
+**Étant donné** cet écran  
+**Quand** il s'affiche  
+**Alors** il ne porte ni pourcentage, ni barre qui se remplit, ni « préparation de vos données » : il occupe, il ne mesure pas
+
+> *Touche :* index.html, src/App.tsx, src/main.tsx, src/styles/systeme.css, src/pixel/reglages.ts, src/pixel/spritifier.ts
+
+
+### Récit 20.2 : Un seul jeu d'icônes, une seule grille
+
+En tant que pilote, je veux des icônes qui appartiennent au même dessin que le reste, afin que l'application n'ait pas l'air d'un assemblage.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** une icône du produit  
+**Quand** elle s'affiche  
+**Alors** c'est un tracé SVG en `currentColor`, jamais un emoji — la convention est déjà écrite et argumentée dans Trophee.tsx ①
+
+**Étant donné** Trophee.tsx en `stroke` de 1,8 sur 24×24 et les tracés pixelarticons en `fill` sur une grille de 12×12  
+**Quand** les deux cohabitent à l'écran  
+**Alors** ils sont sur la MÊME grille : deux registres côte à côte se voient, et convertir Trophee suppose de maîtriser les tracés, donc de les avoir chez soi
+
+**Étant donné** les sept tracés utiles (trash, pencil, calendar, camera, wallet, chart-line, tools)  
+**Quand** on choisit la forme d'embarquement  
+**Alors** ce sont ~1,2 Ko d'attributs `d` copiés dans un module maison — pas `npm install pixelarticons`, pas une fonte d'icônes (25,7 Ko woff2 + 27,5 Ko CSS pour 1029 glyphes inutilisés, à embarquer en data URI dans un fontes.css qui fait déjà 100 Ko)
+
+**Étant donné** la licence MIT de pixelarticons  
+**Quand** un tracé est copié dans un dépôt PUBLIC  
+**Alors** la mention « Copyright (c) 2019 Gerrit Halfmann » est présente, en en-tête de module ou dans un LICENCES.md
+
+**Étant donné** qu'aucun jeu d'icônes pixel sous licence permissive ne contient de casque, de combinaison ni de moto — vérifié sur les 4600 de pixelarticons y compris le jeu Pro, et sur les 579 de HackerNoon  
+**Quand** ces trois-là sont dessinés à la main  
+**Alors** ils le sont sur la même grille 12×12 en `fill`, et pas empruntés à game-icons.net dont le motorcycle-helmet est une silhouette à 22 commandes de Bézier
+
+**Étant donné** qu'un sprite existe pour cette moto ou cet équipement (portrait.ts, sprite-cbr83.ts)  
+**Quand** l'écran se rend  
+**Alors** c'est le sprite qui s'affiche et jamais l'icône : celle-ci n'est qu'un état vide, une amorce sourde, et si elle est jolie elle concurrence le sprite
+
+**Étant donné** `public/icons.svg` — reliquat du gabarit Vite (bluesky, discord, github, x), référencé nulle part  
+**Quand** ce récit est fini  
+**Alors** il n'est plus dans le dépôt
+
+> *Touche :* src/ecrans/Trophee.tsx, public/icons.svg, package.json, src/pixel/portrait.ts, src/assets/sprite-cbr83.ts
+
+
+### Récit 20.3 : L'atelier sous la clé à molette
+
+En tant que pilote, je veux reconnaître d'un coup d'œil ce qui entretient et ce qui améliore, afin que l'atelier cesse d'être trois boutons de texte qu'il faut lire pour distinguer.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** l'atelier  
+**Quand** je l'ouvre  
+**Alors** chaque entrée porte son tracé : la clé pour ce qui entretient, la courbe pour ce qui améliore — aujourd'hui Atelier.tsx:28-40 rend trois boutons pleine largeur avec un titre, un sous-titre et un décompte, rien d'autre
+
+**Étant donné** FR-46, qui est une clause de SÉCURITÉ et non de rangement (atelier.ts:9-18 : « si plaquettes en fin de vie s'affiche à côté de sticker décollé, l'élément de sécurité hérite du caractère repoussable du cosmétique »)  
+**Quand** entretien et bricoles passent sous une même icône  
+**Alors** les trois listes restent séparées à l'ouverture et aucun écran n'en assemble deux — regrouper sous une icône commune est la première marche, et Julian doit dire que le mur tient
+
+**Étant donné** le seul repère visuel actuel, un liseré de 3 px porté par la couleur (systeme.css:222-225, 592-594)  
+**Quand** l'icône arrive  
+**Alors** la couleur n'est jamais seule à porter le sens (UX-DR8) : le tracé et le mot restent
+
+**Étant donné** ce qui attend au garage  
+**Quand** il s'affiche  
+**Alors** aucune pastille, aucun compte à rebours, aucun rouge, aucune échéance — FR-48, et Atelier.tsx le tient déjà : ce qui attend attend, c'est précisément son intérêt
+
+⚠ « ATELIER » N'EST PAS UNE CATÉGORIE —
+**Étant donné** qu'« atelier » est aujourd'hui le NOM DU GROUPE des trois (Atelier.tsx:33) et non une quatrième entrée  
+**Quand** Julian le place « en sous-partie de la molette » au même rang qu'entretien et bricoles  
+**Alors** ce qu'il désigne est à trancher avant d'écrire quoi que ce soit : le carnet daté ? la page d'une catégorie ? un mot à supprimer ?
+
+**Étant donné** une icône choisie pour l'argent  
+**Quand** elle est posée  
+**Alors** ce n'est pas `chart` : le portefeuille énonce, une jauge ou une courbe de croissance jugerait
+
+> *Touche :* src/ecrans/Atelier.tsx, src/db/atelier.ts, src/styles/systeme.css
+
+
+### Récit 20.4 : L'équipement porte un casque
+
+En tant que pilote, je veux que mon équipement se reconnaisse à sa figure, afin de le distinguer de ma moto sans lire le titre.
+
+*Taille : petit.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** l'équipement sans sprite  
+**Quand** il s'affiche  
+**Alors** un casque ou une combinaison en tracé maison tient sa place — budget.ts:126 range déjà casque, combinaison, dorsale, gants et bottes sous protection
+
+**Étant donné** un équipement dont le sprite existe  
+**Quand** l'écran se rend  
+**Alors** c'est le sprite qui s'affiche : portrait.ts porte la phrase de Julian en commentaire — « la combinaison c'est comme un skin, et le casque aussi, c'est à pixeliser » — et le type `Sujet` accepte déjà un `equipementId`
+
+**Étant donné** une combinaison rendue à 12×12  
+**Quand** elle ne se distingue pas d'un bonhomme  
+**Alors** on y renonce et le libellé texte suffit : le produit privilégie déjà le mot partout
+
+**Étant donné** cette icône  
+**Quand** elle s'affiche  
+**Alors** elle ne porte aucune échéance, aucun âge, aucun compteur — un compteur qui monte sur un équipement de protection est un compte à rebours déguisé (Budget.tsx:186-195), et le schéma n'a délibérément aucune colonne d'échéance
+
+> *Touche :* src/ecrans/Budget.tsx, src/pixel/portrait.ts, src/db/budget.ts
+
+## Épique 21 : Les mots, le rouge, et ce qui se dit deux fois
+
+**Objectif.** Que chaque bouton dise ce qu'il fait, qu'un geste irréversible se voie avant d'être fait, et qu'aucune phrase ne s'écrive deux fois. Ce sont quatre corrections que rien ne relie techniquement et que tout relie du point de vue de Julian : il ouvre l'application, il lit, et le produit lui dit trois mots pour la même chose, un bouton qui ne sert à rien, et un effacement qui n'a pas de couleur.
+
+**La porte.** Ouverte, sans condition. Aucune de ces corrections n'attend une donnée, une migration, un réseau ni une réponse — c'est la seule épique des six qui peut être finie en une passe, et 21.3 doit exister AVANT l'épique 22.
+
+**Ce qu'elle refuse.** Un mot pour deux choses. Le rouge décoratif — il ne sert nulle part ailleurs que sur le destructif. Une confirmation qui disparaît sous prétexte que la couleur suffirait : la couleur n'est jamais seule (UX-DR8). Renommer une table parce qu'un libellé change.
+
+*4 récits · 21 critères · aucun tenu — rien n'est écrit.*
+
+
+### Récit 21.1 : « Modifier la moto », et le vocabulaire d'un seul écran
+
+En tant que pilote, je veux que le garage m'appelle ma moto une moto, afin de ne pas lire deux mots pour le même objet à trois lignes d'écart.
+
+*Taille : libelle.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** le bouton de Garage.tsx:244-246  
+**Quand** la machine porte une année  
+**Alors** il dit « Modifier la moto » — et ses DEUX autres états suivent : le bouton porte trois libellés selon l'état, « Annuler la correction » et « Ajouter l'année », pas un seul
+
+**Étant donné** le formulaire ouvert  
+**Quand** je valide  
+**Alors** le bouton ne dit plus « Corriger » ni « Déclarer ma machine » (Garage.tsx:496)
+
+**Étant donné** l'écran du garage  
+**Quand** je le lis de haut en bas  
+**Alors** il ne dit pas « moto » ici et « machine » trois lignes plus bas — « Aucune machine » (Garage.tsx:156), « X machine(s) · équipement › » (Garage.tsx:213), le sélecteur « Machine » du nouveau roulage (App.tsx:1042), face à « SUR LA MOTO » (Budget.tsx:169) et « Photographier la moto » (Garage.tsx:379) : le vocabulaire est déjà mixte, et corriger un seul bouton aggrave le mélange
+
+**Étant donné** la table `machine` (schema.ts:33) et le type `Machine` (depot.ts:19)  
+**Quand** le libellé change  
+**Alors** le schéma ne bouge pas : ce qui ne se lit pas ne se renomme pas
+
+**Étant donné** le banc de fumée  
+**Quand** ce récit est fini  
+**Alors** un essai échoue si le mot « machine » réapparaît dans un libellé d'écran
+
+> *Touche :* src/ecrans/Garage.tsx, src/App.tsx, src/ecrans/Budget.tsx, banc-rendu/fumee-machine.mjs
+
+
+### Récit 21.2 : « Refaire le portrait pixel », et ce qu'il consomme
+
+En tant que pilote, je veux pouvoir refaire un portrait raté depuis l'endroit où je modifie ma moto, afin de ne pas devoir l'effacer d'abord pour avoir le droit de recommencer.
+
+*Taille : petit.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** une machine avec un sprite  
+**Quand** j'ouvre le garage  
+**Alors** il y a UN bouton, « Refaire le portrait pixel » — les deux boutons actuels s'excluent l'un l'autre : le retrait n'est visible que si `machine.sprite` (Garage.tsx:386-392) et la fabrication que si `machine.photo_chemin && !machine.sprite` (Garage.tsx:381-385), donc refaire est aujourd'hui impossible sans effacer d'abord
+
+**Étant donné** ce bouton  
+**Quand** il est posé  
+**Alors** il est à côté de « Modifier la moto » (Garage.tsx:244, dans `.garage-titre`), et non sous la scène et sous les trois chiffres
+
+**Étant donné** qu'une fabrication coûte de l'argent réel — la fonction serveur, le registre `generation` avec `cout_centimes` et son quota (schema.ts:296-307), ≈ 0,16 € par portrait (A-FAIRE §1) — et qu'aucune confirmation n'existe aujourd'hui  
+**Quand** je tape « Refaire »  
+**Alors** le produit dit ce que ça consomme AVANT d'appeler : un bouton nommé « Refaire », posé en haut d'écran, transforme un tap accidentel en dépense
+
+**Étant donné** le portrait précédent  
+**Quand** la nouvelle fabrication est en cours ou refusée  
+**Alors** il n'est pas perdu : rien n'a changé tant que le nouveau n'est pas gardé, comme le fait déjà l'équipement (Budget.tsx:365-372)
+
+**Étant donné** « Retirer le portrait pixel »  
+**Quand** ce récit est fini  
+**Alors** il n'existe plus : retirer n'a aucun intérêt, Julian l'a dit
+
+**Étant donné** le même couple sur l'équipement (Budget.tsx:378-388, « Retirer le portrait »)  
+**Quand** la règle change sur la moto  
+**Alors** elle change aussi là, ou la différence est écrite et assumée
+
+> *Touche :* src/ecrans/Garage.tsx, src/ecrans/Budget.tsx, src/db/depot.ts, src/pixel/portrait.ts, src/db/schema.ts
+
+
+### Récit 21.3 : Le rouge du destructif, partout et sans exception
+
+En tant que pilote, je veux voir au premier coup d'œil ce qui détruit, afin de ne pas taper « retirer » en croyant fermer un panneau.
+
+*Taille : petit.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** n'importe quel geste qui détruit — retirer une journée, une horloge, une ligne de liste, une photo, un équipement, une chute, un compte  
+**Quand** il s'affiche  
+**Alors** il est en rouge, fond ou texte
+
+**Étant donné** le jeton `--alerte` déjà présent (systeme.css:46) et la classe `.alerte` (systeme.css:282)  
+**Quand** le rouge arrive  
+**Alors** il vient de ce jeton, jamais d'une valeur écrite à la main
+
+**Étant donné** UX-DR8 (« la couleur n'est jamais seule »)  
+**Quand** un bouton devient rouge  
+**Alors** le mot dit encore ce qui part, et la confirmation en deux taps ne disparaît pas au motif que la couleur suffirait
+
+**Étant donné** les onze endroits recensés — Checklist.tsx:87, Chute.tsx:150 et 161, Budget.tsx:386 et 390, Compte.tsx:163 et 179, Usure.tsx:93, Preparation.tsx:99, Poste.tsx:300, App.tsx:942 et 949  
+**Quand** l'un d'eux est oublié  
+**Alors** un essai de fumée le voit et échoue
+
+**Étant donné** tout le reste du produit  
+**Quand** on cherche du rouge  
+**Alors** il n'y en a pas : ni sur un dépassement de budget (systeme.css:453-455), ni sur une horloge au-delà de son intervalle, ni sur une pastille de ce qui attend (FR-48) — un rouge qui sert à deux choses ne sert plus à rien
+
+**Étant donné** `.bouton.secondaire` (systeme.css:148), utilisé aujourd'hui aussi bien pour « Retirer définitivement » que pour « Ajouter à entretien »  
+**Quand** ce récit est fini  
+**Alors** le destructif a sa propre forme et ne se confond plus avec le secondaire
+
+> *Touche :* src/styles/systeme.css, src/App.tsx, src/ecrans/Compte.tsx, src/ecrans/Chute.tsx, src/ecrans/Usure.tsx, src/ecrans/Poste.tsx, src/ecrans/Preparation.tsx, src/ecrans/Checklist.tsx, banc-rendu/fumee-confirmation.mjs
+
+
+### Récit 21.4 : Effacer mon compte ne s'écrit qu'une fois
+
+En tant que pilote, je veux lire une seule fois le nom du geste qui efface mon compte, afin de ne pas croire qu'il y en a deux.
+
+*Taille : libelle.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** l'écran du compte  
+**Quand** j'arrive sur la section d'effacement  
+**Alors** « effacer mon compte » n'apparaît qu'UNE fois — Compte.tsx:161 le pose en libellé et Compte.tsx:163 le repose en bouton, deux lignes plus bas
+
+**Étant donné** ce qui reste  
+**Quand** je le lis  
+**Alors** c'est le bouton qui porte le mot, parce que c'est lui qui agit
+
+**Étant donné** Legal.tsx:101, qui cite « Effacer mon compte » en gras pour désigner ce bouton  
+**Quand** le libellé change  
+**Alors** la citation dit encore le nom exact du bouton
+
+**Étant donné** la confirmation ouverte  
+**Quand** elle énumère ce qui part  
+**Alors** elle ne répète pas non plus le titre : « ce qui part, et ne revient pas » suffit, et le bouton final dit « Effacer définitivement »
+
+> *Touche :* src/ecrans/Compte.tsx, src/ecrans/Legal.tsx, banc-rendu/fumee-legal.mjs
+
+## Épique 22 : Le geste sur une journée, et le témoin de sauvegarde
+
+**Objectif.** Pouvoir corriger ou retirer une journée d'un geste, et savoir que ce qu'on saisit est gardé. Les deux demandes n'ont l'air d'avoir aucun rapport et elles ont le même fond : Julian ne fait pas confiance à ce que l'application a fait de sa saisie. Il a de bonnes raisons — il a eu 25 roulages pour 5 saisis (App.tsx:878-882), et le produit ne lui a jamais dit qu'une écriture était partie.
+
+**La porte.** Une liste de roulages contient au moins une journée qu'il faut corriger ou retirer. Porte franchie, et c'est Julian qui l'a franchie pour nous.
+
+**Ce qu'elle refuse.** Un balayage qui détruit — EXPERIENCE.md:202-203 l'écrit nommément sur la carte de roulage. Un geste caché comme seul chemin (EXPERIENCE.md:46). Un témoin qui devient une alarme. Un indicateur qui signale l'absence de réseau — au paddock, hors ligne, rien ne change (EXPERIENCE.md:214, NFR-7).
+
+*3 récits · 21 critères · aucun tenu — rien n'est écrit.*
+
+
+### Récit 22.1 : Modifier un roulage — l'écran qui n'existe pas
+
+En tant que pilote, je veux corriger la date ou le circuit d'une journée mal saisie, afin de ne pas devoir la supprimer et tout ressaisir.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** une journée saisie avec le mauvais circuit ou la mauvaise date  
+**Quand** je veux la corriger  
+**Alors** il existe un écran pour ça — aujourd'hui il n'y en a AUCUN : la seule écriture sur `roulage` hors création est `chrono_visible` (cercle.ts:149) et deux normalisations d'ouverture (depot.ts:524-544). La languette « modifier » de R9 ouvrirait le vide
+
+**Étant donné** une journée modifiée  
+**Quand** elle est enregistrée  
+**Alors** ce qu'elle porte ne bouge pas : sessions, tours, photos, gestes, dépenses, checklist
+
+**Étant donné** une date changée d'une journée vécue vers une date à venir, ou l'inverse  
+**Quand** elle est enregistrée  
+**Alors** les compteurs de l'épique 17 la recomptent correctement — ce récit dépend du prédicat partagé du récit 17.1
+
+**Étant donné** le circuit changé  
+**Quand** il est enregistré  
+**Alors** le rattachement au référentiel se refait côté serveur comme à la création (migration 20260825000003), et la conformité déjà recopiée ne se réécrit pas en silence
+
+**Étant donné** cet écran  
+**Quand** j'y entre par erreur et j'en sors  
+**Alors** rien n'a changé
+
+**Étant donné** une journée en cours de modification  
+**Quand** je tape deux fois  
+**Alors** une seule écriture part (useGeste, geste.ts) — c'est exactement le défaut qui a produit 25 roulages pour 5
+
+> *Touche :* src/App.tsx, src/db/depot.ts, src/ecrans/geste.ts, src/db/cercle.ts
+
+
+### Récit 22.2 : Le glissement révèle, il ne détruit pas
+
+En tant que pilote, je veux glisser une ligne de roulage pour faire apparaître « modifier » et « supprimer », afin de nettoyer vite une liste que l'application a salie.
+
+*Taille : moyen.*
+
+
+**Critères d'acceptation**
+
+
+⚠ CONTRADICTION ÉCRITE, NOMMÉMENT SUR CET ÉLÉMENT —
+**Étant donné** EXPERIENCE.md:202-203 (« Aucun balayage n'y supprime quoi que ce soit — avec des gants, un balayage destructeur se déclenche seul »), qui parle de `card.roulage`  
+**Quand** Julian demande l'inverse  
+**Alors** la règle se lève par une décision datée comme celle du 18 août, pas par oubli — et la forme qui la respecterait est le glissement qui RÉVÈLE sans détruire
+
+**Étant donné** une ligne de roulage  
+**Quand** je glisse de droite à gauche  
+**Alors** deux languettes apparaissent, « modifier » et « supprimer », et RIEN n'est encore fait
+
+**Étant donné** la languette « supprimer »  
+**Quand** je la tape  
+**Alors** la phrase qui nomme ce qui part est toujours là (App.tsx:914-928 : « Cette journée part définitivement, avec 2 sessions chronométrées, 4 photos et 1 dépense — 180 € ») : le glissement remplace le premier tap, jamais la confirmation
+
+**Étant donné** un doigt ganté  
+**Quand** je fais défiler la liste verticalement  
+**Alors** aucune languette ne s'ouvre par accident — `touch-action: pan-y` et un seuil, et jamais de suppression en un seul geste
+
+**Étant donné** un clavier  
+**Quand** je navigue dans la liste  
+**Alors** les deux actions sont atteignables sans glisser : EXPERIENCE.md:46 interdit tout geste caché comme seul chemin
+
+**Étant donné** une languette affichée  
+**Quand** je la vise  
+**Alors** elle fait au moins 56 px (NFR-8) et la destructive est en rouge (récit 21.3)
+
+**Étant donné** le choix de la bibliothèque  
+**Quand** on cherche  
+**Alors** on n'en prend aucune : react-swipeable-list est la seule qui fasse vraiment des languettes et son bundle ESM ne contient AUCUNE occurrence de `aria-`, `role`, `tabindex` ni `onkeydown`, ne déclare ni dependencies ni peerDependencies alors qu'il importe `prop-types` (donc ne résout pas en pnpm strict), et n'a pas publié depuis octobre 2024 ; @dnd-kit est 1,07 Mo de tri, vaul traîne 15 sous-paquets Radix, et react-swipeable n'est qu'un détecteur de geste. Pointer Events + `touch-action: pan-y`, dans un hook posé à côté de geste.ts
+
+**Étant donné** un tap simple sur la ligne  
+**Quand** la languette n'est pas ouverte  
+**Alors** il ouvre la journée, comme aujourd'hui
+
+> *Touche :* src/App.tsx, src/ecrans/geste.ts, src/styles/systeme.css, _bmad-output/planning-artifacts/ux-designs/ux-MyPaddock-2026-08-18/EXPERIENCE.md
+
+
+### Récit 22.3 : Le témoin de sauvegarde
+
+En tant que pilote, je veux un signe que ce que je viens de saisir est gardé, afin de cesser de me demander si l'application a fait quelque chose.
+
+*Taille : petit.*
+
+
+**Critères d'acceptation**
+
+
+**Étant donné** une saisie quelconque  
+**Quand** elle est écrite  
+**Alors** je le vois — aujourd'hui rien ne le dit hors de l'écran du compte, où « Changements en attente » vit seul (Compte.tsx:499)
+
+**Étant donné** la toute première sauvegarde, qui part maintenant d'elle-même (App.tsx:186-240)  
+**Quand** elle aboutit  
+**Alors** elle se dit une fois, en clair, et ne se redit plus
+
+**Étant donné** le paddock sans réseau  
+**Quand** je saisis  
+**Alors** rien ne signale l'absence de réseau : aucun bandeau, aucune icône barrée, aucune dégradation visible (EXPERIENCE.md:214, NFR-7)
+
+**Étant donné** un témoin qui tourne  
+**Quand** une écriture n'est pas encore partie  
+**Alors** il ne devient jamais une alarme ni un reproche : ce qui n'est pas parti n'est pas perdu, et le produit le dit ainsi
+
+⚠ CONTRADICTION AVEC DEUX LIGNES DE LA MÊME TABLE —
+**Étant donné** EXPERIENCE.md:212 (« Chargement — il n'y en a pas au noyau ; un indicateur de chargement au paddock est un aveu ») et EXPERIENCE.md:216 (« Synchronisation en attente — un liseré discret sur la carte concernée, jamais une modale, jamais un blocage »)  
+**Quand** Julian demande un rond qui tourne  
+**Alors** la forme déjà décidée est le LISERÉ, et le rond demande de lever la règle : c'est à lui de le dire
+
+**Étant donné** le liseré  
+**Quand** il s'affiche  
+**Alors** il est sur la carte concernée et pas en haut de l'écran : un témoin global dit « l'application travaille », un liseré dit « cette chose-là n'est pas encore partie »
+
+**Étant donné** `prefers-reduced-motion`  
+**Quand** il est actif  
+**Alors** rien ne tourne (UX-DR11)
+
+> *Touche :* src/App.tsx, src/ecrans/Compte.tsx, src/db/sauvegarde.ts, src/styles/systeme.css, _bmad-output/planning-artifacts/ux-designs/ux-MyPaddock-2026-08-18/EXPERIENCE.md
+
+
+## L'ordre d'attaque
+
+1. ① Récit 18.1 — LE VERSEMENT D'IMAGE, D'ABORD ET AVANT TOUT. `createWritable` n'existe pas avant Safari 26 : si l'iPhone de Julian n'est pas à jour, aucune photo, aucun portrait, aucun manuel, aucune facture ne se garde — et rien de ce qui suit ne se vérifie chez lui.
+
+2. ② Épique 21 en entier — les mots, le rouge, le doublon. Zéro migration, zéro donnée, zéro question ouverte : elle se finit en une passe, et 21.3 (le rouge du destructif) doit exister AVANT que l'épique 22 pose des languettes de suppression.
+
+3. ③ Récit 19.1 — le budget dit sa période. C'est un libellé, c'est ce qui l'agace aujourd'hui, et ça ne dépend pas de la réponse à « mensuel ou annuel » : dans les deux cas la période doit être à côté du champ.
+
+4. ④ Épique 17, récits 17.1 puis 17.2 — le roulage à venir cesse de compter comme vécu, puis le tap ouvre la préparation. C'est la demande la plus dense de Julian et elle ne coûte aucune table neuve ; 17.1 avant 17.2 parce que le prédicat partagé sert aussi à 22.1.
+
+5. ⑤ Récits 17.4 et 17.3 — d'abord ce qui existe et qu'il faut seulement rendre atteignable, ensuite les horloges. 17.3 est le plus gros du lot et il attend une réponse : ne pas le commencer avant.
+
+6. ⑥ Épique 20, récits 20.1 puis 20.2 — l'écran de chargement puis le jeu d'icônes. Aucune dépendance de donnée, et ils occupent utilement le temps pendant lequel les questions d'argent attendent une réponse. 20.3 et 20.4 suivent 20.2, qui fixe la grille.
+
+7. ⑦ Récits 18.3 puis 18.2 — verser plusieurs photos AVANT de construire l'album : une grille sur trois photos fait un trou, et c'est exactement ce que systeme.css:503 avait tranché.
+
+8. ⑧ Épique 22, récit 22.1 puis 22.2 — l'écran de modification AVANT la languette, sinon la languette « modifier » ouvre le vide. 22.3 en dernier de l'épique, parce qu'il attend une décision sur EXPERIENCE.md:212.
+
+9. ⑨ Épique 19, récits 19.2 puis 19.3 puis 19.4 — l'argent en dernier. C'est la seule migration de schéma des six épiques, la seule qui laisse des données irrattrapables derrière elle (les dépenses déjà saisies n'auront jamais de mois), et 19.4 ne peut pas commencer avant 19.2.
+
+10. ⑩ Récits 17.5 et 18.4 — hors file, dès que Julian répond. 17.5 (les objectifs) et 18.4 (le réglage de l'envoi cloud) sont entièrement suspendus à une décision de lexique et à un chiffre de coût qui n'existe nulle part.
+
+
+## Ce que Julian doit trancher
+
+Vingt-deux questions sont sorties de la relecture. Elles ne se valent pas : la
+plupart attendent leur récit, quelques-unes **bloquent** — sans réponse, on
+écrirait quelque chose qu'il faudrait défaire.
+
+- ÉCRAN DE CHARGEMENT — Acceptes-tu de RALENTIR volontairement l'ouverture pour que l'écran se voie (une durée minimale garantie, par exemple 600 ms, y compris sur ordinateur où tout est prêt en 80 ms) : oui ou non ?
+- ÉCRAN DE CHARGEMENT — L'épine UX écrit « il n'y en a pas au noyau ; un indicateur de chargement au paddock est un aveu » (EXPERIENCE.md:212). On lève cette règle par décision datée, ou on s'en tient à un décor peint sans aucun indicateur de progression ?
+- CHECK-LIST DE BASE — On pose des horloges VIDES sur ta moto (vidange, plaquettes, chaîne, liquide de frein, pneus, filtre à air, sans intervalle), pour que « vérifier l'huile » soit dérivé et propre à ta moto — ou tu veux quand même une liste embarquée identique pour tout le monde, en exception assumée à la règle écrite ?
+- OBJECTIFS — Une fois la journée passée, ce que tu avais visé se relit SANS case à cocher, sans « atteint », sans « 2 sur 3 » : d'accord, ou tu veux pouvoir le marquer atteint ?
+- OBJECTIFS — Le mot « objectif » est interdit à l'écran par l'épine UX (EXPERIENCE.md:114) et cette ligne-là n'est pas tombée le 18 août. On la lève aussi, ou on nomme la chose autrement (« ce que je vais chercher ») ?
+- OBJECTIFS — Un objectif chiffré de chrono (« passer sous 1'38 ») : autorisé, ou interdit ? Il fabrique un verdict le soir même et transforme la courbe en écart à combler, ce que courbe.ts refuse explicitement.
+- OBJECTIFS — On propose uniquement les caps de `discipline`, jamais ceux de `bravoure` (viser « genou gauche posé » est l'enchaînement de la chute fondatrice) : d'accord, ou tu lèves ça aussi ?
+- ROULAGE À VENIR — Une journée annoncée naît-elle en « brouillon » et bascule-t-elle en « usage » toute seule à la première session, photo ou dépense (aucune case, aucune relance), ou reste-t-elle en « usage » dès la saisie ?
+- BUDGET — 500 €/mois : est-ce un budget MENSUEL réel à faire entrer au produit (migration des deux côtés), ou un budget ANNUEL de 6000 € mal saisi (un libellé) ?
+- BUDGET — La jauge ne change pas de couleur au dépassement, délibérément (« dépasser son budget n'est pas une faute »). Cette règle tient-elle encore quand le consommé fait quatre fois le budget : oui ou non ?
+- DÉPENSES — Les dépenses déjà saisies n'auront jamais de mois. Elles restent « sans mois » et l'écran le dit (comme « Sans poste »), ou on leur attribue le mois de leur roulage quand il en ont un ?
+- ANALYTIQUES — Le graphe d'argent a-t-il le droit de porter une tendance ou une projection, ou le refus écrit pour le chrono (« aucune tendance, aucune droite, aucun à ce rythme ») s'y applique tel quel ?
+- ANALYTIQUES — « Plein d'analytiques » se limite-t-il pour l'instant à : coût par poste, coût par mois, coût par circuit, coût moyen d'une journée — oui ou non ? (si non, nomme celle qui manque : sans liste il n'y a rien à cadrer)
+- GARAGE — « Modifier la moto » : ce seul bouton, ou « moto » partout à l'écran (« Aucune moto », « Déclarer ma moto », le sélecteur « Moto » du nouveau roulage), la table `machine` restant inchangée ?
+- PORTRAIT — « Refaire le portrait pixel » passe-t-il par une confirmation qui dit ce que ça consomme (≈ 0,16 € et un crédit sur trois), ou relance-t-il la génération directement ?
+- PORTRAIT — L'équipement (« Retirer le portrait », Budget.tsx:386) suit-il la même règle que la moto, ou reste-t-il en l'état ?
+- ATELIER — Les trois listes (entretien, amélioration, bricoles) restent-elles SÉPARÉES à l'ouverture, la clé à molette n'étant qu'un sommaire et jamais une liste mélangée : oui ou non ?
+- ATELIER — « Atelier » est aujourd'hui le NOM DU GROUPE des trois, pas une catégorie. Dans ta proposition, « atelier en sous-partie de la molette » désigne-t-il le carnet daté d'interventions, ou est-ce un mot qui doit disparaître ?
+- GLISSEMENT — L'épine UX interdit nommément tout balayage destructeur sur la carte de roulage (« avec des gants, un balayage destructeur se déclenche seul »). On lève l'interdit avec des languettes qui RÉVÈLENT et exigent toujours la confirmation, ou on garde le bouton actuel ?
+- PHOTOS — Maintenant que tu sais qu'on n'envoie qu'une vignette de 1600 px / ~300 Ko et que ton original 48 Mpx ne quitte jamais l'iPhone : on ajoute un réglage qui coupe l'envoi cloud, ou on laisse tel quel ?
+- TÉMOIN DE SAUVEGARDE — L'épine UX a déjà tranché la forme : « un liseré discret sur la carte concernée, jamais une modale ». Tu veux le liseré, ou tu veux le rond qui tourne (ce qui demande de lever la règle) ?
+- DÉMONSTRATION — Le dépôt sème un roulage futur au 19 septembre 2026 (Garage.tsx:146), pas au 12 comme ta journée à Pau-Arnos. On corrige la démo à ta date, ou on la laisse ?
