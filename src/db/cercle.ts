@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { supabase } from './supabase'
 import { marquerSaisie } from './mesures'
+import { TOUTES_JOURNEES } from './vecu'
 
 /**
  * LE CERCLE — épique 14, FR-39 et FR-39bis.
@@ -139,7 +140,7 @@ const pivot = (nom: string): string =>
 
 export const chronoVisible = async (db: PowerSyncDatabase, roulageId: string) => {
   const r = await db.get<{ v: number | null }>(
-    `SELECT chrono_visible AS v FROM roulage WHERE id = ?`, [roulageId])
+    `SELECT chrono_visible AS v FROM roulage ${TOUTES_JOURNEES} WHERE id = ?`, [roulageId])
   return r.v === 1
 }
 

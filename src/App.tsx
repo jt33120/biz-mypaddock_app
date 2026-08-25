@@ -11,6 +11,8 @@ import {
   type CoutRoulage,
 } from './db/depot'
 import { Depense } from './ecrans/Depense'
+import { jaugeBudget, repereMensuel } from './db/budget'
+import { NoterUneDepense } from './ecrans/Budget'
 import { surCompte, type Identite } from './db/compte'
 import { creerConnecteur, powersyncConfigure } from './db/connecteur'
 import { adopter, estAdopte } from './db/sauvegarde'
@@ -46,6 +48,8 @@ import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 import { useGeste } from './ecrans/geste'
 import { Trophee } from './ecrans/Trophee'
+import { Journee } from './ecrans/Journee'
+import { aujourdhui, estAVenir, sePrepare } from './db/vecu'
 
 type Db = ReturnType<typeof ouvrirBase>
 
@@ -60,11 +64,9 @@ export type Adoption =
   | { etat: 'faite' }
   | { etat: 'partielle'; refus: number; motif: string }
   | { etat: 'echec'; motif: string }
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'journee' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
-
-const aujourdhui = () => new Date().toISOString().slice(0, 10)
 
 /** Le groupe se saisit sur l'échelle de SON organisateur. Pau-Arnos annonce
  *  2 à 4 groupes nommés Initiation/Intermédiaire/Confirmé/Expert, pas
@@ -336,9 +338,25 @@ export default function App() {
     return b
   }
 
-  const ouvrirBilan = async (id: string) => {
-    await chargerRoulage(id)
-    setEcran('bilan')
+  /**
+   * OUVRIR UNE JOURNÉE — ET C'EST LA JOURNÉE QUI DÉCIDE DE L'ÉCRAN, récit 17.2.
+   *
+   * ⚠ CE SEUL AIGUILLAGE EST TOUT LE RÉCIT. Il n'y avait pas d'aiguillage : le
+   * tap ouvrait `bilan`, toujours, y compris sur une journée saisie pour
+   * septembre — et le bilan demandait alors « Meilleur tour du jour », affichait
+   * « Sessions 0 », proposait de déclarer une chute et poussait « Saisir une
+   * session » en bouton primaire. L'application réclamait le récit d'une journée
+   * qui n'a pas eu lieu.
+   *
+   * Le prédicat vit dans `src/db/vecu.ts` et il tient à un FAIT OBSERVABLE — la
+   * date, et l'existence d'une session — jamais à une heure ni à un réglage.
+   * Il est le même depuis l'accueil et depuis la liste des roulages : deux
+   * chemins vers la même journée ne peuvent pas ouvrir deux écrans différents.
+   */
+  const ouvrirRoulage = async (id: string) => {
+    const b = await chargerRoulage(id)
+    setEcran(b && sePrepare(b) ? 'journee' : 'bilan')
+    return b
   }
 
   return (
@@ -357,23 +375,36 @@ export default function App() {
            data-abri={abri ? (abri.menace ? 'menace' : 'persistant') : 'inconnu'}>
         {ecran === 'accueil' && (
           <Accueil db={db} src={src} conseil={conseil} abri={abri}
-                   onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirBilan}
+                   onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirRoulage}
                    onLegal={() => setEcran('legal')}
+                   onEcrit={() => void rafraichir(db)}
                    onAller={(vers, roulageId) => {
                      // L'argent d'une journée se saisit SUR la journée : la
                      // dépense d'engagement porte `cible = 'roulage'`, et la
                      // saisir ailleurs la rattacherait à la saison seule.
-                     if (vers === 'budget') void ouvrirBilan(roulageId).then(() => setEcran('depense'))
+                     // ⚠ On CHARGE sans ouvrir : passer par l'aiguillage
+                     // afficherait la journée une fraction de seconde avant de
+                     // basculer sur la dépense, et un écran qui apparaît pour
+                     // disparaître se lit comme un bug.
+                     if (vers === 'budget') void chargerRoulage(roulageId).then(() => setEcran('depense'))
                      else setEcran('garage')
                    }} />
         )}
-        {ecran === 'roulages' && <Roulages db={db} liste={liste} onOuvrir={ouvrirBilan}
+        {ecran === 'roulages' && <Roulages db={db} liste={liste} onOuvrir={ouvrirRoulage}
                                             onNouveau={() => setEcran('nouveau')}
                                             onEcrit={() => void rafraichir(db)} />}
         {ecran === 'nouveau' && (
           <Nouveau db={db} onValider={async (r) => {
             const id = await creerRoulage(db, r)
-            setCourant(id); await rafraichir(db); setEcran('session')
+            setCourant(id); await rafraichir(db)
+            /* ⚠ ON NE DEMANDE PAS LE CHRONO D'UNE JOURNÉE QUI N'A PAS EU LIEU
+               — récit 17.1. La saisie d'une date future marchait déjà ; c'est
+               la ligne suivante qui mentait, en enchaînant sur « Meilleur tour
+               de la session » pour le 12 septembre saisi le 25 août.
+               Une journée saisie AUJOURD'HUI garde son chemin : c'est le geste
+               du soir en rentrant du circuit, et il ne change pas. */
+            if (estAVenir(r.date)) await ouvrirRoulage(id)
+            else setEcran('session')
           }} onAnnuler={() => setEcran('accueil')} />
         )}
         {ecran === 'session' && courant && (
@@ -387,7 +418,7 @@ export default function App() {
             await chargerRoulage(courant)
             setMatiere(await rassembler(courant))
             setEcran('recap')
-          }} onAnnuler={() => void ouvrirBilan(courant)} />
+          }} onAnnuler={() => void ouvrirRoulage(courant)} />
         )}
         {ecran === 'bilan' && bilan && courant && (
           <BilanEcran
@@ -405,13 +436,32 @@ export default function App() {
             }}
           />
         )}
+        {/* ⚠ LE MÊME ROULAGE, L'AUTRE MOITIÉ DU CHEMIN — récit 17.2. Ce n'est
+            pas un second bilan : c'est ce qui PRÉPARE la journée, là où le
+            bilan raconte ce qu'elle a été. Aucun des deux n'est atteignable
+            depuis l'autre par erreur — `sePrepare` tranche, et il tranche sur
+            un fait observable. */}
+        {ecran === 'journee' && bilan && courant && (
+          <Journee
+            db={db}
+            r={{ id: bilan.id, circuit: bilan.circuit, date: bilan.date,
+                 machine_id: bilan.machine_id }}
+            onAller={(vers) => {
+              if (vers === 'budget') setEcran('depense')
+              else setEcran('garage')
+            }}
+            onSession={() => setEcran('session')}
+            onCircuit={() => { setCircuitVu(bilan.circuit); setEcran('circuit') }}
+            onAccueil={() => setEcran('accueil')}
+          />
+        )}
         {ecran === 'recap' && matiere && courant && (
-          <Recap db={db} matiere={matiere} onFermer={() => void ouvrirBilan(courant)} />
+          <Recap db={db} matiere={matiere} onFermer={() => void ouvrirRoulage(courant)} />
         )}
         {ecran === 'depense' && courant && bilan && (
           <Depense db={db} roulageId={courant} dateRoulage={bilan.date}
-                   onFini={() => void ouvrirBilan(courant)}
-                   onAnnuler={() => void ouvrirBilan(courant)} />
+                   onFini={() => void ouvrirRoulage(courant)}
+                   onAnnuler={() => void ouvrirRoulage(courant)} />
         )}
         {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
         {ecran === 'compte' && <Compte db={db} identite={identite} adoption={adoption}
@@ -421,8 +471,14 @@ export default function App() {
         {/* QO-11 : les textes existent, et ils sont ATTEIGNABLES. Un document
             juridique que rien ne lie n'a jamais été publié. */}
         {ecran === 'legal' && <Legal onFermer={() => setEcran('compte')} />}
+        {/* ⚠ LE RETOUR DE LA FICHE PASSE PAR L'AIGUILLAGE, lui aussi. Écrit en
+            dur, il ramenait sur `bilan` — donc, depuis la fiche ouverte d'une
+            journée à venir, sur le post-mortem qu'on vient précisément de
+            retirer du chemin. Une sortie qui ne ramène pas d'où l'on vient est
+            un cul-de-sac déguisé. */}
         {ecran === 'circuit' && circuitVu && (
-          <Circuit db={db} nom={circuitVu} onFermer={() => setEcran(courant ? 'bilan' : 'roulages')} />
+          <Circuit db={db} nom={circuitVu}
+                   onFermer={() => { if (courant) void ouvrirRoulage(courant); else setEcran('roulages') }} />
         )}
       </div>
 
@@ -481,14 +537,20 @@ export default function App() {
    FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
    échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
    rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
-function Accueil({ db, src, conseil, abri, onNouveau, onOuvrir, onLegal, onAller }: {
+function Accueil({ db, src, conseil, abri, onNouveau, onOuvrir, onLegal, onAller, onEcrit }: {
   db: Db; src: Source | null; conseil: string | null; abri: Abri | null
   onNouveau: () => void; onOuvrir: (id: string) => void
   onLegal: () => void
+  /** Une dépense notée depuis l'accueil change ce que l'accueil affiche —
+   *  « dépensé cette saison » est un des chiffres proposés (FR-15). */
+  onEcrit: () => void
   /** Chaque tâche de préparation MÈNE QUELQUE PART. Une liste de rappels dont
    *  les lignes ne mènent nulle part se lit une fois et ne se relit jamais. */
   onAller: (vers: 'atelier' | 'usure' | 'budget', roulageId: string) => void
 }) {
+  /** Un compteur, pas un booléen : un booléen déjà vrai ne relirait rien à la
+   *  deuxième dépense notée dans la même minute. */
+  const [maj, setMaj] = useState(0)
   return (
     <>
       <header className="tete">
@@ -520,7 +582,20 @@ function Accueil({ db, src, conseil, abri, onNouveau, onOuvrir, onLegal, onAller
                                 date: src.roulage.date_jour }}
                      onAller={(vers) => onAller(vers, src.roulage.id)} />
       )}
-      {src && src.genre !== 'vide' && <ZoneChiffres db={db} />}
+      {src && src.genre !== 'vide' && <ZoneChiffres db={db} key={maj} />}
+      {/* ⚠ LE RACCOURCI DE DÉPENSE — « d'ailleurs avec un raccourci sur la page
+          d'accueil ça ne peut pas faire de mal » (Julian, 25 août 2026).
+          Il vit SOUS les chiffres et n'apparaît PAS sur l'accueil vide : là, une
+          seule action existe — saisir le premier roulage (FR-14) — et un second
+          chemin à côté d'elle la dilue. Replié, il ne dit rien ; déplié, il écrit
+          la même ligne complète que le garage.
+          ⚠ `key={maj}` SUR LES CHIFFRES, ET C'EST LE POINT : « dépensé cette
+          saison » est lu une fois au montage. Sans remontage, on noterait 230 €
+          au-dessus d'un total qui n'a pas bougé — et un chiffre qui ne suit pas
+          ce qu'on vient de saisir est lu comme une saisie perdue. */}
+      {src && src.genre !== 'vide' && (
+        <NoterUneDepense db={db} onEcrit={() => { setMaj((n) => n + 1); onEcrit() }} />
+      )}
       {conseil && <Conseil texte={conseil} />}
     </>
   )
@@ -1261,20 +1336,74 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
           </div>
           {/* Jamais séparable du chiffre ci-dessus — et ce n'est plus ce rendu
               qui tient la clause, c'est le type : `auTour` porte son budget. */}
-          <div className="rang">
-            <span className="libelle">Saison {annee} · consommé</span>
-            <span className="chiffre hud-16">
-              {formaterEuros(c.auTour.consommeCentimes)} <span className="faible">sur {formaterEuros(c.auTour.budgetCentimes)}</span>
+          {/* ⚠ « SUR L'ANNÉE », PAS « SAISON » TOUT COURT — récit 19.1. Julian a
+              lu « Budget de la saison 2026 » et saisi 500 en pensant 500 par
+              mois : le mot « saison » ne dit pas assez fort qu'il s'agit de
+              douze mois. La période est donc collée aux deux chiffres, celui
+              qu'on a dépensé comme celui qu'on s'était fixé. */}
+          {/* ⚠ DEUX LIGNES, PAS UN RANG — et c'est la capture qui l'a dit, pas
+              la relecture. En `rang`, le libellé et le chiffre se partagent la
+              largeur ; ici les deux ont grandi le même jour — « Dépensé sur
+              l'année 2026 » d'un côté, « 2 180,50 € sur 2 000 € posés pour
+              l'année » de l'autre — et `.chiffre` porte `white-space: nowrap`
+              pour ne jamais couper un montant de son unité. Le montant ne
+              pouvait donc pas plier : il passait PAR-DESSUS le libellé, sur un
+              écran de 390 px. Le même défaut avait déjà été trouvé sur la ligne
+              d'équipement, et il se répare pareil. */}
+          <div className="pile" style={{ gap: 2 }}>
+            <span className="libelle">Dépensé sur l'année {annee}</span>
+            <span className="rang" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <span className="chiffre hud-24">{formaterEuros(c.auTour.consommeCentimes)}</span>
+              <span className="libelle faible">
+                sur {formaterEuros(c.auTour.budgetCentimes)} posés pour l'année
+              </span>
             </span>
           </div>
-          <div className="jauge" role="img"
-               aria-label={`${formaterEuros(c.auTour.consommeCentimes)} consommés sur ${formaterEuros(c.auTour.budgetCentimes)}`}>
-            <span style={{ width: `${Math.min(100, (c.auTour.consommeCentimes / c.auTour.budgetCentimes) * 100)}%` }} />
-          </div>
+          {/* LA JAUGE — une TRACE, pas une alarme. Elle ne change pas de couleur,
+              ni près du plafond ni au-delà : « dépasser son budget n'est pas une
+              faute » est une règle écrite (systeme.css), et depuis le 24 août le
+              rouge est réservé au geste qui détruit.
+              Ce qu'elle sait dire depuis 19.1 : la DIFFÉRENCE entre 501 € et
+              2180 € sur un plafond de 500 €. Bornée à 100 %, elle rendait une
+              barre pleine dans les deux cas — donc rien. */}
+          {(() => {
+            const j = jaugeBudget(c.auTour.consommeCentimes, c.auTour.budgetCentimes)
+            return (
+              <div className="jauge" role="img"
+                   aria-label={`${formaterEuros(c.auTour.consommeCentimes)} dépensés sur l'année ${annee}, pour un plafond posé de ${formaterEuros(c.auTour.budgetCentimes)}`}>
+                <span style={{ width: `${j.part}%` }} />
+                {/* Le plafond posé, marqué sur la barre quand elle le dépasse.
+                    Sans lui, le dépassement n'aurait aucune échelle. */}
+                {j.repere != null && <i style={{ left: `${j.repere}%` }} aria-hidden />}
+              </div>
+            )
+          })()}
+          {/* LE REPÈRE MENSUEL — l'autre moitié de la décision du 25 août :
+              « un plafond annuel ET un repère mensuel ». Dit, jamais dessiné :
+              une seconde jauge vers un plafond du mois ferait du repère un
+              compteur à rebours, ce que les deux clauses d'argent refusent. */}
+          {repereMensuel(c.auTour.budgetCentimes) != null && (
+            <p className="note">
+              Soit un repère de {formaterEuros(repereMensuel(c.auTour.budgetCentimes)!)} par mois.
+              Le détail mois par mois vit au garage, dans le budget.
+            </p>
+          )}
         </>
       ) : (
+        /* ⚠ LE CHAMP DIT SA PÉRIODE À CÔTÉ DE LA VALEUR — récit 19.1, et c'est
+           le défaut que Julian a payé : « le coût est de 2180 mais le budget est
+           de 500/mois ». Il a saisi un montant MENSUEL dans un champ ANNUEL, et
+           rien ne l'a contredit — le mot « saison » vivait dans un `<label>`
+           au-dessus, le placeholder disait « 0 », et une fois posé le chiffre ne
+           réaffichait plus sa période nulle part.
+           Trois choses le tiennent maintenant, et il en faut trois : le mot
+           « année » dans l'étiquette, l'unité qui porte « par an » COLLÉE au
+           champ, et la conversion en repère mensuel écrite sous ce qu'on tape —
+           celle-là est la seule qui parle la langue du malentendu. */
         <div className="pile">
-          <label className="libelle" htmlFor="budget">Budget de la saison {annee}</label>
+          <label className="libelle" htmlFor="budget">
+            Ce que tu te fixes pour l'année {annee} entière
+          </label>
           <p className="note">
             Sans lui, le coût au tour reste caché : un chiffre qui baisse quand on roule plus
             n'est pas une mesure.
@@ -1282,9 +1411,20 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
           <div className="somme">
             <input id="budget" className="champ chiffre" value={saisie}
                    onChange={(e) => setSaisie(e.target.value)}
-                   inputMode="decimal" placeholder="0" autoComplete="off" />
-            <span className="unite">€</span>
+                   inputMode="decimal" placeholder={`pour toute l'année ${annee}`}
+                   autoComplete="off" />
+            <span className="unite periode"><span>€</span><span>par an</span></span>
           </div>
+          {/* LA CONVERSION, ÉNONCÉE PENDANT QU'ON TAPE. 500 € posés là rendent
+              « soit 41,67 € par mois » : celui qui pensait 500 par mois le voit
+              immédiatement, avant de valider. Ce n'est ni un avertissement ni un
+              refus — le produit ne dit pas que c'est faux, il dit ce que c'est. */}
+          {centimes != null && centimes > 0 && (
+            <p className="note">
+              {formaterEuros(centimes)} pour l'année {annee} entière, soit un repère
+              de {formaterEuros(repereMensuel(centimes)!)} par mois.
+            </p>
+          )}
           <button className="bouton secondaire" disabled={!centimes}
                   onClick={() => centimes && void onBudget(centimes)}>
             Poser le budget

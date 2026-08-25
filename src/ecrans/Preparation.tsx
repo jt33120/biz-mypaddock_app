@@ -29,12 +29,18 @@ import { useGeste } from './geste'
  * quand la date approche. La liste est là quand le pilote ouvre ; elle ne va pas
  * le chercher (contre-mesure C1).
  */
-export function Preparation({ db, roulage, onAller }: {
+export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
   db: PowerSyncDatabase
   roulage: { id: string; machineId: string | null; date: string }
   /** Chaque ligne dérivée MÈNE QUELQUE PART. Une liste de rappels dont les
    *  lignes ne mènent nulle part se lit une fois et ne se relit jamais. */
   onAller: (vers: Tache['vers']) => void
+  /** ⚠ SUR L'ÉCRAN DE LA JOURNÉE, AJOUTER EST L'ACTION PREMIÈRE — récit 17.2.
+   *  Sur l'accueil, non : la préparation y est un aperçu sous la zone
+   *  temporelle, et un bouton primaire au milieu de l'accueil se disputerait la
+   *  place avec « Saisir un roulage ». Un seul composant, deux poids — jamais
+   *  deux composants, qui divergeraient à la première correction. */
+  ajoutPrimaire?: boolean
 }) {
   const [taches, setTaches] = useState<Tache[]>([])
   const [siennes, setSiennes] = useState<Ligne[]>([])
@@ -67,7 +73,8 @@ export function Preparation({ db, roulage, onAller }: {
             qu'elle sait — rien n'attend — et propose d'en ajouter, sans jamais
             suggérer qu'il manque quelque chose. */}
         <p className="sous-titre">Rien n'attend au garage, et l'engagement est saisi.</p>
-        <Ajout valeur={saisie} sur={setSaisie} occupe={occupe} poser={poser} />
+        <Ajout valeur={saisie} sur={setSaisie} occupe={occupe} poser={poser}
+               primaire={ajoutPrimaire} />
       </div>
     )
   }
@@ -100,13 +107,15 @@ export function Preparation({ db, roulage, onAller }: {
         </label>
       ))}
 
-      <Ajout valeur={saisie} sur={setSaisie} occupe={occupe} poser={poser} />
+      <Ajout valeur={saisie} sur={setSaisie} occupe={occupe} poser={poser}
+             primaire={ajoutPrimaire} />
     </div>
   )
 }
 
-function Ajout({ valeur, sur, occupe, poser }: {
+function Ajout({ valeur, sur, occupe, poser, primaire }: {
   valeur: string; sur: (v: string) => void; occupe: boolean; poser: () => void
+  primaire: boolean
 }) {
   /* ⚠ `min-width: 0` SUR LE CHAMP, sans quoi il déborde. Un `input` a une
      `min-width: auto` qui vaut sa largeur intrinsèque — environ 180 px — et il
@@ -114,12 +123,13 @@ function Ajout({ valeur, sur, occupe, poser }: {
      droite, à moitié coupé. Vu sur la capture, invisible à la relecture. C'est
      le piège flexbox le plus courant et il ne se voit qu'à l'écran. */
   return (
-    <div className="rang ajout-tache">
+    <div className={primaire ? 'rang ajout-tache primaire' : 'rang ajout-tache'}>
       <input className="champ" value={valeur} onChange={(e) => sur(e.target.value)}
              placeholder="autre chose à faire" autoComplete="off"
              onKeyDown={(e) => { if (e.key === 'Enter') poser() }} />
-      <button className="bouton secondaire" disabled={!valeur.trim() || occupe} onClick={poser}>
-        Ajouter
+      <button className={primaire ? 'bouton' : 'bouton secondaire'}
+              disabled={!valeur.trim() || occupe} onClick={poser}>
+        {primaire ? 'Ajouter une chose à faire' : 'Ajouter'}
       </button>
     </div>
   )

@@ -44,7 +44,14 @@ await page.click('text=Reprendre la saison 2026 · Pau-Arnos')
 await page.waitForTimeout(1500)
 
 await page.click('nav.barre .onglet:has-text("ROULAGES")')
-await page.click('.bloc:has-text("Pau-Arnos")')
+// ⚠ ON OUVRE UNE JOURNÉE VÉCUE, ET IL A FALLU L'ÉCRIRE. `.bloc:has-text(
+// "Pau-Arnos")` prend le PREMIER de la liste, rangée par date décroissante —
+// c'est-à-dire le roulage du 19 septembre que la saison de démonstration sème,
+// et qui n'a pas eu lieu. Cet essai lisait donc une courbe de progression dans
+// le bilan d'une journée où le pilote n'était pas encore allé, et il passait au
+// vert. Depuis le récit 17.2 ce tap ouvre ce qui PRÉPARE la journée ; la courbe
+// se lit là où elle a un sens, sur une journée qui a un chrono.
+await page.click('.bloc:has-text("2026-08-15")')
 await page.waitForSelector('.courbe', { timeout: 20_000 })
 const c = (await page.textContent('.courbe')).replace(/\s+/g, ' ')
 console.log('② courbe allumée :', c)
@@ -98,7 +105,9 @@ console.log('④ à Nogaro, un roulage — courbe :',
   await page.isVisible('.courbe') ? 'NON — LES CIRCUITS SE MÉLANGENT' : 'absente, correct')
 
 await page.click('nav.barre .onglet:has-text("ROULAGES")')
-await page.click('.bloc:has-text("Pau-Arnos")')
+// Même motif qu'en ② : on rouvre une journée VÉCUE de Pau-Arnos, pas celle du
+// 19 septembre que la démonstration sème et qui n'a pas eu lieu.
+await page.click('.bloc:has-text("2026-08-15")')
 await page.waitForSelector('.courbe', { timeout: 20_000 })
 console.log('   et Pau-Arnos garde la sienne :', await page.isVisible('.courbe'))
 console.log('   toujours', (await page.$$eval('.courbe .trace rect', n => n.length)), 'points — Nogaro n\'y est pas entré')

@@ -36,8 +36,18 @@ await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
 await pret()
 
 // ── ① AVANT TOUT ROULAGE À VENIR : rien.
+//
+// ⚠ LA DATE EST DANS LE PASSÉ, ET C'EST LE SUJET DE CETTE VÉRIFICATION. Elle
+// prenait le défaut du formulaire — aujourd'hui — et éprouvait donc « une
+// journée du jour même », pas « une journée déjà passée ». Depuis le récit
+// 17.2 les deux ne se valent plus : le matin du 12 septembre, en chargeant le
+// camion, la journée du jour PORTE encore sa préparation (`accueil.ts` filtrait
+// `date_jour > ?` en strict, et la liste disparaissait le seul jour où elle
+// sert). Ce que la clause interdit reste entier : sur une journée PASSÉE, rien.
+const hier = (() => { const t = new Date(); t.setDate(t.getDate() - 1); return t.toISOString().slice(0, 10) })()
 await page.click('text=Saisir mon premier roulage')
 await page.fill('.champ[placeholder="Pau-Arnos"]', 'Nogaro')
+await page.fill('input[type=date]', hier)
 await page.click('text=Continuer')
 await page.waitForSelector('.molettes', { timeout: 20_000 })
 await page.click('text=Retour')

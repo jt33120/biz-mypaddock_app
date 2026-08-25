@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { aplati } from './depot'
+import { TOUTES_JOURNEES } from './vecu'
 
 /**
  * LA COURBE DE PROGRESSION — FR-20, épique 11.
@@ -47,9 +48,12 @@ export const courbeDuCircuit = async (
   // sans y penser : « pau arnos » tapé un soir sortait de sa propre courbe, le
   // titre annonçait un roulage de moins, et le gain se calculait sur une série
   // amputée. Trouvé par une passe adverse, pas par un essai.
+  // Un POINT est un chrono : la courbe passe par `tour`, donc elle ne peut voir
+  // qu'un jour où l'on a roulé. Une journée annoncée n'y entre pas — elle n'a
+  // rien à y mettre, et c'est la seule raison qui vaille.
   const tous = await db.getAll<{ id: string; date: string; ms: number; nom: string }>(
     `SELECT r.id, r.date_jour AS date, min(t.temps_ms) AS ms, r.circuit_nom AS nom
-       FROM roulage r
+       FROM roulage r ${TOUTES_JOURNEES}
        JOIN session s ON s.roulage_id = r.id
        JOIN tour t ON t.session_id = s.id
       WHERE r.circuit_nom IS NOT NULL
@@ -84,7 +88,7 @@ export const circuitsAvecCourbe = async (
   // le seuil, et aucune courbe ne s'allumerait.
   const l = await db.getAll<{ circuit: string; id: string }>(
     `SELECT DISTINCT r.circuit_nom AS circuit, r.id
-       FROM roulage r
+       FROM roulage r ${TOUTES_JOURNEES}
        JOIN session s ON s.roulage_id = r.id
        JOIN tour t ON t.session_id = s.id
       WHERE r.circuit_nom IS NOT NULL`)

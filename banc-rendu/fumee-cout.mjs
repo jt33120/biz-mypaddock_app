@@ -66,15 +66,68 @@ console.log('   coût AU TOUR caché sans budget :', sansBudget.includes('Au tou
 console.log('   ni zéro ni tiret :', /Au tour[^€]*(0 €|—)/.test(sansBudget) ? 'NON' : 'oui')
 console.log('   champ budget proposé :', await page.isVisible('#budget'))
 
-// On pose le budget : le coût au tour doit apparaître AVEC le consommé.
+/* ─── RÉCIT 19.1 — LE CHAMP DIT SA PÉRIODE À CÔTÉ DE LA VALEUR ─────────────
+   Le défaut que Julian a payé : « le coût est de 2180 mais le budget est de
+   500/mois ». Il a saisi un montant MENSUEL dans un champ ANNUEL, et rien à
+   l'écran ne l'a contredit — le mot « saison » vivait dans une étiquette
+   au-dessus et le placeholder disait « 0 ». */
+console.log('   l\'unité du champ porte la période :',
+  (await texte('.somme .unite')).includes('par an') ? 'oui' : 'NON')
 await page.fill('#budget', '2000')
+// LA CONVERSION PENDANT LA FRAPPE, avant même de valider : celui qui pensait
+// « par mois » lit immédiatement ce que son chiffre vaut au mois.
+const pendant = await texte('.bloc:has-text("Ce que la journée a coûté")')
+console.log('   le repère du mois s\'écrit pendant la frappe :',
+  /repère de 166,67 € par mois/.test(pendant) ? 'oui' : 'NON', pendant.slice(-120))
+
+// On pose le budget : le coût au tour doit apparaître AVEC le consommé.
 await page.click('text=Poser le budget')
 // On attend la JAUGE : elle n'existe que dans la branche « budget déclaré ».
 // Attendre le texte « au tour » matchait la note qui explique son absence.
 await page.waitForSelector('.jauge', { timeout: 10_000 })
 const avec = await texte('.bloc:has-text("Ce que la journée a coûté")')
 console.log('③ avec budget :', avec)
-console.log('   consommé dans le MÊME bloc :', avec.includes('consommé') ? 'oui' : 'NON — FR-21 VIOLÉE')
+// FR-21 — le consommé est DANS LE MÊME BLOC, sans interaction pour le révéler.
+// ⚠ L'ESSAI CHERCHAIT LE MOT « consommé » ; il cherche maintenant les DEUX
+// CHIFFRES ensemble, ce qui est la clause elle-même. Un mot est un synonyme
+// près de disparaître, deux montants côte à côte sont la chose à prouver.
+console.log('   dépensé ET plafond dans le MÊME bloc :',
+  /180,50 €/.test(avec) && /sur 2 000 € posés pour l'année/.test(avec) ? 'oui' : 'NON — FR-21 VIOLÉE')
+console.log('   les deux chiffres portent leur période :',
+  /sur l'année 2026/.test(avec) && /posés pour l'année/.test(avec) ? 'oui' : 'NON')
+console.log('   sous le plafond, la jauge ne porte aucun repère :',
+  await page.$$eval('.jauge i', (n) => n.length) === 0 ? 'oui' : 'NON')
+
+/* ─── LE DÉPASSEMENT — le chiffre exact de Julian, 2180 sur un plafond ─────
+   Bornée à 100 % par un `Math.min`, la jauge rendait 2 000,01 € et 2 180 €
+   STRICTEMENT identiques : une barre pleine, et rien pour dire de combien on
+   dépasse. Elle se reborne maintenant sur le consommé, et le plafond devient un
+   repère posé dessus.
+   ⚠ ET RIEN NE ROUGIT, RIEN NE REPROCHE : « dépasser son budget n'est pas une
+   faute » est une règle écrite, et le rouge est réservé au geste qui détruit. */
+await page.click('text=Ajouter une dépense')
+await page.waitForSelector('section.depense')
+await page.fill('#montant', '2000')
+await page.fill('#libelle', 'Pneus')
+await page.click('section.depense .bouton:not(.secondaire)')
+await page.waitForSelector('.jauge', { timeout: 20_000 })
+await page.waitForFunction(() => document.querySelectorAll('.jauge i').length > 0,
+  null, { timeout: 20_000 }).catch(() => {})
+const trop = await texte('.bloc:has-text("Ce que la journée a coûté")')
+console.log('④ dépassement :', trop.slice(0, 200))
+console.log('   le plafond est marqué sur la jauge :',
+  await page.$$eval('.jauge i', (n) => n.length) === 1 ? 'oui' : 'NON')
+// Le repère tombe là où le plafond tombe : 2000 sur 2180,50 ≈ 91,7 %. Une barre
+// bornée à 100 % l'aurait laissé au bout, indiscernable d'un euro de trop.
+const ou = await page.$eval('.jauge i', (n) => n.style.left)
+console.log('   il dit DE COMBIEN on dépasse :',
+  parseFloat(ou) > 85 && parseFloat(ou) < 95 ? 'oui' : 'NON', ou)
+const teintes = await page.$$eval('.jauge, .jauge *',
+  (ns) => ns.map((n) => getComputedStyle(n).backgroundColor + ' ' + getComputedStyle(n).color))
+console.log('   rien ne rougit au dépassement :',
+  teintes.some((t) => /255, 92, 92/.test(t)) ? 'NON — le rouge du destructif' : 'oui')
+console.log('   rien ne dit « dépassé » :',
+  /dépass|trop|attention|faute/i.test(trop) ? 'NON' : 'oui')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/cout.png', fullPage: true })
 await nav.close()

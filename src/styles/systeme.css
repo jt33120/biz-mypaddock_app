@@ -509,12 +509,50 @@ body {
 
 /* La jauge de budget est une TRACE, pas une alarme : elle ne change pas de
    couleur en approchant du plafond. Dépasser son budget n'est pas une faute,
-   et le produit n'a rien à en dire. */
-.jauge { height: 3px; background: rgba(8,12,28,.8); border: 1px solid var(--filet); }
+   et le produit n'a rien à en dire. Depuis le 24 août, le rouge est en plus
+   réservé au geste qui détruit : il n'aurait rien à faire ici même si la règle
+   tombait. Un essai unitaire lit ce bloc et refuse toute couleur d'alerte.
+
+   ⚠ ET ELLE NE SE REMPLIT PAS VERS UN PLAFOND MENSUEL. Il n'existe qu'UNE jauge
+   dans le produit, celle de l'année. Une seconde, mensuelle, ferait du repère du
+   mois un compteur à rebours — exactement ce que les deux clauses d'argent
+   évitent. */
+.jauge {
+  position: relative;   /* pour le repère du plafond, posé dessus */
+  height: 3px; background: rgba(8,12,28,.8); border: 1px solid var(--filet);
+}
 .jauge span {
   display: block; height: 100%;
   background: linear-gradient(90deg, var(--miami), var(--magenta));
 }
+/* LE REPÈRE DU PLAFOND — il n'apparaît QUE lorsque le consommé dépasse, parce
+   qu'en deçà la barre s'arrête déjà au plafond. Sans lui, 501 € et 2180 € sur un
+   budget de 500 € donnaient la MÊME barre pleine : le dépassement existait et
+   l'écran n'en disait rien. C'est un trait d'encre, pas une alerte. */
+.jauge i {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--encre); opacity: .8;
+}
+
+/* L'unité qui porte une PÉRIODE — « € par an » — plutôt que le seul symbole.
+   Récit 19.1 : la période doit se lire à côté de la valeur qu'on tape, pas dans
+   un titre au-dessus qu'on ne relit pas. Deux lignes serrées, pour ne pas
+   manger la largeur du champ sur un écran de 390 px.
+
+   ⚠ COLONNE, PAS UN saut de ligne : `.unite` est une boîte flex, et un `<br>`
+   dans un conteneur flex ne coupe rien — les deux mots seraient restés côte à
+   côte et auraient poussé le champ hors de l'écran. */
+.somme .unite.periode {
+  flex-direction: column; justify-content: center;
+  font-size: 13px; font-weight: 700; line-height: 1.15; text-align: center;
+  letter-spacing: .04em; padding: 0 12px;
+}
+
+/* LE RACCOURCI DE DÉPENSE DE L'ACCUEIL — replié, ce n'est qu'un lien. Aucune
+   pastille, aucun compteur, aucun fond qui le fasse remarquer : un raccourci qui
+   rappelle son existence est une relance, et le produit n'en fait pas. */
+.raccourci-depense { gap: 8px; }
+.raccourci-depense > .lien { align-self: flex-start; }
 
 .depense { display: flex; flex-direction: column; gap: 14px; }
 .depense .texte { color: var(--encre-faible); font-size: 15px; }
@@ -706,6 +744,42 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 }
 .circuit-page .garage-titre { border-left: 3px solid var(--miami); padding-left: 12px; }
 .circuit-page .garage-tete .lien { min-height: 40px; }
+
+/* ─── LA JOURNÉE QUI N'A PAS ENCORE EU LIEU — récit 17.2 ───────────────────
+   Elle emprunte le JAUNE DE LA STRUCTURE, celui d'« Avant d'y aller » juste en
+   dessous : les deux parlent de la même chose, la préparation. Le cyan est
+   celui de la fiche de circuit et le violet celui du record — les confondre
+   ferait lire une journée annoncée comme un résultat.
+
+   ⚠ AUCUN ROUGE, AUCUNE PASTILLE, AUCUNE BARRE. Le jaune est présent, jamais
+   alarmant : rien ici n'échoit, rien ne se remplit, rien ne réclame. */
+.journee-page .garage-titre { border-left: 3px solid var(--plus-lent); padding-left: 12px; }
+.journee-page .garage-tete .lien { min-height: 40px; }
+.journee-page .garage-titre .sous-titre { color: var(--encre-faible); font-size: 14px; }
+/* ⚠ `center` ET NON `baseline`, ET C'EST UN VRAI DÉFAUT QU'ON ÉVITE. Une tête
+   de page aligne un LIEN de 40 px de haut et un libellé d'une ligne : sur la
+   ligne de base, le libellé remonte de toute la hauteur du lien et sort par le
+   haut de l'écran — vu sur la capture, « DANS 18 JOURS » à moitié coupé sous le
+   bandeau. La même tête sert à la fiche de circuit, où le second élément est le
+   PAYS : il n'apparaît que quand le référentiel est descendu, c'est-à-dire
+   jamais encore. Le défaut y dort. */
+.garage-tete { align-items: center; }
+
+/* Le champ d'ajout PASSE EN COLONNE quand son bouton est l'action première.
+   « AJOUTER UNE CHOSE À FAIRE » ne se coupe pas (`white-space: nowrap`) et le
+   bouton ne se comprime pas (`flex: 0 0 auto`) : sur 390 px, il prenait toute
+   la rangée et le champ tombait à 60 px — une case vide à côté d'un bouton
+   géant. C'est le pendant exact du piège `min-width: 0` documenté au-dessus, et
+   il ne se voit pas davantage à la relecture. */
+.ajout-tache.primaire { flex-direction: column; align-items: stretch; }
+.ajout-tache.primaire .bouton { width: 100%; }
+
+/* Le chargement PAS ENCORE COMPOSÉ garde son nom. Sur l'écran d'une journée à
+   venir, les deux listes se suivent : « Avant d'y aller » dans son bloc, et le
+   chargement en lien nu juste dessous, sans titre — la seconde ne se lisait plus
+   comme une liste, mais comme un lien perdu. Elle porte son nom avant d'exister,
+   comme la section « conformité » porte le sien quand elle est vide. */
+.chargement-vide { border-left: 3px solid var(--filet-vif); }
 
 /* ─── AVANT D'Y ALLER ──────────────────────────────────────────────────────
    Aucun rouge, aucune pastille, aucune barre de progression. Ce bloc ÉNONCE ce

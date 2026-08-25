@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
+import { A_EU_LIEU, aujourdhui } from './vecu'
 
 /**
  * L'HORLOGE D'USURE — épique 12, FR-40 à FR-44.
@@ -100,8 +101,7 @@ type Ligne = {
  * inconnue, pas nulle, et confondre les deux ferait mentir le chiffre.
  */
 export const horloges = async (
-  db: PowerSyncDatabase, machineId: string,
-  jour = new Date().toISOString().slice(0, 10),
+  db: PowerSyncDatabase, machineId: string, jour = aujourdhui(),
 ): Promise<Horloge[]> => {
   const lignes = await db.getAll<Ligne>(
     `SELECT id, machine_id, operation, intervalle_roulages, source_url, recolte_le,
@@ -131,9 +131,13 @@ export const horloges = async (
     // est un projet, pas de l'usure : le compter ferait vieillir une machine
     // pour une journée qui n'a pas eu lieu. Trouvé en lisant le résultat de
     // l'essai — l'horloge repartait bien, mais à 1 au lieu de 0.
+    //
+    // ⚠ CETTE RÈGLE ÉTAIT ÉCRITE ICI, ET SEULEMENT ICI. C'est ce qui a permis
+    // aux quatre autres lectures de s'en passer sans que rien ne le signale :
+    // elle vit maintenant dans `src/db/vecu.ts`, et cette requête la CITE.
     const roulages = await db.getAll<{ rang: number | null; total: number | null }>(
       `SELECT groupe_rang AS rang, groupe_total AS total FROM roulage
-        WHERE machine_id = ? AND etat = 'usage' AND date_jour <= ?
+        WHERE machine_id = ? AND ${A_EU_LIEU('')}
           AND (? IS NULL OR date_jour >= ?)`, [l.machine_id, jour, depuis, depuis])
 
     let ponderes = 0, sansGroupe = 0

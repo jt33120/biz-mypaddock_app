@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { aplati } from './depot'
+import { A_EU_LIEU, aujourdhui } from './vecu'
 
 /**
  * LA FICHE D'UN CIRCUIT — demandée par Julian le 20 août : « pour chaque
@@ -61,7 +62,7 @@ export type FicheCircuit = {
  * pas une fiche vide en plus.
  */
 export const ficheCircuit = async (
-  db: PowerSyncDatabase, nom: string,
+  db: PowerSyncDatabase, nom: string, jour = aujourdhui(),
 ): Promise<FicheCircuit> => {
   const cle = aplati(nom)
 
@@ -84,13 +85,18 @@ export const ficheCircuit = async (
   // Ses journées ici. Le rapprochement se fait à plat côté application, pour la
   // même raison que partout ailleurs : deux orthographes ne font pas deux
   // circuits, et `lower()` de SQLite ignore les accents.
+  //
+  // ⚠ « TA DERNIÈRE JOURNÉE ICI » NE PEUT PAS ÊTRE UNE DATE À VENIR. Cette
+  // requête filtrait l'état sans filtrer le temps : le 12 septembre saisi le
+  // 25 août entrait dans `journees` et devenait `derniere` — la fiche annonçait
+  // comme dernière visite une journée où le pilote n'était pas encore allé.
   const r = await db.getAll<{ nom: string; jour: string; meilleur: number | null }>(
     `SELECT r.circuit_nom AS nom, r.date_jour AS jour,
             (SELECT min(t.temps_ms) FROM tour t
                JOIN session s ON s.id = t.session_id WHERE s.roulage_id = r.id) AS meilleur
        FROM roulage r
-      WHERE r.circuit_nom IS NOT NULL AND r.etat = 'usage'
-      ORDER BY r.date_jour ASC, r.id ASC`)
+      WHERE r.circuit_nom IS NOT NULL AND ${A_EU_LIEU('r')}
+      ORDER BY r.date_jour ASC, r.id ASC`, [jour])
   const siens = r.filter((x) => aplati(x.nom) === cle)
   const chronos = siens.filter((x) => x.meilleur != null)
 

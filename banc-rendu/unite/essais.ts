@@ -12,6 +12,7 @@
  * les besoins de l'essai. Ce qui est éprouvé ici est exactement ce qui part.
  */
 import { anneeSaison, enCentimes, formaterChrono, formaterEcart, formaterEuros } from '../../src/db/depot'
+import { grouperParMois, jaugeBudget, moisDuJour, repereMensuel } from '../../src/db/budget'
 import { instantDeLId, SEUIL_H } from '../../src/db/mesures'
 import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
 import { formaterPoids, TABLES_EMPORTEES } from '../../src/db/emporter'
@@ -100,6 +101,66 @@ const vrai = (c: boolean, quoi: string) => { if (!c) throw new Error(quoi) }
 const DESTRUCTIVES = gestesDestructifs(SOURCES)
 
 /**
+ * ─── LES REQUÊTES DU DÉPÔT, LUES COMME DU TEXTE — récit 17.1 ────────────────
+ *
+ * Une requête SQL est une chaîne : elle ne porte aucun type, aucun appel,
+ * aucune référence que le compilateur puisse suivre. Deux requêtes qui doivent
+ * appliquer la même règle n'ont, dans le code, RIEN qui les relie — et c'est
+ * précisément comme ça que « cette journée a-t-elle eu lieu ? » a fini écrite
+ * quatre fois et demie, avec une moitié différente dans chaque fichier.
+ *
+ * Le seul témoin possible est donc le texte source. On en extrait les gabarits
+ * — tout ce qui vit entre deux accents inverses — parce qu'aucun d'eux ne
+ * contient d'accent inverse imbriqué : `${A_EU_LIEU('r')}` porte des
+ * apostrophes, jamais des accents.
+ *
+ * ⚠ `src/db/vecu.ts` EST EXCLU, ET IL DOIT L'ÊTRE : c'est le seul fichier qui a
+ * le droit d'écrire le prédicat, puisque c'est lui qui le définit.
+ */
+const gabaritsSql = (): { fichier: string; sql: string }[] => {
+  const sortie: { fichier: string; sql: string }[] = []
+  for (const [chemin, texte] of Object.entries(SOURCES)) {
+    if (chemin.endsWith('/db/vecu.ts')) continue
+    for (const m of texte.matchAll(/`([^`]*)`/g)) {
+      if (!/\bSELECT\b/i.test(m[1])) continue
+      sortie.push({ fichier: chemin.replace(/^.*\/src\//, 'src/'), sql: m[1] })
+    }
+  }
+  return sortie
+}
+
+/** Toute LECTURE : les écritures — `INSERT`, `UPDATE`, un `DELETE` sans
+ *  sous-requête — n'ont pas à se prononcer sur le temps, elles visent une ligne
+ *  qu'on leur désigne. */
+const lecturesSql = () => gabaritsSql()
+
+/**
+ * Chaque ENDROIT où l'on va chercher dans la table `roulage` — pas chaque
+ * requête. C'est là, et nulle part ailleurs, qu'une journée qui n'a pas eu lieu
+ * peut être comptée comme vécue.
+ *
+ * ⚠ LA DISTINCTION A ÉTÉ TROUVÉE EN FAISANT ROUGIR L'ESSAI, ET ELLE EST TOUT
+ * L'ESSAI. La première version regardait la requête ENTIÈRE : une cinquième
+ * lecture glissée dans le même gabarit que les quatre corrigées passait sans
+ * rien dire, parce qu'un `A_EU_LIEU` écrit trois lignes plus haut, pour un autre
+ * chiffre, suffisait à la couvrir. C'est exactement la forme de `chiffres.ts`,
+ * qui compte sept choses en une seule requête — donc exactement l'endroit où la
+ * cinquième s'écrira.
+ *
+ * On découpe donc au `FROM roulage` : chaque morceau va d'une lecture à la
+ * suivante, et doit porter SA propre décision sur le temps.
+ */
+const lecturesDeRoulage = (): { fichier: string; sql: string }[] => {
+  const sortie: { fichier: string; sql: string }[] = []
+  for (const q of gabaritsSql()) {
+    const coupes = [...q.sql.matchAll(/\b(?:FROM|JOIN)\s+roulage\b/gi)].map((m) => m.index!)
+    for (let i = 0; i < coupes.length; i++)
+      sortie.push({ fichier: q.fichier, sql: q.sql.slice(coupes[i], coupes[i + 1] ?? q.sql.length) })
+  }
+  return sortie
+}
+
+/**
  * SIMULER UN SAFARI D'AVANT LA 26 — on ne l'espère pas, on le fabrique.
  *
  * Ces essais tournent dans Chromium, où `createWritable` existe : attendre de
@@ -151,6 +212,116 @@ const essais = [
     egal(formaterEuros(20000), '200 €')
     vrai(formaterEuros(24550).startsWith('245,50'), `obtenu ${formaterEuros(24550)}`)
     egal(formaterEuros(0), '0 €'); egal(formaterEuros(5), '0,05 €')
+  }),
+
+  /* ─── L'ARGENT AU MOIS — épique 19 ─────────────────────────────────────
+     « Budget c'est pas correct : le coût est de 2180 mais le budget est de
+     500/mois » — Julian, 25 août 2026. Sa décision : LES DEUX, un plafond
+     annuel ET un repère mensuel.
+
+     Ces essais tiennent les DEUX moitiés de chaque règle. Le mois doit exister
+     (moitié positive), et il doit rester un CONSTAT : aucun mois comparé au
+     précédent, aucune projection, aucun reste à dépenser (moitié négative). La
+     seconde moitié ne se prouve pas par un commentaire — elle se prouve en
+     montrant qu'il n'existe nulle part où l'écrire. */
+  doit('un mois se lit dans le jour, et un jour bancal n\'invente aucun mois', () => {
+    egal(moisDuJour('2026-07-01'), '2026-07', 'le 1er du mois')
+    egal(moisDuJour('2026-07-31'), '2026-07', 'le 31 du mois')
+    // Ce qui n'est pas une date rend `null` — donc « sans mois », donc une ligne
+    // que l'écran DIT. Un `slice(0, 7)` nu aurait rendu « 2026-0 » ou « juillet »
+    // et fabriqué un mois qui n'existe pas.
+    for (const d of [null, undefined, '', '2026-07', '2026-7-1', 'demain'])
+      egal(moisDuJour(d), null, `« ${d} » a produit un mois`)
+  }),
+  doit('le 1er et le 31 tombent dans le même mois, décembre et janvier jamais', () => {
+    const m = grouperParMois([
+      { date_jour: '2026-07-01', poste: 'essence', montant_centimes: 9640 },
+      { date_jour: '2026-07-31', poste: 'pneus', montant_centimes: 38990 },
+      // LA SAISON À CHEVAL : deux jours qui se suivent, deux mois, deux années.
+      // Les confondre ferait rentrer janvier dans le bilan de l'année d'avant.
+      { date_jour: '2026-12-31', poste: 'entretien', montant_centimes: 12000 },
+      { date_jour: '2027-01-01', poste: 'entretien', montant_centimes: 5000 },
+    ])
+    egal(m.map((x) => x.mois), ['2026-07', '2026-12', '2027-01'])
+    egal(m[0].total, 48630, 'le 1er et le 31 doivent s\'additionner')
+    egal(m[0].n, 2)
+    // Et la saison, elle, sépare bien les deux jours voisins (AD-8, AD-18).
+    vrai(anneeSaison('2026-12-31') !== anneeSaison('2027-01-01'),
+      'le 31 décembre et le 1er janvier sont dans la même saison')
+  }),
+  doit("une dépense sans jour est dite « sans mois », jamais rangée au hasard", () => {
+    // ⚠ LE PRÉCÉDENT EST « SANS POSTE », ET IL EST DÉLIBÉRÉ. Les dépenses
+    // saisies avant la colonne `date_jour` n'auront JAMAIS de mois. Leur donner
+    // celui de leur roulage, celui de leur uuid ou le 1er janvier fabriquerait
+    // une donnée que personne n'a donnée — et indiscernable d'une vraie.
+    const m = grouperParMois([
+      { date_jour: null, poste: null, montant_centimes: 23000 },
+      { date_jour: '2026-04-12', poste: 'engagement', montant_centimes: 23000 },
+      { date_jour: null, poste: 'essence', montant_centimes: 4000 },
+    ])
+    egal(m.map((x) => x.mois), ['2026-04', null], 'les sans-mois passent en dernier')
+    egal(m[1].total, 27000); egal(m[1].n, 2)
+    // Le poste manquant reste manquant DANS le mois : deux absences distinctes
+    // ne se réparent pas l'une l'autre.
+    // Le plus gros d'abord — 230 € sans poste, puis 40 € d'essence. Une
+    // composition, pas un palmarès : le rang ne dit que la taille.
+    egal(m[1].postes.map((p) => p.poste), [null, 'essence'])
+    egal(m[1].postes.map((p) => p.total), [23000, 4000])
+  }),
+  doit('les mois se rangent dans l\'ordre du calendrier, jamais par montant', () => {
+    // Trier par montant ferait du mois le plus cher une tête de liste, donc un
+    // palmarès, donc un verdict — sur un mois où l'on a simplement roulé.
+    const m = grouperParMois([
+      { date_jour: '2026-09-02', poste: 'pneus', montant_centimes: 100 },
+      { date_jour: '2026-03-02', poste: 'pneus', montant_centimes: 90000 },
+      { date_jour: '2026-06-02', poste: 'pneus', montant_centimes: 5000 },
+    ])
+    egal(m.map((x) => x.mois), ['2026-03', '2026-06', '2026-09'])
+  }),
+  doit('un mois ne porte AUCUN champ où loger une comparaison', () => {
+    // ⚠ L'ESSAI NÉGATIF DE L'ÉPIQUE 19, et il ne se remplace pas par un
+    // commentaire. « Aucun mois ne se compare au précédent, aucun + 40 %, aucun
+    // reste à dépenser » : la seule garantie durable est qu'il n'existe NULLE
+    // PART où écrire ces chiffres. Ajouter `variation` ou `restant` à
+    // `LigneMois` fait rougir cette ligne avant d'atteindre un écran.
+    const [m] = grouperParMois([{ date_jour: '2026-05-04', poste: 'autre', montant_centimes: 1 }])
+    egal(Object.keys(m).sort(), ['mois', 'n', 'postes', 'total'])
+    egal(Object.keys(m.postes[0]).sort(), ['poste', 'total'])
+  }),
+  doit('le repère du mois est le plafond divisé par douze, et rien d\'autre', () => {
+    // La décision de Julian, moitié « mois ». Il se DÉRIVE : deux montants
+    // saisis séparément — 6000 à l'année, 400 au mois — finissent par se
+    // contredire, et personne ne sait plus lequel des deux ment.
+    egal(repereMensuel(50_000), 4167, '500 € par an')
+    egal(repereMensuel(600_000), 50_000, '6000 € par an font 500 € par mois')
+    // Sans plafond, pas de repère. Ni zéro, ni tiret : l'absence est une absence.
+    egal(repereMensuel(null), null); egal(repereMensuel(0), null); egal(repereMensuel(-1), null)
+    // ⚠ DOUZE REPÈRES NE REFONT PAS LE PLAFOND — 41,67 × 12 = 500,04. C'est
+    // pourquoi ce chiffre ne s'additionne JAMAIS dans le produit : il se lit un
+    // mois à la fois. L'essai fige l'écart pour que personne ne le somme.
+    vrai(repereMensuel(50_000)! * 12 !== 50_000, 'le repère se somme en plafond')
+  }),
+  doit('la jauge distingue 501 € de 2180 € sur un plafond de 500 €', () => {
+    // ⚠ LE DÉFAUT EXACT DE JULIAN. `Math.min(100, consommé / plafond)` rendait
+    // les deux IDENTIQUES : une barre pleine, et pas un pixel entre un
+    // dépassement d'un euro et un dépassement de quatre fois le budget.
+    const juste = jaugeBudget(50_100, 50_000)
+    const loin = jaugeBudget(218_000, 50_000)
+    egal(juste.part, 100); egal(loin.part, 100, 'la barre ne dépasse jamais 100 %')
+    vrai(juste.repere !== loin.repere, 'les deux dépassements se confondent encore')
+    vrai(juste.repere! > 99, `à un euro près, le plafond est au bout : ${juste.repere}`)
+    vrai(loin.repere! < 25, `à 2180 € sur 500 €, le plafond est au quart : ${loin.repere}`)
+  }),
+  doit('en deçà du plafond la jauge ne porte aucun repère, et ne divise jamais par zéro', () => {
+    const dessous = jaugeBudget(20_000, 50_000)
+    egal(dessous.part, 40); egal(dessous.repere, null, 'un repère avant le dépassement')
+    // Le plafond absent (FR-24 : la jauge ne devrait alors pas s'afficher du
+    // tout) rendait `Infinity` et une barre large de « Infinity% ».
+    egal(jaugeBudget(20_000, 0), { part: 0, repere: null })
+    egal(jaugeBudget(0, 50_000), { part: 0, repere: null })
+    // Et rien d'autre que deux longueurs ne sort d'ici : ni verdict, ni couleur,
+    // ni « dépassé ». Dépasser son budget n'est pas une faute.
+    egal(Object.keys(jaugeBudget(1, 2)).sort(), ['part', 'repere'])
   }),
 
   /* ─── LE CHRONO ────────────────────────────────────────────────────────── */
@@ -663,6 +834,72 @@ const essais = [
     egal(charge[0].libelle, 'Vidange', 'le reste de la ligne a été perdu')
   }),
 
+  // ⚠ LE TROISIÈME DÉFAUT DE LA MÊME FAMILLE, après l'ordre d'envoi et le YAML
+  // de synchronisation : une colonne AU SCHÉMA LOCAL QUI N'EXISTE PAS AU
+  // SERVEUR. Rien ne le relie — le schéma est du TypeScript, le serveur est un
+  // tas de fichiers SQL — et la sanction n'est pas une ligne perdue : PostgREST
+  // refuse le BLOC entier en PGRST204, donc toutes les dépenses d'un coup, avec
+  // un message qui ne nomme que la colonne. `date_jour` (récit 19.2) est arrivée
+  // par là ; cet essai fait que la prochaine ne passera pas.
+  doit('aucune colonne locale ne manque au serveur', () => {
+    const colonnes = new Map<string, Set<string>>()
+    const noter = (t: string, c: string) => {
+      if (!colonnes.has(t)) colonnes.set(t, new Set())
+      colonnes.get(t)!.add(c.toLowerCase())
+    }
+    for (const sql of Object.values(MIGRATIONS)) {
+      const net = sql.replace(/--[^\n]*/g, '')
+      for (const m of net.matchAll(/create table (?:if not exists )?(\w+)\s*\(([\s\S]*?)\n\)\s*;/gi))
+        for (const l of m[2].split('\n')) {
+          // Une ligne de colonne commence par un nom suivi d'un type ; les
+          // lignes de contrainte commencent par `constraint`, `check`, `unique`,
+          // `primary` ou `foreign` et n'en sont pas.
+          const c = l.match(/^\s*(\w+)\s+[\w[\]().]+/)
+          if (c && !/^(constraint|check|unique|primary|foreign|exclude)$/i.test(c[1]))
+            noter(m[1], c[1])
+        }
+      for (const m of net.matchAll(/alter table (\w+)\s+add column (?:if not exists )?(\w+)/gi))
+        noter(m[1], m[2])
+      // Une colonne renommée au serveur n'est plus celle que le local écrit.
+      for (const m of net.matchAll(/alter table (\w+)\s+rename column (\w+) to (\w+)/gi)) {
+        colonnes.get(m[1])?.delete(m[2].toLowerCase()); noter(m[1], m[3])
+      }
+      for (const m of net.matchAll(/alter table (\w+)\s+drop column (?:if exists )?(\w+)/gi))
+        colonnes.get(m[1])?.delete(m[2].toLowerCase())
+    }
+    vrai((colonnes.get('depense')?.size ?? 0) > 5, 'le lecteur de migrations n\'a rien lu')
+
+    const montees = new Set<string>(ORDRE)
+    for (const t of AppSchema.tables) {
+      if (!montees.has(t.name)) continue
+      const auServeur = colonnes.get(t.name)
+      vrai(!!auServeur, `${t.name} part à l'envoi et n'existe dans aucune migration`)
+      for (const c of t.columns)
+        vrai(auServeur!.has(c.name.toLowerCase()),
+          `${t.name}.${c.name} est au schéma local et pas au serveur — PGRST204 sur tout le bloc`)
+    }
+  }),
+
+  // ⚠ LE JOUR D'UNE DÉPENSE SE PERDAIT À L'ÉCRITURE, pas à l'affichage. Les deux
+  // chemins recevaient la date, en tiraient l'année et jetaient le reste : le
+  // mois n'était pas « pas encore montré », il était détruit — et aucune requête,
+  // aucune migration ne le rattrape après coup. La colonne `poste` avait déjà
+  // vécu ça : `creerDepense` ne l'écrit toujours pas (récit 19.3). Un troisième
+  // chemin d'écriture ajouté demain fera rougir cette ligne.
+  doit('tout chemin qui écrit une dépense écrit son jour', () => {
+    const inserts: { fichier: string; colonnes: string }[] = []
+    for (const [chemin, texte] of Object.entries(SOURCES))
+      for (const m of texte.matchAll(/INSERT INTO\s+depense\s*\(([^)]*)\)/gi))
+        inserts.push({ fichier: chemin.replace(/^.*\/src\//, 'src/'), colonnes: m[1] })
+    // Deux écrivains aujourd'hui : `creerDepense` (depot.ts) et `depenserSur`
+    // (budget.ts). Si ce compte tombe à un, c'est que 19.3 a fusionné les deux —
+    // et il faudra le dire ici plutôt que de laisser l'essai croire au hasard.
+    vrai(inserts.length >= 2, `${inserts.length} écriture(s) de dépense trouvée(s)`)
+    for (const i of inserts)
+      vrai(/\bdate_jour\b/.test(i.colonnes),
+        `${i.fichier} écrit une dépense sans son jour : ce mois-là est perdu pour toujours`)
+  }),
+
   doit('aucune colonne à défaut serveur ne peut apparaître sans écrivain', () => {
     // ⚠ LE MÊME MOTIF QUE LE YAML DE SYNCHRONISATION : deux vérités séparées,
     // dont une prend du retard. `chrono_visible` et `partage` sont arrivées au
@@ -1108,8 +1345,22 @@ const essais = [
 
     // La jauge de budget est nommée parce que c'est elle qu'on a envie de faire
     // rougir : « dépasser son budget n'est pas une faute » (systeme.css).
-    const jauge = FEUILLE.match(/\.jauge\s*\{[^}]*\}[\s\S]{0,200}?\.jauge span\s*\{[^}]*\}/)?.[0]
-    vrai(!!jauge && !jauge.includes('alerte'), 'la jauge de budget a pris du rouge')
+    //
+    // ⚠ TOUTES SES RÈGLES, PAS DEUX. L'essai lisait `.jauge` et `.jauge span`
+    // par une expression figée ; le repère du dépassement (`.jauge i`, récit
+    // 19.1) est arrivé APRÈS et serait passé sous le nez de la garde — or c'est
+    // précisément la pièce qui dit le dépassement, donc la première qu'on aurait
+    // envie de teindre. La garde suit maintenant le sélecteur, pas la position.
+    const regles = [...FEUILLE.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((r) => /(^|[\s,])\.jauge\b/.test(r[1].replace(/\/\*[\s\S]*?\*\//g, ' ')))
+    vrai(regles.length >= 3, `${regles.length} règle(s) de jauge lues`)
+    for (const r of regles) {
+      const nom = r[1].replace(/\/\*[\s\S]*?\*\//g, ' ').trim()
+      vrai(!r[2].includes('alerte'), `${nom} a pris le rouge de l'alerte`)
+      // Et aucun rouge écrit à la main, qui échapperait au jeton.
+      vrai(!/\b(red|crimson|#[fF][0-9a-fA-F]{0,2}[0-4][0-9a-fA-F]{3})\b/.test(r[2]),
+        `${nom} porte une couleur d'alarme écrite à la main`)
+    }
   }),
 
   doit('« effacer mon compte » ne s\'écrit qu\'une fois, et sur le bouton', () => {
@@ -1156,6 +1407,72 @@ const essais = [
     vrai(!!cout, 'le défaut de cout_unitaire_centimes est introuvable dans la migration')
     egal(COUT_PORTRAIT_CENTIMES, Number(cout), 'prix annoncé en euros vs coût unitaire du serveur')
     vrai(COUT_PORTRAIT_CENTIMES > 0, 'un portrait annoncé gratuit est un portrait qui surprend')
+  }),
+
+  /* ─── RÉCIT 17.1 — UNE JOURNÉE ANNONCÉE NE SE COMPTE PAS COMME VÉCUE ──────
+     Ces deux essais sont la RAISON D'ÊTRE de `src/db/vecu.ts`, et ils sont
+     écrits contre l'histoire du défaut plutôt que contre son symptôme.
+
+     Le symptôme, c'était quatre chiffres faux. La cause, c'est une règle écrite
+     quatre fois et demie : `usure.ts` la tenait entière — état ET date —,
+     `bilan.ts` à moitié, `chiffres.ts` et `circuits.ts` pas du tout. Corriger
+     les quatre requêtes une par une est exactement la manière dont le défaut
+     est né, et la cinquième lecture serait écrite de la même façon : par
+     quelqu'un qui ne sait pas que la règle existe.
+
+     Le seul témoin qui voie ça est donc le TEXTE SOURCE. Rien dans le code ne
+     relie deux requêtes SQL écrites dans deux fichiers ; elles ne partagent ni
+     type, ni appel, ni schéma — le compilateur ne peut rien en dire. */
+  doit('17.1 — toute lecture des roulages se prononce sur le temps', () => {
+    const fautives = lecturesDeRoulage()
+      .filter((q) => !q.sql.includes('A_EU_LIEU') && !q.sql.includes('TOUTES_JOURNEES'))
+      .map((q) => `${q.fichier} — ${q.sql.replace(/\s+/g, ' ').trim().slice(0, 90)}`)
+    egal(fautives, [],
+      'lectures qui comptent des roulages sans dire ce qu\'elles font du futur')
+  }),
+
+  doit('17.1 — le prédicat ne se recopie nulle part', () => {
+    /* ⚠ LA MOITIÉ QUI MANQUERAIT SANS ÇA. L'essai ci-dessus se satisfait d'une
+       requête qui REDÉCLARE la règle à la main — `etat = 'usage' AND date_jour
+       <= ?` recopié une cinquième fois passerait sans citer `A_EU_LIEU`, en
+       portant simplement la marque. Or une règle recopiée est une règle qui
+       diverge : c'est littéralement ce qui vient d'arriver entre `usure.ts` et
+       `bilan.ts`, qui n'en portaient déjà plus la même moitié. */
+    const copies = lecturesSql()
+      .filter((q) => /etat\s*=\s*'usage'/i.test(q.sql))
+      .map((q) => q.fichier)
+    egal(copies, [], 'fichiers qui réécrivent le prédicat au lieu de l\'appeler')
+  }),
+
+  /* ─── RÉCIT 17.2 — LE TAP N'OUVRE PAS UN POST-MORTEM ──────────────────────
+     L'écran d'une journée à venir se définit par ce qu'il NE porte pas, et une
+     absence ne se vérifie que par la négative. Les mots visés sont ceux que le
+     bilan affiche sur une journée vide : « Meilleur tour du jour », « Sessions »
+     et le bouton « Saisir une session » en primaire pleine largeur. */
+  doit('17.2 — l\'écran d\'une journée à venir ne réclame aucun chrono', () => {
+    const source = Object.entries(ECRANS).find(([c]) => c.endsWith('/Journee.tsx'))?.[1] ?? ''
+    vrai(source.length > 0, 'Journee.tsx introuvable')
+    const affiche = source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+
+    for (const mot of ['Meilleur tour du jour', 'Sessions', 'Déclarer une chute'])
+      vrai(!affiche.includes(mot), `« ${mot} » sur une journée qui n'a pas eu lieu`)
+
+    // ⚠ MAIS LA PORTE RESTE OUVERTE — et c'est la moitié qu'on oublie. « On
+    // change ce qui est PROPOSÉ EN PREMIER, on ne ferme aucune porte » : si le
+    // pilote roule le jour même, le chemin du chrono existe. Il n'est
+    // simplement pas le bouton primaire pleine largeur.
+    const saisir = boutonsDe(source).filter((b) =>
+      b.libelles.some((l) => /saisir une session/i.test(l)))
+    egal(saisir.length, 1, 'le chemin vers la saisie d\'une session a disparu')
+    vrai(!/className="bouton"[^>]*>\s*Saisir une session/.test(affiche),
+      '« Saisir une session » est redevenu le bouton primaire')
+
+    // Aucun compteur de progression, aucune certification : ni « 4 sur 7 », ni
+    // pourcentage, ni « prêt ». C'est la même clause que FR-50, et elle vaut
+    // ici mot pour mot.
+    vrai(!/\d+\s*(sur|\/)\s*\d+/.test(affiche), 'un compteur de progression est apparu')
+    for (const mot of ['il te reste', 'plus que', 'prêt à partir'])
+      vrai(!affiche.toLowerCase().includes(mot), `« ${mot} » fabrique une échéance`)
   }),
 ]
 

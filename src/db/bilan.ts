@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { budgetDeclare, depenseSaison, poserBudget } from './depot'
+import { A_EU_LIEU, aujourdhui } from './vecu'
 
 /**
  * LE BILAN DE SAISON — épique 15, FR-52, FR-55, FR-56.
@@ -42,9 +43,15 @@ export type Bilan = {
 }
 
 export const bilanSaison = async (
-  db: PowerSyncDatabase, annee: number,
+  db: PowerSyncDatabase, annee: number, jour = aujourdhui(),
 ): Promise<Bilan> => {
   const a = String(annee)
+  // ⚠ LE FILTRE D'ÉTAT SEUL NE SERVAIT À RIEN, et FR-55 se retournait contre
+  // elle-même. `creerRoulage` écrit `usage` en dur : une journée annoncée pour
+  // septembre passait donc le filtre, entrait dans « N roulages saisis », et
+  // comme elle n'a aucun tour, le bilan l'annonçait « sans chrono ». Le seul
+  // écran dont la raison d'être est d'énoncer sa complétude désignait un trou
+  // qui n'en était pas un. Le prédicat partagé porte les DEUX moitiés.
   const r = await db.get<Record<string, number | string | null>>(
     `SELECT min(r.date_jour) AS du, max(r.date_jour) AS au,
             count(*) AS roulages,
@@ -54,22 +61,23 @@ export const bilanSaison = async (
             sum(CASE WHEN r.groupe_rang IS NULL THEN 1 ELSE 0 END) AS sansGroupe,
             count(DISTINCT r.circuit_nom) AS circuits
        FROM roulage r
-      WHERE substr(r.date_jour, 1, 4) = ? AND r.etat = 'usage'`, [a])
+      WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}`, [a, jour])
 
   // Chaque agrégat est compté SÉPARÉMENT et jamais par jointure : joindre
   // sessions, tours, photos et gestes dans la même requête multiplierait les
   // lignes, et chaque compte serait faux d'un facteur différent.
   const c = await db.get<Record<string, number | null>>(
     `SELECT (SELECT count(*) FROM session s JOIN roulage r ON r.id = s.roulage_id
-              WHERE substr(r.date_jour, 1, 4) = ?) AS sessions,
+              WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
                JOIN session s ON s.id = t.session_id
                JOIN roulage r ON r.id = s.roulage_id
-              WHERE substr(r.date_jour, 1, 4) = ?) AS meilleur,
+              WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}) AS meilleur,
             (SELECT count(*) FROM photo p JOIN roulage r ON r.id = p.roulage_id
-              WHERE substr(r.date_jour, 1, 4) = ?) AS photos,
+              WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}) AS photos,
             (SELECT count(*) FROM geste g JOIN roulage r ON r.id = g.roulage_id
-              WHERE substr(r.date_jour, 1, 4) = ?) AS gestes`, [a, a, a, a])
+              WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}) AS gestes`,
+    [a, jour, a, jour, a, jour, a, jour])
 
   return {
     annee,
@@ -88,13 +96,20 @@ export const bilanSaison = async (
   }
 }
 
-/** Les années qui ont au moins un roulage, la plus récente d'abord. Le produit
- *  ne propose jamais une année vide : montrer « 2028 · rien » serait montrer un
- *  écran vide, et un écran vide signale l'abandon (FR-14). */
-export const anneesSaisies = async (db: PowerSyncDatabase): Promise<number[]> => {
+/** Les années qui ont au moins un roulage VÉCU, la plus récente d'abord. Le
+ *  produit ne propose jamais une année vide : montrer « 2028 · rien » serait
+ *  montrer un écran vide, et un écran vide signale l'abandon (FR-14).
+ *
+ *  ⚠ ET UNE JOURNÉE ANNONCÉE POUR JANVIER PROCHAIN OUVRIRAIT EXACTEMENT ÇA :
+ *  une saison 2027 qui n'existe pas encore, avec zéro roulage dedans — puisque
+ *  `bilanSaison` ne compte, lui, que les vécus. Les deux lectures doivent donc
+ *  se prononcer de la même manière, sinon elles se contredisent d'un écran. */
+export const anneesSaisies = async (
+  db: PowerSyncDatabase, jour = aujourdhui(),
+): Promise<number[]> => {
   const l = await db.getAll<{ a: string }>(
     `SELECT DISTINCT substr(date_jour, 1, 4) AS a FROM roulage
-      WHERE date_jour IS NOT NULL ORDER BY a DESC`)
+      WHERE date_jour IS NOT NULL AND ${A_EU_LIEU('')} ORDER BY a DESC`, [jour])
   return l.map((x) => Number(x.a)).filter((n) => Number.isFinite(n))
 }
 

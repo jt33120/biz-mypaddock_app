@@ -3,6 +3,7 @@ import { nouvelId } from './ids'
 import { CONSEILS_EMBARQUES } from './corpus'
 import { marquerSaisie } from './mesures'
 import { aplati } from './depot'
+import { TOUTES_JOURNEES } from './vecu'
 
 /**
  * L'ACCUEIL TEMPOREL — récit 6.1.
@@ -59,7 +60,11 @@ const LIGNE = `
             JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur,
          coalesce((SELECT sum(d.montant_centimes) FROM depense d
                      WHERE d.cible = 'roulage' AND d.roulage_id = r.id), 0) AS cout_centimes
-    FROM roulage r`
+    FROM roulage r ${TOUTES_JOURNEES}`
+/* ⚠ ET C'EST LA SEULE LECTURE DU PRODUIT DONT LE SUJET EST LE FUTUR. Le
+   prédicat partagé n'a rien à faire ici : c'est le `WHERE` de chaque appelant
+   qui porte le temps, parce que l'un cherche ce qui vient et l'autre ce qui
+   est passé. */
 
 /**
  * La source du jour, et l'ORDRE compte.
@@ -79,11 +84,14 @@ export const sourceAccueil = async (db: PowerSyncDatabase, jour: string): Promis
   //    aucune branche ne dit « si on est en décembre », elle dit « si ces deux
   //    dates tombent le même jour ». Le comportement suit la donnée du pilote,
   //    jamais le calendrier.
+  // Un GESTE déclaré prouve la journée : on ne pose pas un genou à terre sur une
+  // date qui n'est pas venue, et la requête ne remonte de toute façon que des
+  // années strictement antérieures.
   const anniv = await db.getAll<{ libelle: string; circuit: string; annee: string }>(
     `SELECT coalesce(c.libelle, g.cap_code) AS libelle, r.circuit_nom AS circuit,
             substr(r.date_jour, 1, 4) AS annee
        FROM geste g
-       JOIN roulage r ON r.id = g.roulage_id
+       JOIN roulage r ${TOUTES_JOURNEES} ON r.id = g.roulage_id
        LEFT JOIN cap c ON c.code = g.cap_code
       WHERE substr(r.date_jour, 6, 5) = substr(?, 6, 5)
         AND substr(r.date_jour, 1, 4) < substr(?, 1, 4)
@@ -95,8 +103,26 @@ export const sourceAccueil = async (db: PowerSyncDatabase, jour: string): Promis
     }
   }
 
+  /**
+   * ⚠ LE JOUR MÊME EST ENCORE « À VENIR », TANT QU'AUCUNE SESSION N'EST SAISIE.
+   *
+   * Le filtre était `date_jour > ?`, en strict. Conséquence exacte : le 12
+   * septembre à 6 h du matin, en chargeant le camion, la journée sortait de
+   * « Prochain roulage » et l'accueil basculait sur « Dernier roulage ·
+   * aujourd'hui », « Meilleur tour du jour — », « 0 session ». La liste « Avant
+   * d'y aller » — celle qu'on ouvre justement ce matin-là — disparaissait le
+   * seul jour où elle sert, et l'écran demandait le bilan d'une journée qui
+   * n'avait pas commencé.
+   *
+   * Le basculement tient donc à un FAIT OBSERVABLE et à rien d'autre : une
+   * session existe. Jamais une heure, jamais un réglage. Le pilote rentre son
+   * premier chrono à midi, et l'accueil montre sa journée.
+   */
   const aVenir = await db.getAll<Prochain>(
-    `${LIGNE} WHERE r.date_jour > ? ORDER BY r.date_jour ASC LIMIT 1`, [jour])
+    `${LIGNE} WHERE r.date_jour > ?
+        OR (r.date_jour = ?
+            AND (SELECT count(*) FROM session s3 WHERE s3.roulage_id = r.id) = 0)
+      ORDER BY r.date_jour ASC LIMIT 1`, [jour, jour])
 
   // ② Le roulage à venir et l'ÉVÉNEMENT VISÉ se disputent la place, et c'est
   //    LE PLUS PROCHE qui l'emporte (FR-11) — pas le plus « officiel ». Un
@@ -168,7 +194,7 @@ export const meilleurAuCircuit = async (
     `SELECT r.circuit_nom AS nom, min(t.temps_ms) AS m
        FROM tour t
        JOIN session s ON s.id = t.session_id
-       JOIN roulage r ON r.id = s.roulage_id
+       JOIN roulage r ${TOUTES_JOURNEES} ON r.id = s.roulage_id
       WHERE r.id <> ? AND r.circuit_nom IS NOT NULL
       GROUP BY r.circuit_nom`, [saufRoulageId])
   const cle = aplati(circuit)
@@ -191,6 +217,16 @@ export const direAVenir = (jours: number): string =>
 
 export const direPasse = (jours: number): string =>
   jours <= 0 ? "aujourd'hui" : jours === 1 ? 'hier' : `il y a ${jours} jours`
+
+/** UNE DATE SE LIT, ELLE NE SE DÉCODE PAS. « 2026-09-12 » est un identifiant ;
+ *  « samedi 12 septembre 2026 » est une date — et le JOUR DE LA SEMAINE compte
+ *  ici plus qu'ailleurs : un roulage se pose un samedi, et c'est à ça qu'on le
+ *  reconnaît dans son calendrier. La même règle est déjà écrite pour les fiches
+ *  d'organisateur (`direPublication`, src/db/checklist.ts) ; elle vaut mot pour
+ *  mot pour la journée qu'on prépare. */
+export const direLeJour = (jour: string): string =>
+  new Date(jour + 'T12:00:00Z').toLocaleDateString('fr-FR',
+    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
 /* ─── LE CONSEIL DU JOUR ET LE PLAN SI-ALORS — récit 6.3 ───────────────────
    Le meilleur rapport valeur/coût de la réorientation, et le seul de ses

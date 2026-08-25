@@ -33,8 +33,24 @@ export function Checklist({ db, roulageId, jour }: {
   const creer = async () => { await composer(db, roulageId); await charger(); setOuverte(true) }
 
   if (!liste.length) {
+    /* ⚠ ELLE PORTE SON NOM AVANT D'EXISTER — et la classe n'est PAS `checklist`.
+       Sur l'écran d'une journée à venir, les deux listes se suivent : « Avant
+       d'y aller » dans son bloc, et le chargement en lien nu juste dessous. La
+       seconde ne se lisait plus comme une liste mais comme un lien égaré, alors
+       que ce sont deux listes distinctes qui doivent le rester (`CHARGEMENT`,
+       src/db/checklist.ts). Elle dit ce qu'elle contiendra — un fait — jamais ce
+       qui manquerait.
+       Le nom de classe reste distinct de `.checklist` À DESSEIN : le banc attend
+       `.checklist` pour savoir que la composition a eu lieu, et le faire
+       correspondre à l'état vide rendrait cette attente immédiate, donc muette. */
     return (
-      <button className="lien" onClick={() => void creer()}>Préparer le chargement</button>
+      <div className="bloc pile chargement-vide">
+        <p className="libelle">Chargement</p>
+        <p className="sous-titre">
+          Ce que tu emportes : la moto, ce que tu portes, ce que l'organisateur publie.
+        </p>
+        <button className="lien" onClick={() => void creer()}>Préparer le chargement</button>
+      </div>
     )
   }
 

@@ -31,6 +31,15 @@ const verifier = (titre, vrai, detail = '') => {
 
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
 await pret()
+
+// ── ⓪ L'ACCUEIL VIDE N'OFFRE QU'UNE SEULE ACTION ───────────────────────────
+// Le raccourci de dépense (récit 19.3) vit sur l'accueil — mais PAS ici. Sans
+// aucune donnée, FR-14 ne laisse qu'un seul chemin : saisir son premier roulage.
+// Un second lien à côté le dilue, et c'est le seul écran du produit où l'on ne
+// peut pas se permettre de disperser.
+verifier('⓪ l\'accueil vide ne propose pas le raccourci de dépense',
+  !(await page.textContent('.ecran')).includes('Noter une dépense'))
+
 await page.click('nav.barre .onglet:has-text("GARAGE")')
 
 // ── ③ AVANT TOUTE MACHINE ──────────────────────────────────────────────────
@@ -64,6 +73,37 @@ verifier('   aucune barre de progression',
 const assurance = (await page.textContent('.ligne-atelier.poste:has-text("Assurance")')).replace(/\s+/g, ' ')
 verifier('   un poste vide ne s\'affiche ni à zéro ni en tiret',
   !/0[ ,]|—/.test(assurance), assurance)
+
+// ── ①bis LE MOIS EXISTE, ET IL RESTE UN CONSTAT — récit 19.2 ──────────────
+// « Le coût est de 2180 mais le budget est de 500/mois » : le produit ne savait
+// pas compter au mois, parce que la dépense ne portait aucune date. Les trois
+// dépenses ci-dessus sont saisies au jour d'aujourd'hui — elles doivent donc se
+// retrouver dans le mois courant, et pour le montant exact.
+const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+const moisCourant = `${MOIS[new Date().getMonth()]} ${new Date().getFullYear()}`
+verifier('①bis le mois existe', budget.includes('Par mois') && budget.includes(moisCourant),
+  moisCourant)
+verifier('   le mois porte le total des trois postes',
+  new RegExp(`${moisCourant}[^€]*716,30`).test(budget), budget.slice(budget.indexOf('Par mois'), budget.indexOf('Par mois') + 160))
+verifier('   le mois dit de quoi il était fait',
+  new RegExp(`${moisCourant}[^€]*engagement`).test(budget))
+
+// ⚠ LES TROIS REFUS DU MOIS, et ils comptent autant que son existence. Un total
+// mensuel est l'endroit du produit où la comparaison, le pourcentage et le
+// « à ce rythme » s'invitent le plus naturellement — et un mois cher est un mois
+// où l'on a roulé, pas une faute.
+const projections = [/\d\s?%/, /à ce rythme/i, /projection/i, /prévisionnel/i,
+  /par rapport/i, /reste à/i, /tendance/i, /moyenne/i]
+verifier('   aucune comparaison de mois, aucune projection',
+  !projections.some((r) => r.test(budget)),
+  projections.filter((r) => r.test(budget)).map(String).join(' '))
+// Et AUCUNE jauge dans ce module : une barre qui se remplit vers un plafond du
+// mois ferait du repère un compteur à rebours — exactement ce que les deux
+// clauses d'argent refusent. La seule jauge du produit est celle de l'année, et
+// elle vit sur le bilan d'une journée.
+verifier('   aucune barre qui se remplit vers un plafond du mois',
+  await page.$$eval('.atelier.budget .jauge', (n) => n.length) === 0)
 
 // La cible est la LIGNE ENTIÈRE, pas le « + » : saisie gantée, 52 px minimum.
 const haut = await page.$eval('.ligne-atelier.poste', n => n.getBoundingClientRect().height)

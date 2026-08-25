@@ -4,6 +4,7 @@ import { nouvelId } from '../db/ids'
 import { NOM_BASE, VFS_DEMANDE, opfsDisponible, ouvrirBase, vfsReel } from '../db/powersync'
 import { SEUIL_H, tableauDeBord, type Tableau } from '../db/mesures'
 import { capaciteLocale, inventaireDuCoffre } from '../db/coffre'
+import { TOUTES_JOURNEES } from '../db/vecu'
 
 type Etat = { cle: string; val: string; ton?: 'oui' | 'non' | 'attente' }
 
@@ -134,7 +135,10 @@ export function Sonde({ db, onFermer }: { db: PowerSyncDatabase; onFermer: () =>
     // Un nombre non nul sans compte, c'est l'application qui a écrit là où elle
     // n'a que le droit de lire — et rien d'autre ne le rendrait visible.
     const r = await db.getAll<{ n: number; t: number; c: number }>(
-      `SELECT (SELECT count(*) FROM tour) AS n, (SELECT count(*) FROM roulage) AS t,
+      // La sonde compte des LIGNES PERSISTÉES, pas des journées vécues : c'est
+      // exactement son objet — savoir ce que le disque porte, quoi que ça vaille.
+      `SELECT (SELECT count(*) FROM tour) AS n,
+              (SELECT count(*) FROM roulage ${TOUTES_JOURNEES}) AS t,
               (SELECT count(*) FROM circuit) AS c`)
     dire(`persisté : ${r[0].n} tours sur ${r[0].t} roulages, ${r[0].c} circuits en référentiel`)
   }
@@ -193,10 +197,11 @@ const effacerLesMesures = async (db: PowerSyncDatabase) => {
   await db.writeTransaction(async (tx) => {
     await tx.execute(
       `DELETE FROM tour WHERE session_id IN (
-         SELECT s.id FROM session s JOIN roulage r ON r.id = s.roulage_id
+         SELECT s.id FROM session s JOIN roulage r ${TOUTES_JOURNEES} ON r.id = s.roulage_id
           WHERE r.circuit_nom = 'Sonde')`)
     await tx.execute(
-      `DELETE FROM session WHERE roulage_id IN (SELECT id FROM roulage WHERE circuit_nom = 'Sonde')`)
+      `DELETE FROM session WHERE roulage_id IN (
+         SELECT id FROM roulage ${TOUTES_JOURNEES} WHERE circuit_nom = 'Sonde')`)
     await tx.execute(`DELETE FROM roulage WHERE circuit_nom = 'Sonde'`)
   })
 }

@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { aplati } from './depot'
+import { A_EU_LIEU } from './vecu'
 
 /**
  * CE QUI RESTE À FAIRE AVANT UN ROULAGE — retour de Julian du 23 août :
@@ -97,9 +98,16 @@ export const cequiResteAFaire = async (
          FROM horloge WHERE machine_id = ?`, [roulage.machineId])
     for (const h of horloges) {
       if (!h.intervalle) continue      // sans barème, elle compte sans échoir
+      // ⚠ LE PARAMÈTRE DE DATE RESTE CELUI DU ROULAGE PRÉPARÉ, et c'est un
+      //   défaut CONNU, pas un oubli : le roulage qu'on prépare se compte
+      //   lui-même. Il ne se corrige pas ici parce qu'il en compense un second
+      //   EXACTEMENT — `n > intervalle` là où le garage lit `pondérés >=
+      //   intervalle` (usure.ts, Usure.tsx). Corriger l'un sans l'autre décale
+      //   toute la liste d'un roulage. Les deux partent ensemble au récit 17.3,
+      //   ou aucun.
       const depuis = await db.get<{ n: number }>(
         `SELECT count(*) AS n FROM roulage
-          WHERE machine_id = ? AND etat = 'usage' AND date_jour <= ?
+          WHERE machine_id = ? AND ${A_EU_LIEU('')}
             AND (? IS NULL OR date_jour >= (
                   SELECT coalesce(date_jour, '0000') FROM intervention WHERE id = ?))`,
         [roulage.machineId, roulage.date, h.depuis, h.depuis])

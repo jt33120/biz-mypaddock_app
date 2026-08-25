@@ -3,6 +3,7 @@ import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
 import { CIRCUITS_EMBARQUES } from './corpus'
 import { effacerLocale, nomLocal } from './photos'
+import { A_EU_LIEU, aujourdhui, TOUTES_JOURNEES } from './vecu'
 
 /** Toutes les lectures et écritures passent ici. Aucun écran n'écrit de SQL. */
 
@@ -144,10 +145,15 @@ export type BilanMachine = {
 /** Une machine sans roulage rend des zéros et des nuls — c'est un état valide,
  *  pas une absence de données (AD-2). */
 export const bilanMachine = async (
-  db: PowerSyncDatabase, machineId: string,
+  db: PowerSyncDatabase, machineId: string, jour = aujourdhui(),
 ): Promise<BilanMachine> => {
+  // ⚠ LES TROIS CHIFFRES DU GARAGE COMPTENT DE L'USURE, pas des intentions.
+  // Une journée annoncée pour septembre faisait dire au garage « 5 roulages »
+  // le jour de sa saisie, à côté d'une horloge d'usure qui, elle, en comptait
+  // 4 — les deux chiffres se contredisaient à trois centimètres d'écart.
   const r = await db.get<{ roulages: number }>(
-    `SELECT COUNT(*) AS roulages FROM roulage WHERE machine_id = ?`, [machineId])
+    `SELECT COUNT(*) AS roulages FROM roulage
+      WHERE machine_id = ? AND ${A_EU_LIEU('')}`, [machineId, jour])
 
   // Le meilleur tour se cherche AVEC sa journée, donc avec son circuit. Un
   // `min()` global aurait rendu le chrono sans savoir où il a été fait.
@@ -155,7 +161,7 @@ export const bilanMachine = async (
     `SELECT t.temps_ms AS ms, r.circuit_nom AS circuit
        FROM tour t
        JOIN session s ON s.id = t.session_id
-       JOIN roulage r ON r.id = s.roulage_id
+       JOIN roulage r ${TOUTES_JOURNEES} ON r.id = s.roulage_id
       WHERE r.machine_id = ? AND r.circuit_nom IS NOT NULL
       ORDER BY t.temps_ms ASC LIMIT 1`, [machineId])
 
@@ -167,7 +173,8 @@ export const bilanMachine = async (
     `SELECT circuit_nom AS nom, count(*) AS n, max(date_jour) AS dernier
        FROM roulage
       WHERE machine_id = ? AND circuit_nom IS NOT NULL AND trim(circuit_nom) <> ''
-      GROUP BY circuit_nom`, [machineId])
+        AND ${A_EU_LIEU('')}
+      GROUP BY circuit_nom`, [machineId, jour])
   const groupes = new Map<string, { nom: string; n: number; dernier: string }>()
   for (const x of l) {
     const cle = aplati(x.nom)
@@ -295,7 +302,11 @@ export const listerRoulages = (db: PowerSyncDatabase) =>
               WHERE d.cible = 'roulage' AND d.roulage_id = r.id) AS depenses,
             (SELECT coalesce(sum(d.montant_centimes), 0) FROM depense d
               WHERE d.cible = 'roulage' AND d.roulage_id = r.id) AS depenses_centimes
-       FROM roulage r
+       -- ⚠ ET ELLE PREND TOUT, Y COMPRIS CE QUI N'A PAS ENCORE EU LIEU. Une
+       -- journée annoncée est SAISIE : elle est à toi, elle porte déjà ses
+       -- dépenses et sa checklist, et elle se retire comme une autre. La cacher
+       -- ici la rendrait introuvable — c'est le seul écran d'où on la corrige.
+       FROM roulage r ${TOUTES_JOURNEES}
       ORDER BY r.date_jour DESC, r.id DESC`,
   )
 
@@ -364,12 +375,19 @@ export const ajouterSession = async (db: PowerSyncDatabase, roulageId: string, t
 /** Le meilleur tour du jour, et l'écart À CIRCUIT CONSTANT avec la dernière
  *  fois. Comparer deux circuits différents ne veut rien dire. */
 export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => {
-  const l = await db.getAll<{ id: string; circuit: string; date: string; sessions: number; meilleur: number | null }>(
-    `SELECT r.id, r.circuit_nom AS circuit, r.date_jour AS date,
+  /* ⚠ `machine_id` DESCEND AVEC LE RESTE — récit 17.2. L'écran d'une journée à
+     venir dérive sa préparation de la MOTO qui roulera : sans cette colonne,
+     l'écran devait relire le roulage une seconde fois, et la seconde lecture
+     est exactement l'endroit où l'on oublie de filtrer comme la première.
+     Une lecture PAR IDENTIFIANT ne se prononce pas sur le temps : elle rend la
+     journée qu'on lui demande, vécue ou non — c'est l'appelant qui décide quoi
+     en faire (`sePrepare`, src/db/vecu.ts). */
+  const l = await db.getAll<{ id: string; circuit: string; date: string; machine_id: string | null; sessions: number; meilleur: number | null }>(
+    `SELECT r.id, r.circuit_nom AS circuit, r.date_jour AS date, r.machine_id,
             (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
                JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur
-       FROM roulage r WHERE r.id = ?`, [roulageId])
+       FROM roulage r ${TOUTES_JOURNEES} WHERE r.id = ?`, [roulageId])
   const cur = l[0]
   if (!cur) return null
 
@@ -378,11 +396,13 @@ export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => 
   // choisi le suivant deux circuits distincts : la progression disparaissait
   // sans rien signaler. Le rapprochement se fait donc à plat — sans accent, sans
   // casse — côté application, parce que le `lower()` de SQLite ignore les accents.
+  // Un CHRONO prouve la journée mieux qu'une date : cette lecture passe par
+  // `tour`, donc elle ne peut voir qu'un jour où l'on a roulé.
   const anterieurs = await db.getAll<{ circuit: string; meilleur: number }>(
     `SELECT r.circuit_nom AS circuit, min(t.temps_ms) AS meilleur
        FROM tour t
        JOIN session s ON s.id = t.session_id
-       JOIN roulage r ON r.id = s.roulage_id
+       JOIN roulage r ${TOUTES_JOURNEES} ON r.id = s.roulage_id
       WHERE r.id <> ? AND r.date_jour <= ?
       GROUP BY r.circuit_nom`,
     [roulageId, cur.date])
@@ -423,10 +443,18 @@ export const creerDepense = async (
   d: { cible: Cible; roulageId: string | null; machineId: string | null; centimes: number; libelle: string; date: string },
 ) => {
   const id = nouvelId()
+  // ⚠ `date_jour` PART AVEC LA LIGNE, ET C'EST TOUT LE RÉCIT 19.2. Cette
+  // fonction recevait déjà la date : elle en tirait l'année et jetait le reste.
+  // Le mois n'était donc pas « pas encore affiché », il était DÉTRUIT À
+  // L'ÉCRITURE — et aucune requête, aucun écran, aucune migration ne pouvait le
+  // rattraper après coup. Un essai unitaire lit désormais les deux INSERT et
+  // exige la colonne : un troisième chemin d'écriture qui l'oublierait ferait
+  // rougir le banc au lieu de perdre les mois d'une saison entière.
   await db.execute(
-    `INSERT INTO depense (id, cible, roulage_id, machine_id, saison_annee, montant_centimes, libelle)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, d.cible, d.roulageId, d.machineId, anneeSaison(d.date), d.centimes, d.libelle || null],
+    `INSERT INTO depense (id, cible, roulage_id, machine_id, saison_annee, montant_centimes, libelle, date_jour)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, d.cible, d.roulageId, d.machineId, anneeSaison(d.date), d.centimes, d.libelle || null,
+      d.date],
   )
   await marquerSaisie(db)
   return id
@@ -518,8 +546,10 @@ export const listerDepenses = (db: PowerSyncDatabase, annee: number) =>
  * brouillon, et il n'existe pas encore.
  */
 export const normaliserEtats = async (db: PowerSyncDatabase): Promise<number> => {
+  // Une REPRISE de base regarde toutes les lignes déjà écrites : c'est son
+  // objet même, et une journée à venir doit être normalisée comme une autre.
   const r = await db.get<{ n: number }>(
-    `SELECT count(*) AS n FROM roulage WHERE etat IS NULL OR etat = ''`)
+    `SELECT count(*) AS n FROM roulage ${TOUTES_JOURNEES} WHERE etat IS NULL OR etat = ''`)
   if (!r.n) return 0
   await db.execute(`UPDATE roulage SET etat = 'usage' WHERE etat IS NULL OR etat = ''`)
   return r.n
@@ -527,7 +557,7 @@ export const normaliserEtats = async (db: PowerSyncDatabase): Promise<number> =>
 
 export const normaliserCircuits = async (db: PowerSyncDatabase): Promise<number> => {
   const avant = await db.get<{ n: number }>(
-    `SELECT count(*) AS n FROM roulage WHERE circuit_nom IS NULL`)
+    `SELECT count(*) AS n FROM roulage ${TOUTES_JOURNEES} WHERE circuit_nom IS NULL`)
   if (!avant.n) return 0
 
   // ① Le nom rangé dans la référence : il rejoint sa colonne.
@@ -629,9 +659,14 @@ export const circuitsProposes = async (
   // Le départage se fait par l'UUID v7 (AD-14) quand deux roulages tombent le
   // même jour : la date seule les laisse dans un ordre arbitraire, et c'est le
   // dernier SAISI qu'un pilote s'attend à retrouver en tête.
+  // ⚠ ET UNE JOURNÉE À VENIR PROPOSE SON CIRCUIT COMME UNE AUTRE. Le pilote
+  // qui saisit sa deuxième journée à Pau-Arnos doit retrouver « Pau-Arnos » en
+  // tête, que la première ait déjà eu lieu ou non : c'est une aide à la SAISIE,
+  // pas un compte de ce qui a été roulé.
   const siens = await db.getAll<{ nom: string }>(
     `SELECT circuit_nom AS nom, max(date_jour) AS dernier, max(id) AS ecrit
-       FROM roulage WHERE circuit_nom IS NOT NULL AND trim(circuit_nom) <> ''
+       FROM roulage ${TOUTES_JOURNEES}
+      WHERE circuit_nom IS NOT NULL AND trim(circuit_nom) <> ''
       GROUP BY circuit_nom ORDER BY dernier DESC, ecrit DESC`)
   const enBase = await db.getAll<{ nom: string }>(`SELECT nom FROM circuit ORDER BY nom`)
 

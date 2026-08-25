@@ -129,6 +129,23 @@ const depense = new Table({
   saison_annee: column.integer,
   montant_centimes: column.integer,
   libelle: column.text,
+  /** LE JOUR DE LA DÉPENSE — récit 19.2, et c'est la colonne qui rend le mois
+   *  possible. Avant elle, `saison_annee` était TOUT ce que la table gardait du
+   *  temps : « ce que j'ai dépensé en juillet » n'était pas imprécis, il était
+   *  INCALCULABLE, et aucun écran ne pouvait le dire.
+   *
+   *  ⚠ ON RANGE LE JOUR, JAMAIS LE MOIS. Le mois se dérive (`moisDuJour`,
+   *  src/db/budget.ts) et ne se stocke pas : une colonne `mois` posée à côté de
+   *  sa source serait une seconde vérité, et c'est toujours la copie qu'on
+   *  oublie de corriger. Même règle que `saison_annee`… qui est l'exception
+   *  assumée d'AD-18, fixée à la saisie parce qu'elle ne doit JAMAIS bouger.
+   *
+   *  ⚠ NULLABLE POUR TOUJOURS. Les dépenses saisies avant cette colonne n'ont
+   *  aucun jour et n'en auront jamais : le leur inventer — celui du roulage,
+   *  celui de l'uuid, le 1er janvier — fabriquerait une donnée que personne n'a
+   *  donnée. L'écran dit « Sans mois », exactement comme il dit « Sans poste ».
+   */
+  date_jour: column.text,
   // LE POSTE dit DE QUOI il s'agit ; la cible dit À QUOI c'est rattaché. Les
   // deux sont orthogonaux et AD-7 n'est pas touché : 90 € d'essence sont un
   // poste « essence » ET une cible « saison ». Nullable pour toujours — les

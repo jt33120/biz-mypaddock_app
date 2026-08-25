@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
+import { A_EU_LIEU, aujourdhui } from './vecu'
 
 /**
  * LES TROIS INSTRUMENTS DE BORD — récit 7.1.
@@ -51,9 +52,16 @@ export type Delai = { roulages: number; medianeH: number | null; maxH: number | 
  *  souvenir perdu ne revient pas. */
 export const SEUIL_H = 48
 
-export const delaiSaisie = async (db: PowerSyncDatabase): Promise<Delai> => {
+export const delaiSaisie = async (
+  db: PowerSyncDatabase, jour = aujourdhui(),
+): Promise<Delai> => {
+  // ⚠ UNE JOURNÉE À VENIR N'A PAS DE DÉLAI DE SAISIE, et l'y compter rendait
+  // l'instrument OPTIMISTE : `ecrit - finDuJour` est négatif, la ligne suivante
+  // le ramène à zéro, et une saisie « instantanée » entrait dans la médiane
+  // d'un roulage où l'on n'était pas encore allé. FR-57 mesure ce qui sépare la
+  // journée de sa saisie ; ça n'existe qu'après la journée.
   const l = await db.getAll<{ id: string; date_jour: string }>(
-    `SELECT id, date_jour FROM roulage`)
+    `SELECT id, date_jour FROM roulage WHERE ${A_EU_LIEU('')}`, [jour])
   const heures = l
     .map((r) => {
       const ecrit = instantDeLId(r.id)
@@ -91,7 +99,10 @@ export const accepterMesures = (oui: boolean) => {
   try { localStorage.setItem(CLE, oui ? 'oui' : 'non') } catch { /* rien à faire */ }
 }
 
-const aujourdhui = () => new Date().toISOString().slice(0, 10)
+/* `aujourdhui` vient de `vecu.ts` : la même définition vivait ici et dans
+   `usure.ts`, et le prédicat partagé en avait besoin d'une troisième. Trois
+   copies d'un même calcul de jour, c'est trois fuseaux à corriger le jour où
+   l'une bouge. */
 
 const ecrire = async (db: PowerSyncDatabase, genre: Genre, valeur = 0) => {
   // AD-16 : le refus arrête l'écriture ICI, avant la base. Il ne filtre rien

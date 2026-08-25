@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { formaterChrono, formaterEuros } from './depot'
+import { A_EU_LIEU, aujourdhui, TOUTES_JOURNEES } from './vecu'
 
 /**
  * LA ZONE DES CHIFFRES — FR-15, la seule moitié de l'accueil qui appartient au
@@ -91,17 +92,29 @@ export const poserChiffres = (l: Cle[]) => {
  * chiffre qui descend quand on roule plus — la même perversité que FR-21 traite
  * pour le coût au tour, et elle n'a pas plus sa place ici que là-bas.
  */
-export const valeurs = async (db: PowerSyncDatabase): Promise<Record<Cle, Valeur>> => {
+export const valeurs = async (
+  db: PowerSyncDatabase, jour = aujourdhui(),
+): Promise<Record<Cle, Valeur>> => {
   const annee = new Date().getFullYear()
+  // ⚠ « X ROULAGES » ET « Y CIRCUITS » COMPTAIENT UNE JOURNÉE QUI N'A PAS EU
+  // LIEU. `count(*) FROM roulage`, sans filtre de date ni d'état : le 12
+  // septembre saisi le 25 août faisait passer l'accueil de 5 à 6 le jour de sa
+  // saisie. Le prédicat est partagé (src/db/vecu.ts) — il n'est pas réécrit ici.
+  //
+  // Les sessions, les tours et le meilleur tour n'en ont pas besoin : ils
+  // passent par un chrono, et un chrono prouve la journée mieux qu'une date.
+  // La dépense non plus : un engagement réglé d'avance est de l'argent sorti,
+  // que la journée ait eu lieu ou non.
   const r = await db.get<Record<string, number | null>>(
-    `SELECT (SELECT count(*) FROM roulage) AS roulages,
-            (SELECT count(DISTINCT circuit_nom) FROM roulage WHERE circuit_nom IS NOT NULL) AS circuits,
+    `SELECT (SELECT count(*) FROM roulage WHERE ${A_EU_LIEU('')}) AS roulages,
+            (SELECT count(DISTINCT circuit_nom) FROM roulage
+              WHERE circuit_nom IS NOT NULL AND ${A_EU_LIEU('')}) AS circuits,
             (SELECT count(*) FROM session) AS sessions,
             (SELECT count(*) FROM tour) AS tours,
             (SELECT sum(montant_centimes) FROM depense WHERE saison_annee = ?) AS depense_saison,
             (SELECT count(*) FROM machine) AS machines,
             (SELECT count(*) FROM intervention WHERE etat = 'faite') AS interventions`,
-    [annee])
+    [jour, jour, annee])
 
   // Le meilleur tour se cherche AVEC sa journée, donc avec son circuit. Un
   // `min()` global rendait le chrono sans savoir où il avait été fait.
@@ -109,7 +122,7 @@ export const valeurs = async (db: PowerSyncDatabase): Promise<Record<Cle, Valeur
     `SELECT t.temps_ms AS ms, r.circuit_nom AS circuit
        FROM tour t
        JOIN session s ON s.id = t.session_id
-       JOIN roulage r ON r.id = s.roulage_id
+       JOIN roulage r ${TOUTES_JOURNEES} ON r.id = s.roulage_id
       WHERE r.circuit_nom IS NOT NULL
       ORDER BY t.temps_ms ASC LIMIT 1`)
 

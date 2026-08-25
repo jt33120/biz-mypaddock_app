@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
+import { TOUTES_JOURNEES } from './vecu'
 
 /**
  * LA CHECKLIST DE CHARGEMENT — épique 13, FR-49 à FR-51.
@@ -147,7 +148,10 @@ export const composer = async (
   if (deja.n) return 0
 
   const r = await db.get<{ circuit_id: string | null; organisateur_id: string | null }>(
-    `SELECT circuit_id, organisateur_id FROM roulage WHERE id = ?`, [roulageId])
+    // Une journée à venir compose son chargement comme une autre — c'est même
+    // le seul moment où l'on charge vraiment le camion.
+    `SELECT circuit_id, organisateur_id FROM roulage ${TOUTES_JOURNEES} WHERE id = ?`,
+    [roulageId])
 
   // Les règles publiées, si le référentiel en connaît pour ce circuit ou cet
   // organisateur. Aucune n'est inventée : le produit n'en a aucune à lui.

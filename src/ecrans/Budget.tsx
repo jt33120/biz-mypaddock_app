@@ -3,13 +3,16 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import {
   CATEGORIES_EQUIPEMENT, coutEquipement, declarerEquipement, depenserSur,
   EXEMPLE_EQUIPEMENT, EXEMPLE_POSTE, listerEquipement, NOM_EQUIPEMENT, NOM_POSTE,
-  oublierEquipement, parPoste, poserSpriteEquipement, POSTES,
-  type CategorieEquipement, type Equipement as Materiel, type LignePoste, type Poste,
+  nomMois, oublierEquipement, parMois, parPoste, poserSpriteEquipement, POSTES, repereMensuel,
+  type CategorieEquipement, type Equipement as Materiel, type LigneMois, type LignePoste,
+  type Poste,
 } from '../db/budget'
 import { photoEquipement, verserPhotoEquipement } from '../db/photos'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
-import { enCentimes, formaterEuros, type Cible } from '../db/depot'
+import {
+  anneeSaison, budgetDeclare, enCentimes, formaterEuros, listerMachines, type Cible,
+} from '../db/depot'
 import { useGeste } from './geste'
 import { Refaire } from './Refaire'
 
@@ -34,6 +37,14 @@ import { Refaire } from './Refaire'
  *     un compteur à rebours sur de l'argent produit exactement ce qu'il prétend
  *     éviter : on cesse de saisir pour ne plus le voir descendre.
  */
+/* ⚠ LE JOUR EST CELUI D'UTC, ET C'EST LA CONVENTION DE TOUT LE PRODUIT
+   (`vecu.ts:32`, `Depense.tsx`, `Usure.tsx`, `Poste.tsx` — six endroits, tous
+   pareils). Conséquence, maintenant que le mois compte : une dépense notée à
+   00 h 30 à Paris le 1er septembre porte le 31 août, donc tombe dans le mois
+   précédent. C'est SU et laissé tel quel, pas ignoré — le corriger ici seulement
+   ferait vivre deux horloges dans le produit, et le jour d'une dépense ne se
+   comparerait plus au jour d'un roulage. Le jour où on le corrige, on le corrige
+   partout, en un seul geste, avec sa propre garde. */
 const aujourdhui = () => new Date().toISOString().slice(0, 10)
 const ceMois = () => new Date().toISOString().slice(0, 7)
 
@@ -46,23 +57,38 @@ export function Budget({ db, annee, machineId, onEcrit }: {
   onEcrit: () => void
 }) {
   const [lignes, setLignes] = useState<LignePoste[]>([])
+  const [mois, setMois] = useState<LigneMois[]>([])
+  /** Le PLAFOND de la saison, tel que le pilote l'a posé — jamais dérivé, jamais
+   *  reconduit tout seul. `null` est un état parfaitement normal (FR-24). */
+  const [plafond, setPlafond] = useState<number | null>(null)
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState<Poste | null>(null)
 
-  const charger = useCallback(async () => setLignes(await parPoste(db, annee)), [db, annee])
+  const charger = useCallback(async () => {
+    setLignes(await parPoste(db, annee))
+    setMois(await parMois(db, annee))
+    setPlafond(await budgetDeclare(db, annee))
+  }, [db, annee])
   useEffect(() => { void charger() }, [charger])
 
   const total = lignes.reduce((t, l) => t + l.total, 0)
   const trouve = (p: Poste) => lignes.find((l) => l.poste === p)
   const sansPoste = lignes.find((l) => l.poste === null)
+  const repere = repereMensuel(plafond)
 
   return (
     <div className="bloc pile atelier budget">
+      {/* ⚠ LA PÉRIODE VOYAGE AVEC LE CHIFFRE — récit 19.1. « Le coût est de 2180
+          mais le budget est de 500/mois » : Julian a saisi un montant MENSUEL
+          dans un champ ANNUEL, et le produit ne l'a contredit nulle part. Un
+          titre au-dessus ne suffit pas — on lit le nombre, pas l'en-tête. Le mot
+          « année » est donc collé à chaque somme de ce module, ici comme au
+          bilan de la journée (App.tsx) et au bilan de saison (Saison.tsx). */}
       <button className="rang atelier-tete" onClick={() => setOuvert(!ouvert)}>
         <span className="pile" style={{ gap: 1 }}>
-          <span className="libelle">Budget · saison {annee}</span>
+          <span className="libelle">Budget · année {annee}</span>
           <span className="sous-titre">
-            ce que la saison a coûté, poste par poste
+            ce que l'année entière a coûté, poste par poste
           </span>
         </span>
         <span className="chiffre hud-16">{total ? formaterEuros(total) : '—'}</span>
@@ -105,7 +131,8 @@ export function Budget({ db, annee, machineId, onEcrit }: {
                 </button>
                 {saisie === p && (
                   <Ajouter db={db} poste={p} machineId={machineId}
-                           onFini={() => { setSaisie(null); void charger().then(onEcrit) }} />
+                           onFini={() => { setSaisie(null); void charger().then(onEcrit) }}
+                           onAnnuler={() => setSaisie(null)} />
                 )}
               </div>
             )
@@ -125,6 +152,62 @@ export function Budget({ db, annee, machineId, onEcrit }: {
               <span className="chiffre hud-16 faible">{formaterEuros(sansPoste.total)}</span>
             </div>
           )}
+
+          {/* ─── PAR MOIS — récit 19.2, moitié « le mois existe » ──────────────
+              Ce qui est montré : ce que chaque mois a coûté, et de quoi il était
+              fait. Ce qui ne l'est JAMAIS, et la tentation est ici :
+                · aucun mois ne se compare au précédent, aucun « + 40 % » ;
+                · aucune couleur sur un mois cher — un mois cher est un mois où
+                  l'on a roulé, pas une faute ;
+                · aucune barre qui se remplit vers un plafond du mois : une jauge
+                  mensuelle transformerait un repère en compteur à rebours, et
+                  c'est exactement ce que les deux clauses d'argent refusent ;
+                · aucun « à ce rythme » — les douze mois d'une saison de piste ne
+                  se ressemblent pas, et une droite tirée sur avril ne dit rien
+                  de janvier. */}
+          {!!mois.length && (
+            <div className="pile" style={{ gap: 6 }}>
+              <span className="sous-titre">Par mois</span>
+
+              {/* LE REPÈRE MENSUEL — « un plafond annuel ET un repère mensuel »,
+                  décision de Julian du 25 août 2026. Il se DÉRIVE du plafond
+                  (÷ 12) au lieu de se saisir : deux montants saisis séparément
+                  finissent par se contredire, et un second champ rouvrirait la
+                  confusion même que 19.1 vient de fermer. Il est dit une fois,
+                  en toutes lettres, et aucune ligne de mois ne s'y mesure. */}
+              {repere != null && plafond != null && (
+                <p className="note">
+                  Repère du mois · {formaterEuros(repere)} — c'est le plafond que tu as posé
+                  pour l'année {annee}, {formaterEuros(plafond)}, divisé par douze. Un repère,
+                  rien de plus : aucun mois ne s'y compare, et un mois au-dessus n'est pas
+                  une faute.
+                </p>
+              )}
+
+              {mois.map((m) => (
+                <div className="rang ligne-atelier" key={m.mois ?? 'sans-mois'}>
+                  <span className="pile" style={{ gap: 0 }}>
+                    <span className={m.mois ? 'texte' : 'texte faible'}>
+                      {m.mois ? nomMois(m.mois) : 'Sans mois'}
+                    </span>
+                    {/* ⚠ LES DÉPENSES D'AVANT LA COLONNE SE DISENT, elles ne se
+                        rangent pas au hasard — exactement comme « Sans poste »
+                        juste au-dessus, et pour la même raison : leur attribuer
+                        un mois ferait croire qu'un choix a été fait. */}
+                    <span className="sous-titre">
+                      {m.mois
+                        ? m.postes.map((p) => p.poste ? NOM_POSTE[p.poste].toLowerCase() : 'sans poste')
+                          .join(' · ')
+                        : "saisies avant que la dépense porte son jour"}
+                    </span>
+                  </span>
+                  <span className={m.mois ? 'chiffre hud-16' : 'chiffre hud-16 faible'}>
+                    {formaterEuros(m.total)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -140,22 +223,42 @@ export function Budget({ db, annee, machineId, onEcrit }: {
  * saison — mais il reste modifiable, parce qu'un pilote à deux motos sait mieux
  * que le produit à laquelle appartient ce train de pneus.
  */
-function Ajouter({ db, poste, machineId, onFini }: {
-  db: PowerSyncDatabase; poste: Poste; machineId: string | null; onFini: () => void
+function Ajouter({ db, poste, machineId, onFini, onAnnuler }: {
+  db: PowerSyncDatabase; poste: Poste; machineId: string | null
+  /** Le montant écrit, pour que l'appelant puisse ÉNONCER ce qui vient d'être
+   *  noté. Le raccourci de l'accueil en a besoin : sans lui, la saisie
+   *  disparaîtrait sans qu'aucun écran ne dise ce qu'elle est devenue. */
+  onFini: (centimes: number) => void
+  /** ⚠ ANNULER N'EST PAS FINIR, et c'est le compilateur qui a posé la question :
+   *  le même rappel servait aux deux, et il recevait alors l'événement du clic à
+   *  la place du montant. Deux gestes opposés derrière une seule porte finissent
+   *  toujours par produire l'un quand on demandait l'autre. */
+  onAnnuler: () => void
 }) {
   const SUR_LA_MACHINE: Poste[] = ['entretien', 'pneus']
   const defaut: Cible = SUR_LA_MACHINE.includes(poste) && machineId ? 'machine' : 'saison'
   const [cible, setCible] = useState<Cible>(defaut)
   const [montant, setMontant] = useState('')
   const [libelle, setLibelle] = useState('')
+  /* LE JOUR — récit 19.2. Aujourd'hui par défaut, parce que c'est le cas de neuf
+     saisies sur dix : on note en payant, ou le soir en rentrant. Corrigeable,
+     parce que la dixième est la facture retrouvée trois semaines plus tard — et
+     c'est précisément celle dont le mois serait faux si le champ n'existait pas.
+     ⚠ CE N'EST PAS UN CHAMP OBLIGATOIRE DE PLUS : il arrive rempli, et une
+     saisie qui n'y touche pas se comporte exactement comme avant. */
+  const [jour, setJour] = useState(aujourdhui())
   const centimes = enCentimes(montant)
+  // Un champ date vidé à la main rend `''`. On retombe sur aujourd'hui plutôt
+  // que d'écrire une ligne sans jour : les seules dépenses sans mois du produit
+  // sont celles d'avant la colonne, et il n'a pas à s'en fabriquer de nouvelles.
+  const leJour = /^\d{4}-\d{2}-\d{2}$/.test(jour) ? jour : aujourdhui()
   const [poser, occupe] = useGeste(async () => {
     if (centimes == null) return
     await depenserSur(db, {
-      poste, cible, centimes, libelle, date: aujourdhui(),
+      poste, cible, centimes, libelle, date: leJour,
       machineId: cible === 'machine' ? machineId : null,
     })
-    onFini()
+    onFini(centimes)
   })
 
   return (
@@ -164,6 +267,14 @@ function Ajouter({ db, poste, machineId, onFini }: {
              placeholder="montant en €" inputMode="decimal" autoComplete="off" />
       <input className="champ" value={libelle} onChange={(e) => setLibelle(e.target.value)}
              placeholder="ce que c'était, si tu veux" autoComplete="off" />
+      <div className="rang" style={{ gap: 8 }}>
+        <input className="champ" type="date" value={jour}
+               onChange={(e) => setJour(e.target.value)} style={{ flex: 1 }} />
+        {/* AD-18 : c'est l'année du jour qui fixe la saison, à la saisie et pour
+            toujours. Une facture de janvier notée en décembre part donc dans la
+            saison suivante — c'est juste, et ça ne se devine pas : on l'écrit. */}
+        <span className="sous-titre">saison {anneeSaison(leJour)}</span>
+      </div>
       {machineId && (
         <div className="puces">
           <button className="puce" data-actif={cible === 'machine' ? '1' : '0'}
@@ -176,7 +287,102 @@ function Ajouter({ db, poste, machineId, onFini }: {
               onClick={() => void poser()}>
         {occupe ? 'enregistrement…' : `Ajouter à ${NOM_POSTE[poste].toLowerCase()}`}
       </button>
-      <button className="lien" onClick={onFini}>Annuler</button>
+      <button className="lien" onClick={onAnnuler}>Annuler</button>
+    </div>
+  )
+}
+
+/**
+ * LE RACCOURCI DE L'ACCUEIL — « d'ailleurs avec un raccourci sur la page
+ * d'accueil ça ne peut pas faire de mal » (Julian, 25 août 2026).
+ *
+ * ⚠ IL ÉCRIT UNE LIGNE COMPLÈTE, et c'est sa seule raison d'exister ici plutôt
+ * qu'ailleurs. Le produit a déjà deux chemins d'écriture de dépense qui ne
+ * produisent pas la même ligne — `creerDepense` n'écrit aucun poste,
+ * `depenserSur` n'a jamais proposé la cible « journée ». Un troisième chemin
+ * bâclé aurait fabriqué une troisième sorte de dépense. Celui-ci passe par la
+ * MÊME saisie que le garage (`Ajouter`) : même poste, même cible, même jour.
+ *
+ * ⚠ ET IL NE RÉCLAME RIEN (FR-13). C'est un lien discret, replié, qui ne
+ * s'affiche jamais en bloc, ne porte aucune pastille, ne compte rien et ne dit
+ * jamais « tu n'as rien saisi ce mois-ci ». Un raccourci qui rappelle son
+ * existence est une relance, et le produit n'en fait pas.
+ */
+export function NoterUneDepense({ db, onEcrit }: {
+  db: PowerSyncDatabase; onEcrit: () => void
+}) {
+  const [ouvert, setOuvert] = useState(false)
+  const [poste, setPoste] = useState<Poste | null>(null)
+  /** Ce qui vient d'être noté, dit une fois. Ce n'est pas une félicitation ni un
+   *  compteur : c'est l'accusé de réception d'un geste, et il dit OÙ la ligne est
+   *  partie — sinon le pilote la croit perdue et la ressaisit au garage. */
+  const [note, setNote] = useState<string | null>(null)
+  /** La seule moto, s'il n'y en a qu'une : elle rend la cible « sur la moto »
+   *  atteignable depuis l'accueil pour des pneus ou un entretien. À plusieurs
+   *  motos on ne choisit PAS à la place du pilote — la dépense part sur la
+   *  saison, ce qui est une cible pleine et vraie, et le garage reste l'endroit
+   *  où l'on désigne une machine précise. */
+  const [machineSeule, setMachineSeule] = useState<string | null>(null)
+  const [plusieurs, setPlusieurs] = useState(false)
+
+  // Rien n'est lu tant que le raccourci est replié : l'accueil ne paie pas une
+  // requête pour un lien que personne n'a touché.
+  useEffect(() => {
+    if (!ouvert) return
+    void listerMachines(db).then((m) => {
+      setMachineSeule(m.length === 1 ? m[0].id : null)
+      setPlusieurs(m.length > 1)
+    })
+  }, [db, ouvert])
+
+  if (!ouvert) {
+    return (
+      <div className="pile raccourci-depense">
+        {/* Le « + » est le seul signe qu'il porte, et c'est délibéré : il dit
+            qu'on AJOUTE quelque chose, là où un lien nu se lit comme un réglage
+            — celui qui le précède, « changer ces chiffres », en est un. Aucune
+            pastille, aucun compteur : la différence entre une action offerte et
+            une action réclamée tient à ça. */}
+        <button className="lien" onClick={() => { setOuvert(true); setNote(null) }}>
+          + Noter une dépense
+        </button>
+        {note && <p className="note">{note}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="bloc pile raccourci-depense">
+      <span className="libelle">Noter une dépense</span>
+      {poste == null ? (
+        <>
+          <span className="sous-titre">de quoi il s'agit</span>
+          <div className="puces">
+            {POSTES.map((p) => (
+              <button key={p} className="puce" data-actif="0"
+                      onClick={() => setPoste(p)}>{NOM_POSTE[p].toUpperCase()}</button>
+            ))}
+          </div>
+          <button className="lien" onClick={() => setOuvert(false)}>Annuler</button>
+        </>
+      ) : (
+        <>
+          <span className="sous-titre">{NOM_POSTE[poste]}</span>
+          {plusieurs && (
+            <p className="note">
+              Elle est notée sur la saison. Pour la rattacher à une moto précise, ça se
+              passe au garage.
+            </p>
+          )}
+          <Ajouter db={db} poste={poste} machineId={machineSeule}
+                   onFini={(centimes) => {
+                     setNote(`Noté · ${formaterEuros(centimes)} sur ${NOM_POSTE[poste].toLowerCase()}.`
+                       + ' Le détail vit au garage, dans le budget.')
+                     setPoste(null); setOuvert(false); onEcrit()
+                   }}
+                   onAnnuler={() => setPoste(null)} />
+        </>
+      )}
     </div>
   )
 }
@@ -421,15 +627,10 @@ function LigneMateriel({ db, e, onEcrit }: {
   )
 }
 
-/** `2026-04` → « en avril 2026 ». Aucune bibliothèque : douze chaînes suffisent,
- *  et rien ne se charge depuis un CDN au paddock (NFR-4). */
-const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
-const moisDit = (aaaaMm: string) => {
-  const [a, m] = aaaaMm.split('-')
-  const i = Number(m) - 1
-  return MOIS[i] ? `en ${MOIS[i]} ${a}` : `en ${a}`
-}
+/** `2026-04` → « en avril 2026 ». Les douze noms vivent dans `db/budget.ts`
+ *  depuis que le budget compte au mois : deux tables de mois dans deux fichiers,
+ *  c'est un « févier » à corriger deux fois et une seule fois qu'on y pense. */
+const moisDit = (aaaaMm: string) => `en ${nomMois(aaaaMm)}`
 
 function DeclarerMateriel({ db, onFini }: { db: PowerSyncDatabase; onFini: () => void }) {
   const [nom, setNom] = useState('')

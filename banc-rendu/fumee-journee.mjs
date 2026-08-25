@@ -97,14 +97,21 @@ verifier('   « Garder » ne retire rien', gardee === 1, `${gardee} restante(s)`
 // ── ②bis L'ARGENT DE LA JOURNÉE EST ANNONCÉ ────────────────────────────────
 // Un pilote qui retire une journée mal saisie perdait avec elle les 180,50 €
 // d'engagement qu'il y avait notés, sans qu'une ligne le lui dise.
+// ⚠ CETTE JOURNÉE EST DATÉE D'AUJOURD'HUI ET N'A AUCUNE SESSION — le chrono a
+// été abandonné par « Retour ». Depuis le récit 17.2, le tap ouvre donc ce qui
+// la PRÉPARE et non son bilan : le matin où l'on charge le camion, l'écran ne
+// réclame pas le meilleur tour d'une journée qui n'a pas commencé.
+// L'argent s'y saisit par la ligne « L'engagement » d'« Avant d'y aller », qui
+// mène au budget. C'est le chemin réel du pilote — et il éprouve au passage la
+// promesse de cette liste : chaque ligne dérivée MÈNE quelque part.
 await page.click('.pile > .bloc .titre')
-await page.waitForSelector('text=Ajouter une dépense', { timeout: 20_000 })
-await page.click('text=Ajouter une dépense')
-await page.waitForSelector('section.depense')
+await page.waitForSelector('.journee-page .preparation', { timeout: 20_000 })
+await page.click('.preparation .tache:has-text("L\'engagement")')
+await page.waitForSelector('section.depense', { timeout: 20_000 })
 await page.fill('#montant', '180,50')
 await page.fill('#libelle', 'Engagement')
 await page.click('section.depense .bouton:not(.secondaire)')
-await page.waitForSelector('text=Meilleur tour du jour', { timeout: 20_000 })
+await page.waitForSelector('.journee-page', { timeout: 20_000 })
 // La journée ne se quitte que par la barre : c'est un lieu, pas une modale.
 await onglet('ROULAGES')
 await page.waitForSelector('text=Retirer cette journée', { timeout: 20_000 })

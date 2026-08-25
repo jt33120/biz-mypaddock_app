@@ -4,6 +4,7 @@ import {
   anneesSaisies, bilanSaison, reportPossible, reporter, type Bilan, type Report,
 } from '../db/bilan'
 import { ecartJours } from '../db/accueil'
+import { repereMensuel } from '../db/budget'
 import { formaterChrono, formaterEuros } from '../db/depot'
 
 /**
@@ -88,10 +89,18 @@ export function Saison({ db }: { db: PowerSyncDatabase }) {
         <div><p className="et">gestes</p><p className="va">{b.gestes}</p></div>
       </div>
 
+      {/* ⚠ LA PÉRIODE EST COLLÉE AU CHIFFRE ICI AUSSI — récit 19.1. « Budget
+          déclaré : 500 € » relu six mois plus tard ne dit pas si ces 500 €
+          valaient un mois ou douze, et c'est exactement le malentendu qui a
+          coûté la remarque de Julian (« le coût est de 2180 mais le budget est
+          de 500/mois »). Le repère mensuel se dit à côté, dérivé du plafond —
+          jamais saisi séparément, sinon les deux montants finiraient par se
+          contredire. */}
       {b.budgetCentimes != null && (
         <p className="note">
-          Budget déclaré : {formaterEuros(b.budgetCentimes)}
-          {' '}· consommé {formaterEuros(b.depenseCentimes)}
+          Plafond posé pour l'année {b.annee} : {formaterEuros(b.budgetCentimes)}
+          {' '}· soit un repère de {formaterEuros(repereMensuel(b.budgetCentimes)!)} par mois
+          {' '}· dépensé sur l'année {formaterEuros(b.depenseCentimes)}
         </p>
       )}
 
