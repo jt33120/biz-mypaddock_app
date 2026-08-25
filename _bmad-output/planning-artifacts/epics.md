@@ -2328,7 +2328,41 @@ En tant que **porteur du projet**, je veux **que les règles publiées par les c
 
 **La porte.** Le tableau dit « Un pote roule. Pas avant : un cercle à une personne est un écran vide ». C'est vrai pour une moitié de l'épique et faux pour l'autre, et il faut deux portes. ① Le cercle : « un pote roule » est la bonne condition, et elle n'est pas gardée dans le code — le bloc « Créer un cercle » s'affiche sous chaque journée dès le premier roulage, avant qu'aucun pote n'existe (src/App.tsx:1189, src/ecrans/Cercle.tsx:100-104). ② Le carnet partagé : la porte est fausse. Un acheteur d'occasion n'a besoin d'aucun pote — il n'a même pas de compte, c'est le sens de FR-38. Sa vraie condition d'allumage est « une machine porte un carnet qu'on veut montrer à quelqu'un qui n'installera pas l'application », c'est-à-dire, en dépendance réelle, le journal d'interventions de l'épique 8 — pas le cercle. Les deux portes ne s'ouvrent ni au même moment ni pour la même raison, et rien n'oblige à les allumer ensemble.
 
-*4 récits · 22 critères · 8 tenus · 10 non tenus.*
+*4 récits · 25 critères · 11 tenus · 9 non tenus.*
+
+> **RELECTURE DU 25 AOÛT 2026** — douze agents, dont cinq envoyés détruire les
+> défauts affirmés plutôt que les confirmer. Elle a rendu quatre choses.
+>
+> ⚠ **LE PIRE DÉFAUT DU PRODUIT ÉTAIT ICI, ET DEUX CRITÈRES LE DÉCRIVAIENT SANS
+> MESURER CE QU'IL COÛTAIT** (14.1 c6, 14.3 c5). En SQL, « la colonne vaut NULL »
+> et « la colonne est absente » ne sont pas la même chose : le défaut serveur ne
+> s'applique qu'à l'absente. Vérifié sur la base réelle — l'insertion d'un roulage
+> avec `chrono_visible` à NULL rend `23502`, la même insertion sans la colonne
+> passe. Conséquence pour un pilote qui saisit sa saison avant de créer un compte,
+> ce que le produit l'invite à faire : à la connexion, **chaque roulage est
+> refusé**, et avec eux les sessions, les tours, les chutes et les dépenses qui y
+> pendent. Il lui reste sa moto. Corrigé pour la classe entière — dix colonnes,
+> reconstruites par un essai depuis les migrations, valeurs comprises.
+>
+> ⚠ **LE CERCLE AVAIT UNE FENÊTRE OUVERTE À CÔTÉ DE SA PORTE, et aucun critère ne
+> la couvrait.** La politique d'insertion de `membre_cercle` vérifiait qui
+> s'inscrit, jamais où : une requête suffisait à entrer dans n'importe quel cercle
+> sans code, et à y lire le nom, LE CODE et tous les membres. Fermé, vérifié dans
+> la peau d'un pilote connecté (42501). Au passage, la création est devenue
+> atomique : elle faisait deux écritures sans transaction, dont la seconde n'était
+> jamais vérifiée, et son échec laissait un cercle illisible par tous, ineffaçable
+> par tous, dont le code continuait de répondre.
+>
+> ⚠ **TROIS VERDICTS VERTS ÉTAIENT VRAIS POUR DE MAUVAISES RAISONS**, et une
+> raison fausse est un piège pour celui qui s'y fiera demain. Le détail est sous
+> chaque critère.
+>
+> ⚠ **CE QUE L'ÉPIQUE N'EXIGE PAS** est rassemblé en fin d'épique. Le plus lourd :
+> `anon` détient aujourd'hui SELECT, INSERT, UPDATE et DELETE sur toutes les
+> tables du pilote — les droits par défaut de Supabase, jamais retirés. Rien ne
+> fuit, parce que la RLS refuse. Mais la frontière entière tient sur une seule
+> couche, et le carnet public du récit 14.4 est exactement ce qui la mettra à
+> l'épreuve.
 
 
 ### Récit 14.1 : L'interrupteur du chrono, journée par journée
@@ -2343,7 +2377,7 @@ En tant que **pilote**, je veux **décider journée par journée si mon meilleur
 **Quand** on regarde ce que le cercle en verrait  
 **Alors** le chrono est **masqué**, et ce défaut ne se règle **jamais globalement** — le défaut est celui qui protège (FR-19, interdiction 8 du §6).
 
-> ✅ **tenu** — src/db/depot.ts:236-246 (l'INSERT du roulage n'écrit pas la colonne, elle reste nulle) · src/db/cercle.ts:108-112 (`r.v === 1`, donc nul vaut masqué) · src/App.tsx:1290 (état initial faux) · supabase/migrations/20260819000016_cercle_et_visibilite.sql:7 (`not null default false` côté serveur)
+> ✅ **tenu** — mais **la preuve disait le contraire du code, et c'est elle qu'il fallait corriger**. « L'INSERT n'écrit pas la colonne, elle reste nulle » donnait la nullité comme la preuve du défaut protecteur, alors que la nullité était précisément le défaut que le critère 6 dénonce. Depuis le 25 août, src/db/depot.ts écrit `chrono_visible` à 0 **explicitement** : le masquage est une valeur posée, pas une absence. Même résultat à l'écran (src/db/cercle.ts, `r.v === 1` rend faux pour 0 comme pour nul), meilleure raison. Reste vrai : src/App.tsx:1290 (état initial faux), migration 20260819000016:7 (`not null default false`).
 
 
 **Étant donné** deux roulages du même pilote  
@@ -2357,7 +2391,7 @@ En tant que **pilote**, je veux **décider journée par journée si mon meilleur
 **Quand** un membre du cercle interroge les données par n'importe quel chemin  
 **Alors** le temps **n'en sort pas** — le masquage tient **côté serveur**, pas seulement à l'écran (FR-19, AD-11).
 
-> ✅ **tenu** — supabase/migrations/20260824000001_est_membre_ne_repond_que_de_soi.sql:49-53 (`case when r.chrono_visible`, sinon nul) et :58 (le grant ne porte que sur la vue) · supabase/migrations/20260818000002_rls_et_role_recolte.sql:52 et 20260819000003_proprietaire_sur_les_descendants.sql:46 (`tour` reste au seul pilote, donc aucun contournement par la table)
+> ✅ **tenu** — la conclusion tient, **un des deux arguments est faux**. « Le grant ne porte que sur la vue » décrit une barrière de privilèges qui n'existe pas : `20260824000001:58` ACCORDE un droit sur la vue, il n'en retire aucun aux tables, et aucun `revoke` ne vise `roulage`, `session` ni `tour` (les seuls visent le rôle `recolte`). Vérifié sur la base réelle : `authenticated` **et `anon`** détiennent SELECT, INSERT, UPDATE, DELETE sur ces trois tables. Ce qui ferme le chemin par la table est **uniquement la RLS** — celle-là est bien réelle et bien citée. La nuance décide de la suite : la frontière du produit tient sur une seule couche.
 
 
 **Étant donné** un pilote qui a laissé son chrono masqué  
@@ -2378,7 +2412,7 @@ En tant que **pilote**, je veux **décider journée par journée si mon meilleur
 **Quand** sa saison est reprise par un compte  
 **Alors** le roulage **arrive au serveur**, en masqué — un défaut jamais écrit ne doit pas faire **refuser la ligne** (FR-19).
 
-> ❌ **NON TENU** — src/db/sauvegarde.ts:223 (`SELECT * FROM ${table}`) remonte `chrono_visible` à nul, envoyé tel quel par l'upsert de src/db/sauvegarde.ts:178 ; la colonne serveur est `not null` (supabase/migrations/20260819000016:7) → 23502, et la ligne est écartée avec son motif (src/db/sauvegarde.ts:181-184). Le piège est **nommé et évité** pour `etat` à src/db/depot.ts:236-241, avec sa réparation `normaliserEtats` (src/db/depot.ts:513-518) — il n'existe aucun équivalent pour `chrono_visible`, dans la même table et depuis la même migration.
+> ✅ **tenu depuis le 25 août** — le verdict était juste, et il sous-estimait la portée : ce n'était pas une colonne mais une **classe**, et elle ne coûtait pas une ligne mais la saison entière. Dix colonnes du schéma local sont déclarées `not null default …` au serveur ; deux n'étaient jamais écrites. `DEFAUTS_SERVEUR` pose maintenant la valeur du défaut plutôt que de retirer la clé — retirer la clé rendait les lignes hétérogènes, et PostgREST refuse une insertion groupée dont les objets n'ont pas les mêmes clés (`PGRST102`), ce qui aurait transformé une adoption en une requête HTTP par ligne. La source est fermée aussi : src/db/depot.ts écrit `chrono_visible` à faux dans le même INSERT que `etat`. Un essai unitaire reconstruit la liste depuis les migrations — **noms et valeurs** — et rougit sur les deux.
 
 
 ### Récit 14.2 : Le cercle fermé, et sans aucun rang
@@ -2407,7 +2441,7 @@ En tant que **pilote**, je veux **rejoindre par un code un cercle de quelques pe
 **Quand** on y cherche un rang  
 **Alors** il n'y en a **aucun** : ni numéro, ni podium, ni « meilleur du cercle », et le tri est **chronologique** et jamais par temps (FR-39).
 
-> ✅ **tenu** — supabase/migrations/20260824000001:45-56 (la vue ne porte aucune colonne de rang, donc il n'y a rien à trier et rien à fuiter) · src/db/cercle.ts:98 (`.order('date_jour')`) · src/ecrans/Cercle.tsx:85-93 (aucun indice de position) et :78 (« il n'y a aucun classement, ici ni ailleurs »)
+> 🟡 **partiel** — l'écran ne classe pas, et c'est vrai (src/db/cercle.ts trie sur `date_jour`, src/ecrans/Cercle.tsx n'affiche aucune position). Mais **la raison invoquée est fausse**, et c'est elle qui prétendait rendre la garantie structurelle : la vue porte `meilleur_ms`, colonne ordinaire et triable, et `grant select on roulage_du_cercle to authenticated` porte sur toutes ses colonnes. PostgREST expose le tri sur toute relation sélectionnable — `?order=meilleur_ms.asc` rend le cercle classé au temps, avec les chronos. L'interdiction « tout rang, tout tri par temps » annoncée en tête d'épique n'est donc tenue **que dans le client**, ce qui est exactement ce que « ni ici, ni côté serveur » promettait d'éviter.
 
 
 **Étant donné** deux journées roulées sur des circuits différents  
@@ -2421,14 +2455,14 @@ En tant que **pilote**, je veux **rejoindre par un code un cercle de quelques pe
 **Quand** son code circule au-delà de ceux à qui on l'a donné  
 **Alors** quelque chose **l'arrête** — un cercle sans borne, dont le code est **permanent et irrévocable**, n'est plus fermé (FR-39).
 
-> ❌ **NON TENU** — supabase/migrations/20260819000016:23-37 : aucune borne de membres, `code` unique et permanent, aucune expiration, aucun renouvellement. Et :58-59, « on quitte pour soi » est la seule politique de suppression — **personne ne peut retirer un membre**, pas même le créateur. src/ecrans/Cercle.tsx:77-79 montre le code à chaque membre, qui peut le publier n'importe où.
+> ❌ **NON TENU** — et **le trou n'était pas là où le critère le cherchait**. Tout cela est exact (aucune borne, code permanent, aucun retrait, code affiché à chaque membre). Mais le code n'était même pas nécessaire : la politique d'insertion de `membre_cercle` ne vérifiait que l'identité de l'inscrit, **jamais le cercle visé** — une requête HTTP suffisait à entrer dans n'importe quel cercle dont on connaît l'identifiant, et un membre qui part garde cet identifiant. « On quitte pour soi » ne fermait donc rien du tout. **Fermé le 25 août** : `membre_cercle` et `cercle` ne s'écrivent plus que par `creer_cercle` et `rejoindre_cercle`, toutes deux `security definer` ; l'écriture directe rend 42501, vérifié. Ce qui reste ouvert demande une **décision** et non un correctif : combien de personnes, un code qui se renouvelle ou expire, et qui peut retirer qui.
 
 
 **Étant donné** un cercle où personne n'a encore roulé au circuit du jour  
 **Quand** le pilote l'ouvre  
 **Alors** l'écran **dit l'absence** au lieu de rester vide, et **ne ment pas** sur ce qu'il ne montre pas (UX-DR10).
 
-> 🟡 **partiel** — src/ecrans/Cercle.tsx:95 (« Personne du cercle n'a encore roulé ici. ») et :100-104 : l'absence est bien dite, jamais un écran vide. Mais la phrase devient **fausse** dès qu'un membre a roulé — la vue ne rend pas sa journée (critère 2), et l'écran attribue ce silence aux autres pilotes plutôt qu'à lui-même.
+> 🟡 **partiel** — le document voyait un mensonge ; il y en avait deux, et le second est **corrigé le 25 août**. Les quatre lectures du cercle ne liaient pas leur `error` et retombaient sur `?? []` : supabase-js ne lève pas, il **retourne** l'erreur. Un réseau coupé, un jeton expiré, une politique qui refuse rendaient donc une liste vide, et l'écran affirmait « Personne du cercle n'a encore roulé ici. » quand la vérité était « je n'ai pas pu demander ». Pire, `mesCercles` renvoyait à « Créer un cercle » un pilote qui en a déjà un — qui en aurait créé un second. Les soucis de lecture sont désormais dits, et distingués du refus d'un geste. **Le premier mensonge tient toujours** : la vue ne rend la journée de personne d'autre (critère 2).
 
 
 ### Récit 14.3 : Le cap ne part jamais tout seul
@@ -2450,7 +2484,7 @@ En tant que **pilote**, je veux **que chaque geste célébré reste chez moi tan
 **Quand** ils coexistent dans la même application  
 **Alors** **aucun chemin ne relie l'un à l'autre** sans un geste du pilote — le danger n'est ni dans le catalogue ni dans le cercle pris seuls, il est dans leur **conjonction automatique** (FR-39bis).
 
-> ✅ **tenu** — supabase/migrations/20260824000001_est_membre_ne_repond_que_de_soi.sql:45-56 (la vue ne porte ni geste ni cap) · aucune requête de geste dans src/db/cercle.ts ni dans src/ecrans/Cercle.tsx
+> ⬜ **sans objet** — les faits cités sont exacts, mais c'est un vert obtenu **par absence**, et le document ne peut pas coter la même absence verte ici et rouge trois lignes plus bas (critère 3). Rien ne relie le catalogue au cercle parce que le partage de geste n'est écrit nulle part. Le seul garde-fou réellement écrit, `partageableAutomatiquement` (src/db/gestes.ts), **n'a aucun appelant dans tout le dépôt**. La conjonction qu'interdit FR-39bis n'est empêchée par aucun mécanisme : elle est seulement non construite — et ce produit est né d'une chute causée par la recherche d'un geste.
 
 
 **Étant donné** un cap de bravoure que le pilote veut montrer  
@@ -2471,7 +2505,7 @@ En tant que **pilote**, je veux **que chaque geste célébré reste chez moi tan
 **Quand** la saison est reprise par un compte  
 **Alors** le geste **arrive au serveur** — un défaut jamais écrit ne doit pas faire refuser la ligne (FR-39bis).
 
-> ❌ **NON TENU** — src/db/sauvegarde.ts:223 remonte `partage` à nul, envoyé tel quel par l'upsert de :178, contre `not null` à supabase/migrations/20260819000016:18 → 23502 et ligne écartée (src/db/sauvegarde.ts:181-184). Même classe de défaut que `chrono_visible` (critère 14.1), même migration, même absence de normalisation.
+> ✅ **tenu depuis le 25 août** — fermé par le même geste que 14.1 c6, et par sa source : src/db/gestes.ts écrit désormais `partage` à faux dans l'INSERT. Ça dit la règle FR-39bis là où elle se décide — un geste naît **non partagé**, ce n'est pas une absence d'information.
 
 
 ### Récit 14.4 : Le carnet de la machine, lisible sans compte
@@ -2516,6 +2550,58 @@ En tant que **pilote qui cède sa machine**, je veux **ouvrir mon carnet à quel
 
 > ❌ **NON TENU** — Aucune table de jeton, aucune colonne de partage ni d'expiration sur `machine` (src/db/schema.ts), aucun chemin de révocation nulle part dans src/.
 
+
+
+### Ce que l'épique 14 n'exige pas — relevé du 25 août 2026
+
+La leçon de l'épique 13 s'est répétée : **les deux pires défauts ne vivaient dans
+aucun critère**. Voici ce que la relecture a vérifié et que le découpage ne
+demande nulle part. Chacun est un critère à écrire, pas une remarque.
+
+**① `anon` détient tout, et seule la RLS l'arrête.** Vérifié sur la base :
+`anon` a SELECT, INSERT, UPDATE, DELETE, TRUNCATE sur `roulage`, `session`,
+`tour`, `geste`, `pilote`, `machine`, `cercle`, `membre_cercle` et la vue du
+cercle — les droits par défaut de Supabase, retirés seulement au rôle `recolte`.
+Rien ne fuit aujourd'hui, parce que la RLS refuse. Mais la frontière tient sur une
+seule couche, et le récit 14.4 — un carnet lisible **sans compte** — est
+précisément ce qui la mettra à l'épreuve. Le dépouillement d'`anon` doit précéder
+l'écriture de 14.4, pas la suivre.
+
+**② Le tiret confond deux états, et en accuse un troisième.** src/ecrans/Cercle.tsx
+rend `—` quand `meilleur_ms` est nul. Or la sous-requête `min(t.temps_ms)` de la
+vue rend nul **aussi** quand le pilote est visible et n'a chronométré aucun tour.
+Un pilote qui a tout montré s'affiche exactement comme celui qui a fermé son
+interrupteur — et le critère 14.1 c4 interdit justement de le **désigner**.
+
+**③ Deux membres peuvent porter le même pseudo.** Aucune unicité sur
+`(cercle_id, pseudo)` — la seule contrainte est « non vide ». Et
+`rejoindre_cercle` fait `on conflict … do update set pseudo` : un membre peut se
+renommer **du pseudo d'un autre**, quand il veut. L'écran n'affiche que pseudo,
+date et chrono : rien ne distingue les deux, et un temps s'attribue alors à la
+mauvaise personne, sans un mot.
+
+**④ Le pseudo n'est pas un pseudonyme.** La vue expose `r.pilote_id`, l'identifiant
+d'authentification, et `membre_cercle` l'expose aussi à tout membre. Le même homme
+sous deux pseudos dans deux cercles est reliable par quiconque appartient aux
+deux. L'écran promet « ton pseudo dedans » ; la base rend un identifiant stable.
+
+**⑤ On ne peut pas quitter un cercle depuis l'application.** La politique existe
+depuis le 19 août ; **aucun écran ne l'appelle**. Et quitter ne serait pas une
+frontière tant que le point ① du critère 14.2 c5 n'est pas tranché : le partant
+garde le code, qui lui a été affiché à chaque ouverture.
+
+**⑥ L'écran télécharge tout le cercle pour en montrer un circuit.** La lecture ne
+pose ni limite ni filtre de circuit côté serveur : toutes les journées de tous les
+membres descendent, puis la plupart sont jetées dans le téléphone. C'est le
+contraire exact de la doctrine que le fichier écrit lui-même — « faire descendre
+les données d'autrui dans ce téléphone serait les ranger là où on ne les contrôle
+plus ».
+
+**⑦ Le remasquage est instantané à l'écran et différé au cercle.** `rendreVisible`
+écrit en SQLite et le libellé bascule aussitôt ; la remontée passe par la file
+PowerSync, éteinte tant que le compte n'a pas adopté la saison. Au paddock, sans
+réseau, le bouton affirme « ton chrono de ce jour est masqué » pendant que la vue
+serveur — ce que le cercle lit — rend encore le temps. Rien ne le dit.
 
 ## Épique 15 : Bilan, saison dérivée, budget prévisionnel
 
