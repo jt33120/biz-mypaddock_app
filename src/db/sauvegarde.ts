@@ -160,6 +160,74 @@ export const etatLocal = async (db: PowerSyncDatabase): Promise<BilanEnvoi> => {
 }
 
 /**
+ * ⚠ UNE COLONNE NULLE NE S'ENVOIE PAS — ET C'EST LE DÉFAUT LE PLUS COÛTEUX QUE
+ * CE FICHIER AIT PORTÉ.
+ *
+ * En SQL, « la colonne vaut NULL » et « la colonne n'est pas dans la requête »
+ * ne sont PAS la même chose. Le défaut d'une colonne ne s'applique que si elle
+ * est ABSENTE. Une valeur nulle transmise explicitement écrase le défaut, et
+ * une colonne `not null default false` refuse alors la ligne entière : 23502.
+ *
+ * Or l'adoption lit `SELECT *` et envoie tout tel quel. Le schéma local, lui,
+ * n'a aucune notion de « non nul » : PowerSync range en SQLite, où toute colonne
+ * jamais écrite vaut NULL. Toute colonne que le serveur déclare
+ * `not null default …` et que le produit n'écrit pas explicitement était donc
+ * une mine — et il y en avait deux, sur les deux tables les plus lourdes de
+ * conséquence.
+ *
+ * `roulage.chrono_visible` : jamais écrite par `depot.ts`. Vérifié sur la base
+ * réelle le 25 août 2026 — l'insertion avec la colonne à NULL rend
+ * « 23502 null value in column "chrono_visible" », la même insertion SANS la
+ * colonne passe. Conséquence pour un pilote qui a saisi sa saison avant de
+ * créer un compte, ce que le produit l'invite à faire : à la connexion, CHAQUE
+ * roulage est refusé — et avec eux les sessions, les tours, les chutes, les
+ * dépenses, qui pendent tous à un roulage par clé étrangère. Il reste sa moto.
+ *
+ * `geste.partage` : même chose, même migration, même classe.
+ *
+ * ON NE RUSTINE DONC PAS LES DEUX COLONNES : on retire les nuls de la charge.
+ * C'est exact pour toutes les autres, et vérifié plutôt que supposé — aucune
+ * colonne nullable du schéma ne porte de défaut serveur (requête du 25 août),
+ * donc « absente » et « nulle » y donnent rigoureusement le même résultat à
+ * l'insertion. La règle ferme la classe entière, y compris les colonnes qui
+ * n'existent pas encore.
+ *
+ * ⚠ CE N'EST VRAI QUE POUR L'ADOPTION. Elle DÉPOSE un état initial ; elle ne
+ * modifie rien. La synchronisation continue passe par la file PowerSync, qui
+ * n'envoie que les colonnes réellement changées et sait donc dire « mets ceci
+ * à nul ». Appliquer cette règle là-bas rendrait un effacement impossible.
+ */
+export const sansLesNuls = (ligne: Record<string, unknown>): Record<string, unknown> => {
+  const propre: Record<string, unknown> = {}
+  for (const [c, v] of Object.entries(ligne)) if (v !== null && v !== undefined) propre[c] = v
+  return propre
+}
+
+/**
+ * LA CHARGE D'UNE TABLE — sortie du corps de `sauvegarder` pour UNE raison :
+ * c'est ici que se décide ce qui part, et rien ne pouvait l'éprouver tant que
+ * ça vivait au milieu d'un appel réseau. Le défaut des colonnes nulles a vécu
+ * là, invisible, parce qu'il n'y avait rien à interroger.
+ */
+export const chargeDe = (
+  table: string, lignes: Record<string, unknown>[], piloteId: string,
+): { charge: Record<string, unknown>[]; differes: { id: string; valeur: unknown }[] } => {
+  const differes: { id: string; valeur: unknown }[] = []
+  const charge = lignes.map((l) => {
+    const avecProprio: Record<string, unknown> = PORTE_PROPRIETAIRE.has(table)
+      ? { ...l, pilote_id: piloteId } : { ...l }
+    if (table === LIEN_DIFFERE.table && avecProprio[LIEN_DIFFERE.colonne]) {
+      differes.push({ id: String(avecProprio.id), valeur: avecProprio[LIEN_DIFFERE.colonne] })
+      avecProprio[LIEN_DIFFERE.colonne] = null
+    }
+    // Le lien différé vient d'être mis à nul : `sansLesNuls` le retire donc de
+    // la charge — même effet à l'insertion, et il est reposé au dernier passage.
+    return sansLesNuls(avecProprio)
+  })
+  return { charge, differes }
+}
+
+/**
  * ⚠ UNE LIGNE REFUSÉE NE BLOQUE PLUS LES AUTRES, et c'est le correctif le plus
  * important de ce fichier.
  *
@@ -223,15 +291,8 @@ export const sauvegarder = async (
     const lignes = await db.getAll<Record<string, unknown>>(`SELECT * FROM ${table}`)
     if (!lignes.length) { bilan[table] = 0; continue }
 
-    const charge = lignes.map((l) => {
-      const avecProprio: Record<string, unknown> = PORTE_PROPRIETAIRE.has(table)
-        ? { ...l, pilote_id: piloteId } : { ...l }
-      if (table === LIEN_DIFFERE.table && avecProprio[LIEN_DIFFERE.colonne]) {
-        aReposer.push({ id: String(avecProprio.id), valeur: avecProprio[LIEN_DIFFERE.colonne] })
-        avecProprio[LIEN_DIFFERE.colonne] = null
-      }
-      return avecProprio
-    })
+    const { charge, differes } = chargeDe(table, lignes, piloteId)
+    aReposer.push(...differes)
 
     // `upsert` et non `insert` : l'adoption doit pouvoir être relancée sans
     // dupliquer quoi que ce soit. Les identifiants sont des UUID v7 posés par le

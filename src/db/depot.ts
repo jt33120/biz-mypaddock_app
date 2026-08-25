@@ -240,9 +240,16 @@ export const creerRoulage = async (
     // file derrière elle. C'est l'incident du 19 août, à l'identique. Et côté
     // lecture, l'horloge d'usure ne compte que les roulages en `usage` : un
     // NULL les rendait tous invisibles, donc l'horloge annonçait zéro.
+    // ⚠ `chrono_visible` S'ÉCRIT AUSSI, et pour le motif exact de `etat` juste
+    // au-dessus — il a coûté la même chose deux fois. Le serveur la porte en
+    // `not null default false` : une colonne jamais écrite part à NULL, et NULL
+    // n'est pas « absente », donc le défaut ne s'applique pas et la ligne est
+    // refusée en 23502. `sansLesNuls` (sauvegarde.ts) ferme la classe entière ;
+    // ceci ferme la source, et rend le masquage EXPLICITE au lieu d'inconnu.
     `INSERT INTO roulage
-       (id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, circuit_nom, etat)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'usage')`,
+       (id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, circuit_nom,
+        etat, chrono_visible)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'usage', 0)`,
     [id, machineId, r.date, r.groupeNom, r.rang, r.total, r.circuit],
   )
   await marquerSaisie(db)

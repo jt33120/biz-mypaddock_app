@@ -38,8 +38,15 @@ export const declarerGeste = async (
   db: PowerSyncDatabase, roulageId: string, capCode: string,
 ) => {
   const id = nouvelId()
+  // ⚠ `partage` S'ÉCRIT, À FAUX, EXPLICITEMENT. Elle est `not null default false`
+  // au serveur : jamais écrite, elle part à NULL — et NULL n'est pas « absente »,
+  // donc le défaut ne s'applique pas et le geste est refusé à l'adoption (23502).
+  // C'est la même classe que `etat` et `chrono_visible` sur `roulage`.
+  // Et ça dit la règle FR-39bis là où elle se décide : un geste naît NON PARTAGÉ,
+  // ce n'est pas une absence d'information.
   await db.execute(
-    `INSERT INTO geste (id, roulage_id, cap_code) VALUES (?, ?, ?)`, [id, roulageId, capCode])
+    `INSERT INTO geste (id, roulage_id, cap_code, partage) VALUES (?, ?, ?, 0)`,
+    [id, roulageId, capCode])
   await marquerSaisie(db)
   return id
 }

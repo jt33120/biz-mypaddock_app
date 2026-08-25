@@ -18,7 +18,8 @@ import { formaterPoids, TABLES_EMPORTEES } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
 import {
-  DEPENDANCES, direCombien, LIEN_DIFFERE, NOM_TABLE, ORDRE, PORTE_PROPRIETAIRE,
+  chargeDe, DEPENDANCES, direCombien, LIEN_DIFFERE, NOM_TABLE, ORDRE, PORTE_PROPRIETAIRE,
+  sansLesNuls,
 } from '../../src/db/sauvegarde'
 import { AppSchema, REFERENTIEL } from '../../src/db/schema'
 // Le fichier de règles tel qu'il est déployé, lu à la lettre. C'est un YAML et
@@ -529,6 +530,46 @@ const essais = [
     const sans = direPublication('2026-03-12', null)
     vrai(!/publié par/.test(sans), `« ${sans} » invente un publieur`)
     vrai(sans.includes('mars'), `« ${sans} » a perdu la date`)
+  }),
+
+  /* ─── L'ADOPTION N'ENVOIE JAMAIS UN NUL ───────────────────────────────── */
+  doit("aucune colonne nulle ne part à l'adoption", () => {
+    // ⚠ LE DÉFAUT LE PLUS COÛTEUX DU PRODUIT, et il tenait à une nuance de SQL.
+    // « la colonne vaut NULL » ≠ « la colonne est absente » : le défaut serveur
+    // ne s'applique qu'à l'absente. `roulage.chrono_visible` est `not null
+    // default false` et n'était jamais écrite en local — donc envoyée à NULL,
+    // donc 23502, donc CHAQUE roulage refusé à la connexion, et avec eux les
+    // sessions, les tours, les chutes et les dépenses qui y pendent.
+    // Vérifié sur la base réelle le 25 août 2026 avant d'être corrigé.
+    const { charge } = chargeDe('roulage', [{
+      id: 'r1', machine_id: 'm1', date_jour: '2026-04-18', circuit_nom: 'Nogaro',
+      chrono_visible: null, groupe_nom: null, etat: 'usage',
+    }], 'p1')
+    vrai(!('chrono_visible' in charge[0]), 'chrono_visible part encore, et à nul')
+    for (const [c, v] of Object.entries(charge[0]))
+      vrai(v !== null, `${c} part à nul et fera refuser la ligne`)
+  }),
+  doit('mais un zéro, un faux et une chaîne vide ne sont pas des nuls', () => {
+    // La faute symétrique, et elle serait pire : filtrer sur la fausseté au lieu
+    // de la nullité effacerait `cochee: 0`, `groupe_rang: 0`, `partage: 0` —
+    // le produit enverrait alors des lignes amputées de ce qu'elles affirment.
+    const propre = sansLesNuls({ a: 0, b: false, c: '', d: null, e: undefined, f: NaN })
+    egal(Object.keys(propre).sort(), ['a', 'b', 'c', 'f'])
+    egal(propre.a, 0); egal(propre.b, false); egal(propre.c, '')
+  }),
+  doit("l'adoption pose le propriétaire et diffère le lien coupé", () => {
+    // Les deux autres charges de `chargeDe`, éprouvées ici parce qu'elles
+    // vivaient au milieu d'un appel réseau et que rien ne pouvait les voir.
+    for (const t of PORTE_PROPRIETAIRE) {
+      const { charge } = chargeDe(t, [{ id: 'x' }], 'p1')
+      egal(charge[0].pilote_id, 'p1', `${t} part sans propriétaire`)
+    }
+    const { charge, differes } = chargeDe(LIEN_DIFFERE.table,
+      [{ id: 'i1', [LIEN_DIFFERE.colonne]: 'ph1', libelle: 'Vidange' }], 'p1')
+    vrai(!(LIEN_DIFFERE.colonne in charge[0]),
+      `${LIEN_DIFFERE.colonne} part au premier passage, donc en clé étrangère morte`)
+    egal(differes, [{ id: 'i1', valeur: 'ph1' }])
+    egal(charge[0].libelle, 'Vidange', 'le reste de la ligne a été perdu')
   }),
 
   /* ─── LE CODE DE CERCLE — il se donne DE VIVE VOIX ────────────────────── */
