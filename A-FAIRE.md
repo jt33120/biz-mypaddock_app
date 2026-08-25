@@ -181,20 +181,33 @@ simplement pas achetable :
 3. **Le prix.** Le coût réel est connu et déjà écrit ligne par ligne dans `generation` : c'est
    la seule base honnête pour fixer un tarif, et elle sera mesurée avant d'être devinée.
 
-**L'argument qui tranche ton « à la place ou au-dessus d'un freemium ? »** — et c'est déjà
-écrit dans le PRD, section monétisation : le produit s'ouvre **onze fois par an**. Facturer au
-mois un produit ouvert onze fois l'an est une machine à résiliation : chaque prélèvement
-tombe un mois où il ne s'est rien passé. Le crédit n'a pas ce défaut — il ne se consomme que
-quand on s'en sert, donc il ne se remarque jamais au mauvais moment. Il est aussi le seul
-modèle qui **facture exactement ce qui coûte**, ce qui est déjà la position retenue pour les
-styles de portrait.
+**⚠ CORRECTION — L'ARGUMENT QUI ÉTAIT ÉCRIT ICI ÉTAIT PÉRIMÉ, ET IL VENAIT DE MOI.**
 
-**Ma recommandation, à confirmer par toi :** crédit **au lieu** d'un abonnement pour tout ce
-qui appelle une IA, et le noyau reste gratuit et sans limite. Un pass saison reste possible
-par-dessus pour ce qui ne coûte rien à l'usage — l'import de chrono, le cercle partagé — parce
-que l'unité de compte du produit est déjà la saison. À ne trancher que quand un vrai
-utilisateur aura demandé une de ces fonctionnalités : c'est le seul moment où la réponse coûte
-moins qu'elle ne rapporte.
+Cette entrée disait : « le produit s'ouvre onze fois par an, donc l'abonnement mensuel est une
+machine à résiliation ». C'est faux depuis le 18 août 2026, et la rétractation est écrite noir
+sur blanc dans `_bmad/custom/mypaddock-contraintes.md` §3 : **onze est le nombre de ROULAGES,
+pas le nombre d'ouvertures.** On en avait tiré un rythme d'usage qui n'a jamais été mesuré.
+« Aucun nombre ne remplace celui-là, et c'est délibéré. »
+
+Conséquence directe : **l'abonnement n'est plus disqualifié d'office.** Je l'avais pourtant
+répété comme un acquis, ici et de vive voix — c'est le genre d'argument qui s'installe parce
+qu'il sonne bien, et qui survit à sa propre réfutation.
+
+Ce qui reste vrai, et qui est plus étroit : **le moment de saisie au paddock** est rare —
+gants aux mains, plein soleil, sans réseau. C'est une contrainte d'interface, pas un argument
+de tarification.
+
+**Ce qui est vraiment écarté, et pour un tout autre motif : le pass saison.** La revue produit
+lui reproche de fabriquer un coût échoué — « j'ai payé, il faut que ça serve » — c'est-à-dire
+exactement la pression à rouler que l'interdit n°4 proscrit. Et le PRD juge ce défaut PIRE
+qu'une mécanique de jeu, parce qu'il est invisible dans l'interface : rien à l'écran ne le
+montre, il n'agit que dans la tête du pilote.
+
+**Ma recommandation, à confirmer par toi**, débarrassée de l'argument mort : crédit prépayé
+pour tout ce qui appelle une IA, noyau gratuit et sans limite. Deux raisons qui tiennent
+toutes seules — il **facture exactement ce qui coûte**, et il ne crée aucun coût échoué. À
+trancher quand un vrai utilisateur aura demandé une de ces fonctionnalités : c'est le seul
+moment où la réponse coûte moins qu'elle ne rapporte.
 
 ---
 
