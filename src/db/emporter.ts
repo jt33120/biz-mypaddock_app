@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { lireLocale, nomLocal, photoMachine, type Photo } from './photos'
 import { CAPS_EMBARQUES } from './corpus'
+import { ORDRE } from './sauvegarde'
 
 /**
  * EMPORTER SA SAISON — NFR-6, FR-27.
@@ -28,11 +29,29 @@ import { CAPS_EMBARQUES } from './corpus'
 
 export const FORMAT = 1
 
-/** Les tables de PILOTE, et elles seulement. */
-const TABLES = [
-  'machine', 'roulage', 'session', 'tour', 'depense', 'budget_saison',
-  'intervention', 'mesure', 'photo', 'geste', 'plan_si_alors',
-] as const
+/**
+ * LES TABLES DE PILOTE, ET ELLES SEULEMENT — et elles ne se recopient plus.
+ *
+ * ⚠ CETTE LISTE ÉTAIT ÉCRITE À LA MAIN, ET ELLE AVAIT SIX TABLES DE RETARD.
+ * Elle en portait onze quand la sauvegarde en synchronisait dix-sept : il
+ * manquait `equipement`, `chute`, `evenement_vise`, `horloge`,
+ * `checklist_ligne` et `document`. L'équipement, les chutes consignées, les
+ * horloges d'usure et les preuves d'atelier ne sortaient pas — et le fichier
+ * écrivait quand même « rien — tout ce que porte ce téléphone est ici ».
+ *
+ * C'est la propriété ③ que l'en-tête de ce fichier se donne : un emport qui
+ * ment sur ses trous est pire qu'un emport incomplet, parce qu'on ne va pas
+ * chercher ailleurs ce qu'on croit tenir.
+ *
+ * Une liste tenue à la main diverge à la table suivante. Celle-ci est donc
+ * DÉRIVÉE de `ORDRE`, la liste d'envoi — même source, même vérité — et un essai
+ * unitaire vérifie qu'elles ne se séparent pas.
+ */
+const TABLES = ORDRE
+
+/** Rendue au banc : c'est la clause « l'emport sort ce que la sauvegarde
+ *  envoie » qui protège contre la divergence, pas la bonne volonté. */
+export const TABLES_EMPORTEES: readonly string[] = TABLES
 
 const CONVENTIONS = {
   argent: 'les montants sont des CENTIMES entiers — 24550 vaut 245,50 €',

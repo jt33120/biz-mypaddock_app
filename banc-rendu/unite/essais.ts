@@ -14,7 +14,7 @@
 import { anneeSaison, enCentimes, formaterChrono, formaterEcart, formaterEuros } from '../../src/db/depot'
 import { instantDeLId, SEUIL_H } from '../../src/db/mesures'
 import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
-import { formaterPoids } from '../../src/db/emporter'
+import { formaterPoids, TABLES_EMPORTEES } from '../../src/db/emporter'
 import { dimensions } from '../../src/db/photos'
 import { enFichier } from '../../src/recap/composer'
 import {
@@ -324,6 +324,17 @@ const essais = [
     const m = direLAbri({ persistant: false, installee: true, proposable: false, systeme: 'ios', menace: true })
     vrai(!!m && /refusé/.test(m.titre), 'le refus doit être nommé')
     egal(m?.geste, null)
+  }),
+
+  // ⚠ L'EMPORT EST LE DERNIER FILET — celui qui sert le jour où le compte est
+  // perdu, le serveur suspendu, le produit arrêté. Sa liste de tables était
+  // tenue à la main et avait SIX TABLES DE RETARD sur la sauvegarde : ni
+  // l'équipement, ni les chutes, ni les horloges d'usure, ni les preuves
+  // d'atelier n'en sortaient. Et le fichier écrivait quand même « rien — tout
+  // ce que porte ce téléphone est ici ». Un filet qui ment sur ses trous est
+  // pire qu'un filet troué : on ne va pas chercher ailleurs ce qu'on croit tenir.
+  doit("l'emport sort exactement ce que la sauvegarde envoie", () => {
+    egal([...TABLES_EMPORTEES], [...ORDRE])
   }),
 
   /* ─── LES CORPUS EMBARQUÉS ─────────────────────────────────────────────── */
