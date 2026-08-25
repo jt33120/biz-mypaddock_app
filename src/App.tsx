@@ -40,6 +40,7 @@ import {
 import { televerserDocuments } from './db/documents'
 import { Chutes } from './ecrans/Chute'
 import { Preparation } from './ecrans/Preparation'
+import { retirerLEcranDeChargement } from './chargement'
 import { Circuit } from './ecrans/Circuit'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
@@ -76,6 +77,13 @@ export default function App() {
      était demandé à chaque démarrage et le booléen était jeté. */
   const [abri, setAbri] = useState<Abri | null>(null)
   const [panne, setPanne] = useState<string | null>(null)
+
+  // ⚠ LE DÉCOR PART QUAND IL Y A QUELQUE CHOSE DERRIÈRE, et « quelque chose »
+  // inclut la PANNE : un écran de chargement qui tourne indéfiniment sur un
+  // navigateur qui a refusé le stockage est le pire des deux mondes — le pilote
+  // attend une application qui ne viendra jamais, et le message qui le lui dirait
+  // est caché dessous.
+  useEffect(() => { if (db || panne) retirerLEcranDeChargement() }, [db, panne])
   const [ecran, setEcran] = useState<Ecran>('accueil')
   const [liste, setListe] = useState<Liste>([])
   const [courant, setCourant] = useState<string | null>(null)
@@ -286,7 +294,11 @@ export default function App() {
     </div>
   )
 
-  if (!db) return <div className="ecran"><div className="libelle">chargement…</div></div>
+  // ⚠ TANT QUE LA BASE N'EST PAS LÀ, ON NE REND RIEN DU TOUT — et surtout pas
+  // le mot « chargement ». Le décor d'index.html occupe l'écran depuis le
+  // premier coup d'œil ; lui superposer deux mots gris serait le cacher au
+  // moment précis où il sert.
+  if (!db) return null
 
   /** La matière du récapitulatif — rassemblée à partir des mêmes données que
    *  l'écran, jamais recalculée autrement. La photo de fond vient de la COPIE

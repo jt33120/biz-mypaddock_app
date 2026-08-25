@@ -18,8 +18,124 @@
     <!-- Remplacé au build par le plugin `titre-depuis-la-constante` (vite.config.ts),
          qui lit la même source que le manifeste. Ne pas écrire le nom ici. -->
     <title>chargement</title>
+    <style>
+      /* Le décor du chargement. Il est inline parce qu'une feuille externe est
+         une requête de plus avant le premier pixel — et c'est exactement ce
+         qu'on essaie d'éviter ici. */
+      html, body { margin: 0; padding: 0; background: #070B1A; }
+      #chargement {
+        position: fixed; inset: 0; z-index: 9999;
+        background: #070B1A; overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+        image-rendering: pixelated; user-select: none;
+      }
+      /* La scène est dessinée pour 390 × 844. On la met à l'échelle plutôt que
+         de la refluer : un pixel art qui se réagence n'est plus le même dessin.
+         `min` et non `max` — couvrir recadrerait la moto. */
+      .ch-scene {
+        position: relative; width: 390px; height: 844px; flex: none;
+        transform: scale(min(100vw / 390, 100dvh / 844));
+        transform-origin: center;
+      }
+      .ch-moto { position: absolute; left: 18px; top: 344px; width: 354px; height: 309px; }
+      .ch-moto img, .ch-lisere {
+        position: absolute; inset: 0; width: 354px; height: 309px;
+        image-rendering: pixelated;
+      }
+      .ch-lisere {
+        background-color: #3DE0FF;
+        -webkit-mask-size: 354px 309px; mask-size: 354px 309px;
+        -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+        animation: chLisere 3.2s linear infinite;
+      }
+      @keyframes chFloorA { from { background-position: 50% 0 } to { background-position: 50% 20px } }
+      @keyframes chFloorB { from { background-position: 50% 0 } to { background-position: 50% 40px } }
+      @keyframes chFloorC { from { background-position: 50% 0 } to { background-position: 50% 60px } }
+      @keyframes chFloorD { from { background-position: 50% 0 } to { background-position: 50% 90px } }
+      @keyframes chLight  { 0%, 25% { background-color: #3DE0FF } 25.01%, 100% { background-color: #070B1A } }
+      @keyframes chLisere { 0%, 86% { background-color: #3DE0FF } 86.01%, 100% { background-color: #FF2E9A } }
+      /* La sortie : une coupe douce, jamais un fondu long — l'application est
+         prête, la faire attendre son propre décor serait absurde. */
+      #chargement.ch-parti { opacity: 0; pointer-events: none; transition: opacity .18s linear; }
+      @media (prefers-reduced-motion: reduce) {
+        /* Rien ne bouge, et les trois feux restent ALLUMÉS : la scène doit
+           rester composée, pas amputée. Consigne du handoff. */
+        [data-om-anim="1"], .ch-lisere { animation: none !important; }
+        [data-om-light="1"] { background-color: #3DE0FF !important; }
+        #chargement.ch-parti { transition: none; }
+      }
+    </style>
   </head>
   <body>
+      <!-- ═══════════════════════════════════════════════════════════════════
+           L'ÉCRAN DE CHARGEMENT — et il vit ICI, pas dans React.
+
+           ⚠ C'EST TOUT L'INTÉRÊT. Ce qui est long au démarrage n'est pas React :
+           c'est le paquet (≈755 Ko), la feuille de style, et surtout le moteur
+           SQLite qui s'ouvre dans un worker OPFS. Un écran de chargement monté
+           par React arrive APRÈS tout ça — c'est-à-dire quand il n'y a plus rien
+           à attendre. Peint dans le document, il est là au premier coup d'œil,
+           avant qu'une seule ligne de JavaScript ne soit lue.
+
+           Design remis par Julian le 25 août 2026 (handoff Claude Design,
+           « arcade 16 bits »), reproduit au pixel : mêmes couleurs, mêmes
+           positions, mêmes durées. Le sprite est passé du SVG inline de la
+           maquette — 3 106 rectangles, 150 802 octets — à deux PNG indexés de
+           118 × 103 : le corps, et le liseré en masque pour qu'il reste
+           colorable. 2 713 octets au lieu de 150 802, et VÉRIFIÉ IDENTIQUE au
+           pixel près (0 différence sur 8 816 pixels opaques). Les sources sont
+           dans src/assets/chargement/.
+
+           ⚠ AUCUN INDICATEUR DE PROGRESSION, et c'est une contrainte de produit,
+           pas un oubli : ni barre, ni pourcentage, ni rond qui tourne, ni le mot
+           « chargement ». Ce produit ne compte rien et ne presse personne.
+           ═══════════════════════════════════════════════════════════════════ -->
+      <div id="chargement" aria-hidden="true">
+        <div class="ch-scene">
+
+        <div style="position:absolute;left:90px;top:14px;width:5px;height:5px;background:#EDF3FF;"></div>
+        <div style="position:absolute;left:200px;top:14px;width:5px;height:5px;background:#8FA3CE;"></div>
+        <div style="position:absolute;left:310px;top:14px;width:5px;height:5px;background:#8FA3CE;"></div>
+        <div style="position:absolute;left:150px;top:44px;width:5px;height:5px;background:#8FA3CE;"></div>
+        <div style="position:absolute;left:230px;top:62px;width:5px;height:5px;background:#EDF3FF;"></div>
+        <div style="position:absolute;left:300px;top:40px;width:5px;height:5px;background:#8FA3CE;"></div>
+        <div style="position:absolute;left:345px;top:70px;width:5px;height:5px;background:#8FA3CE;"></div>
+        <div style="position:absolute;left:125px;top:170px;width:5px;height:5px;background:#8FA3CE;"></div>
+        <div style="position:absolute;left:265px;top:196px;width:5px;height:5px;background:#8FA3CE;"></div>
+
+        <svg viewBox="0 0 12 7" width="84" height="49" fill="#3DE0FF" aria-label="MY" style="position:absolute;left:30px;top:34px;display:block;shape-rendering:crispEdges;"><g transform="translate(0,0)"><rect x="0" y="0" width="1" height="7"></rect><rect x="4" y="0" width="1" height="7"></rect><rect x="1" y="1" width="1" height="1"></rect><rect x="3" y="1" width="1" height="1"></rect><rect x="2" y="2" width="1" height="1"></rect></g><g transform="translate(7,0)"><rect x="0" y="0" width="1" height="3"></rect><rect x="4" y="0" width="1" height="3"></rect><rect x="1" y="3" width="1" height="1"></rect><rect x="3" y="3" width="1" height="1"></rect><rect x="2" y="4" width="1" height="3"></rect></g></svg>
+        <svg viewBox="0 0 47 7" width="329" height="49" fill="#3DE0FF" aria-label="PADDOCK" style="position:absolute;left:30px;top:95px;display:block;shape-rendering:crispEdges;"><g transform="translate(0,0)"><rect x="0" y="0" width="1" height="7"></rect><rect x="1" y="0" width="3" height="1"></rect><rect x="4" y="1" width="1" height="2"></rect><rect x="1" y="3" width="3" height="1"></rect></g><g transform="translate(7,0)"><rect x="1" y="0" width="3" height="1"></rect><rect x="0" y="1" width="1" height="6"></rect><rect x="4" y="1" width="1" height="6"></rect><rect x="1" y="3" width="3" height="1"></rect></g><g transform="translate(14,0)"><rect x="0" y="0" width="1" height="7"></rect><rect x="1" y="0" width="3" height="1"></rect><rect x="4" y="1" width="1" height="5"></rect><rect x="1" y="6" width="3" height="1"></rect></g><g transform="translate(21,0)"><rect x="0" y="0" width="1" height="7"></rect><rect x="1" y="0" width="3" height="1"></rect><rect x="4" y="1" width="1" height="5"></rect><rect x="1" y="6" width="3" height="1"></rect></g><g transform="translate(28,0)"><rect x="1" y="0" width="3" height="1"></rect><rect x="0" y="1" width="1" height="5"></rect><rect x="4" y="1" width="1" height="5"></rect><rect x="1" y="6" width="3" height="1"></rect></g><g transform="translate(35,0)"><rect x="1" y="0" width="3" height="1"></rect><rect x="0" y="1" width="1" height="5"></rect><rect x="4" y="1" width="1" height="1"></rect><rect x="4" y="5" width="1" height="1"></rect><rect x="1" y="6" width="3" height="1"></rect></g><g transform="translate(42,0)"><rect x="0" y="0" width="1" height="7"></rect><rect x="4" y="0" width="1" height="2"></rect><rect x="3" y="2" width="1" height="1"></rect><rect x="1" y="3" width="2" height="1"></rect><rect x="3" y="4" width="1" height="1"></rect><rect x="4" y="5" width="1" height="2"></rect></g></svg>
+
+        <div style="position:absolute;left:0;top:160px;width:390px;height:20px;background-image:conic-gradient(#1A1140 0 25%,#070B1A 0 50%,#1A1140 0 75%,#070B1A 0);background-size:10px 10px;"></div>
+        <div style="position:absolute;left:0;top:180px;width:390px;height:30px;background:#1A1140;"></div>
+        <div style="position:absolute;left:0;top:210px;width:390px;height:15px;background-image:conic-gradient(#3A1550 0 25%,#1A1140 0 50%,#3A1550 0 75%,#1A1140 0);background-size:10px 10px;"></div>
+        <div style="position:absolute;left:0;top:225px;width:390px;height:15px;background:#3A1550;"></div>
+        <div style="position:absolute;left:0;top:240px;width:390px;height:5px;background-image:conic-gradient(#FF2E9A 0 25%,#3A1550 0 50%,#FF2E9A 0 75%,#3A1550 0);background-size:10px 10px;"></div>
+        <div style="position:absolute;left:0;top:245px;width:390px;height:5px;background:#FF2E9A;"></div>
+
+        <div style="position:absolute;left:0;top:250px;width:390px;height:594px;overflow:hidden;">
+        <div data-om-anim="1" data-band="1" data-dur="0.5" style="position:absolute;left:0;top:0px;width:390px;height:70px;background-image:conic-gradient(#0C1228 0 25%,#070B1A 0 50%,#0C1228 0 75%,#070B1A 0);background-size:20px 20px;background-position:50% 0;animation:chFloorA 0.5s steps(4) infinite;"></div>
+        <div data-om-anim="1" data-band="1" data-dur="0.55" style="position:absolute;left:0;top:70px;width:390px;height:90px;background-image:conic-gradient(#0C1228 0 25%,#070B1A 0 50%,#0C1228 0 75%,#070B1A 0);background-size:40px 40px;background-position:50% 0;animation:chFloorB 0.55s steps(8) infinite;"></div>
+        <div data-om-anim="1" data-band="1" data-dur="0.6" style="position:absolute;left:0;top:160px;width:390px;height:130px;background-image:conic-gradient(#0C1228 0 25%,#070B1A 0 50%,#0C1228 0 75%,#070B1A 0);background-size:60px 60px;background-position:50% 0;animation:chFloorC 0.6s steps(12) infinite;"></div>
+        <div data-om-anim="1" data-band="1" data-dur="0.65" style="position:absolute;left:0;top:290px;width:390px;height:304px;background-image:conic-gradient(#0C1228 0 25%,#070B1A 0 50%,#0C1228 0 75%,#070B1A 0);background-size:90px 90px;background-position:50% 0;animation:chFloorD 0.65s steps(18) infinite;"></div>
+        </div>
+
+          <!-- La moto : le corps, puis le liseré en masque recoloré. Deux
+               calques, parce que le liseré bascule cyan → magenta et qu'un
+               PNG ne se recolore pas. -->
+          <div class="ch-moto">
+            <img src="data:image/png;base64,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" alt="" />
+            <div class="ch-lisere" style="-webkit-mask-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHYAAABnCAMAAADi80YdAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlMA/1uRIrUAAAGiSURBVHja7ZrbksQgCAXp///pfZmayiZe0Agnm9W3qamyAwKiHrPIwXdY3jjQEsG/SVncMyfH4AKEVcEyRL1v72eC+jyVP1gWoSPU2bi6JuHlV9v73LPyYoGzKoybS91zA2WIMb+uyjqm0y8Bu7yyIKG6ZoyoohHRvoQbtGP0uFEbFZ10TceGbsmk+/ehWM3ahlpMfrHoY02BDUyhZscpCeVXYnedUmKRYIPPoihcvLEp9xtoqChcXPWxbR+/08em8XEwFkmtQFIY196U7XbmOT0jkoO8hvq4S4s39qmaAlVv3DTYf7S9x7/BobC1TECENQU243H1ysh5S0bg4gIFEdYU2KxnJqKNLd+9h0siKlf+CFb2ZGCm4AWFsUcWIqxlYpFgvzREWNvYv4VFgvVoeSKwfXAMtpuQPexEPveUasdZqe6XzC6sRx1G9aMGdVI4Yqstoivp2wZ7p0pX08o1Jk4NJTUlNFpFp/qSGf3AWRfYWAfGr/JbMYSzX53IKDwB3nI5zg8fWfdqRuBTFaJ5v/GFawY366gIvgiOON3c15f+ABkQAgX2At37AAAAAElFTkSuQmCC);mask-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHYAAABnCAMAAADi80YdAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlMA/1uRIrUAAAGiSURBVHja7ZrbksQgCAXp///pfZmayiZe0Agnm9W3qamyAwKiHrPIwXdY3jjQEsG/SVncMyfH4AKEVcEyRL1v72eC+jyVP1gWoSPU2bi6JuHlV9v73LPyYoGzKoybS91zA2WIMb+uyjqm0y8Bu7yyIKG6ZoyoohHRvoQbtGP0uFEbFZ10TceGbsmk+/ehWM3ahlpMfrHoY02BDUyhZscpCeVXYnedUmKRYIPPoihcvLEp9xtoqChcXPWxbR+/08em8XEwFkmtQFIY196U7XbmOT0jkoO8hvq4S4s39qmaAlVv3DTYf7S9x7/BobC1TECENQU243H1ysh5S0bg4gIFEdYU2KxnJqKNLd+9h0siKlf+CFb2ZGCm4AWFsUcWIqxlYpFgvzREWNvYv4VFgvVoeSKwfXAMtpuQPexEPveUasdZqe6XzC6sRx1G9aMGdVI4Yqstoivp2wZ7p0pX08o1Jk4NJTUlNFpFp/qSGf3AWRfYWAfGr/JbMYSzX53IKDwB3nI5zg8fWfdqRuBTFaJ5v/GFawY366gIvgiOON3c15f+ABkQAgX2At37AAAAAElFTkSuQmCC)"></div>
+          </div>
+
+        <div style="position:absolute;left:145px;top:665px;width:100px;height:20px;display:flex;gap:20px;">
+        <div data-om-anim="1" data-om-light="1" style="width:20px;height:20px;background-color:#070B1A;animation:chLight 2.4s linear infinite;animation-delay:0s;"></div>
+        <div data-om-anim="1" data-om-light="1" style="width:20px;height:20px;background-color:#070B1A;animation:chLight 2.4s linear infinite;animation-delay:0.6s;"></div>
+        <div data-om-anim="1" data-om-light="1" style="width:20px;height:20px;background-color:#070B1A;animation:chLight 2.4s linear infinite;animation-delay:1.2s;"></div>
+        </div>
+
+        </div>
+      </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
