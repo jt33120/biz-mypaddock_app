@@ -7,6 +7,7 @@
 //   ③ le texte est VRAI : il nomme ce que le code envoie vraiment, et il ne
 //     prétend pas à une adresse de contact qui n'existe pas
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -56,6 +57,5 @@ console.log('   et renvoie au texte :', await page.isVisible('.compte .lien:has-
 console.log('   sans case à cocher :', await page.isVisible('input[type=checkbox]') ? 'NON' : 'oui')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/legal.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+sortir(erreurs)

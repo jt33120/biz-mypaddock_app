@@ -6,6 +6,7 @@
 //   ② FR-44 — aucun verdict : ni « à changer », ni durée de vie restante
 //   ③ FR-61 — un roulage BROUILLON ne fait pas vieillir une machine
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -90,6 +91,5 @@ console.log('   un roulage à venir ne la fait pas avancer :',
 console.log('   le dépassement a disparu :', apres.includes("Au-delà") ? 'NON' : 'oui')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/usure.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+sortir(erreurs)

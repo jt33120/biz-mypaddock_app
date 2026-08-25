@@ -1,6 +1,7 @@
 // Essai de fumée du récit 1.2 — on SAISIT d'abord, on regarde le compte ensuite :
 // c'est l'ordre réel d'un pilote, et le seul qui teste l'adoption.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const base = process.argv[2] ?? 'http://localhost:4173'
 const sortie = process.argv[3] ?? '/tmp/compte.png'
@@ -120,6 +121,5 @@ await page.waitForSelector('section.compte .repris', { timeout: 10_000 })
 console.log('repris :', (await page.textContent('.repris .detail')).replace(/\s+/g, ' ').trim())
 await page.screenshot({ path: sortie, fullPage: true })
 
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+sortir(erreurs)

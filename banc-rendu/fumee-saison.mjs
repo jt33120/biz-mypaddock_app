@@ -4,6 +4,7 @@
 // présenter des moyennes fausses. L'essai vérifie donc surtout une ABSENCE —
 // aucune moyenne nulle part — et un ORDRE : la complétude avant les chiffres.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -55,6 +56,5 @@ console.log('   le mot « prévision » est écarté :',
   t.includes("pas une prévision") || !t.includes('report') ? 'oui' : 'NON')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/saison.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+sortir(erreurs)

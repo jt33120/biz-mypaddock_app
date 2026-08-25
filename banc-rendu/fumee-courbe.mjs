@@ -5,6 +5,7 @@
 // comptent autant que ce qu'elle fait : aucune projection, aucune comparaison
 // entre circuits, aucune cible.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -103,6 +104,5 @@ console.log('   et Pau-Arnos garde la sienne :', await page.isVisible('.courbe')
 console.log('   toujours', (await page.$$eval('.courbe .trace rect', n => n.length)), 'points — Nogaro n\'y est pas entré')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/courbe.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+sortir(erreurs)

@@ -5,6 +5,7 @@
 // tout classement. Ce sont des états initiaux, et un état initial faux ne se
 // remarque jamais : personne ne va vérifier que rien n'est parti.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -60,6 +61,5 @@ console.log('④ déclarer un geste ne propose aucun partage :',
   /partager au cercle|envoyer au cercle|partage automatique/i.test(g) ? 'NON' : 'oui')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/cercle.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+sortir(erreurs)

@@ -5,6 +5,7 @@
 // un compteur de conformité, un « validé », une barre qui se remplit — autant
 // que la présence de ce qui rapporte.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -65,6 +66,5 @@ console.log('④ aucune ligne de conformité sans source :',
   t.includes("Ce que l'organisateur publie") ? 'une section conformité existe sans référentiel' : 'oui')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/checklist.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+sortir(erreurs)

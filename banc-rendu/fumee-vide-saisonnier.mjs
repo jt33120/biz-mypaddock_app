@@ -8,6 +8,7 @@
 // L'essai descend les sources UNE PAR UNE, en retirant à chaque fois celle qui
 // gagnait : c'est la seule façon de vérifier un ordre de priorité.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -89,6 +90,5 @@ const fautes = interdits.filter((m) => a3.toLowerCase().includes(m.toLowerCase()
 console.log('④ FR-13 — aucun impératif, aucune échéance :', fautes.length ? fautes : 'oui')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/vide.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(erreurs.length ? 1 : 0)
+sortir(erreurs)
