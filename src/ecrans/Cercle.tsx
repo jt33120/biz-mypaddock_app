@@ -28,21 +28,30 @@ export function Cercle({ identite, circuit }: {
   const [gens, setGens] = useState<Membre[]>([])
   const [lignes, setLignes] = useState<LigneCercle[]>([])
   const [souci, setSouci] = useState<string | null>(null)
+  /** Ce que la lecture n'a pas pu faire — distinct de `souci`, qui est le refus
+   *  d'un geste du pilote. Une panne de lecture n'est la faute de personne. */
+  const [panne, setPanne] = useState<string | null>(null)
   const [mode, setMode] = useState<'aucun' | 'creer' | 'rejoindre'>('aucun')
   const [nom, setNom] = useState('')
   const [pseudo, setPseudo] = useState('')
   const [code, setCode] = useState('')
 
+  // ⚠ UNE PANNE NE SE RANGE PAS DANS LES DONNÉES, elle se dit. Les quatre
+  // lectures rendent maintenant leur souci ; sans ça, un réseau coupé renvoyait
+  // un pilote qui a un cercle vers « Créer un cercle », et affirmait à un autre
+  // que personne n'avait roulé là où il n'avait pas pu demander.
   const charger = useCallback(async () => {
-    const l = await mesCercles()
+    const { valeur: l, souci: s } = await mesCercles()
+    setPanne(s)
     setListe(l); setActif((a) => l.find((x) => x.id === a?.id) ?? l[0] ?? null)
   }, [])
   useEffect(() => { if (identite) void charger() }, [identite, charger])
 
   useEffect(() => {
     if (!actif) { setGens([]); setLignes([]); return }
-    void membres(actif.id).then(setGens)
-    if (circuit) void roulagesDuCercle(actif.id, circuit).then(setLignes)
+    void membres(actif.id).then((r) => { setGens(r.valeur); if (r.souci) setPanne(r.souci) })
+    if (circuit) void roulagesDuCercle(actif.id, circuit)
+      .then((r) => { setLignes(r.valeur); setPanne(r.souci) })
   }, [actif, circuit])
 
   if (!identite) {
@@ -82,7 +91,7 @@ export function Cercle({ identite, circuit }: {
           {circuit && (
             <>
               <div className="libelle faible">à {circuit}</div>
-              {lignes.length ? lignes.map((l) => (
+              {panne ? <p className="mot-erreur">{panne}</p> : lignes.length ? lignes.map((l) => (
                 <div className="rang ligne-atelier" key={l.id}>
                   <span className="texte">{l.pseudo}</span>
                   <span className="libelle faible">{l.date_jour}</span>
@@ -98,6 +107,10 @@ export function Cercle({ identite, circuit }: {
         </>
       ) : mode === 'aucun' ? (
         <>
+          {/* ⚠ LA PANNE PASSE AVANT L'INVITATION. Sans elle, un pilote qui a
+              déjà un cercle et dont la lecture a échoué lirait « Créer un
+              cercle » — et en créerait un second. */}
+          {panne && <p className="mot-erreur">{panne}</p>}
           <p className="texte">
             Un cercle est fermé et de l'ordre de quelques personnes. On y compare à circuit égal,
             et il n'existe aucun classement.
@@ -113,8 +126,11 @@ export function Cercle({ identite, circuit }: {
           <div className="libelle">ton pseudo dedans</div>
           <input className="champ" value={pseudo} onChange={(e) => setPseudo(e.target.value)}
                  placeholder="Julian" autoComplete="off" />
+          {souci && <p className="mot-erreur">{souci}</p>}
           <button className="bouton" disabled={!nom.trim() || !pseudo.trim()}
-                  onClick={() => void creerCercle(nom, pseudo).then(() => { setMode('aucun'); return charger() })}>
+                  onClick={() => void creerCercle(nom, pseudo).then((e) => {
+                    setSouci(e); if (!e) { setMode('aucun'); return charger() }
+                  })}>
             Créer
           </button>
           <button className="lien" onClick={() => setMode('aucun')}>Annuler</button>
