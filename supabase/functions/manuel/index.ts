@@ -113,6 +113,30 @@ Deno.serve(async (req) => {
 
   const quoi = [m.marque, m.modele, m.annee].filter(Boolean).join(' ')
 
+  // ─── ①bis LA RÉSERVATION, AVANT LE PREMIER APPEL PAYANT ──────────────────
+  //
+  // ⚠ ELLE MANQUAIT, ET C'ÉTAIT UN TROU D'ARGENT. L'interrupteur `cle_absente`
+  // protégeait tant que la clé n'était pas posée — mais un interrupteur n'est
+  // pas un plafond. Clé posée, chaque tap lançait une recherche web facturée
+  // PUIS un téléchargement jusqu'à 25 Mo, sans compteur, sans plafond, et sans
+  // une ligne écrite nulle part. Un tap répété est une facture répétée, et
+  // personne ne l'aurait vue avant le relevé.
+  //
+  // Tout est descendu dans `reserver_manuel`, sous verrou consultatif : le
+  // solde du compte, le plafond global des 24 h, et l'écriture de la ligne au
+  // registre. Une lecture suivie d'une écriture laisserait passer N appels
+  // simultanés — c'est le défaut qui avait déjà été trouvé sur la réservation
+  // des portraits, et il ne se rejoue pas ici.
+  const { data: resa, error: eResa } = await admin
+    .rpc('reserver_manuel', { p_pilote: pilote, p_machine: m.id })
+  if (eResa) {
+    const motif = /quota/.test(eResa.message) ? 'quota'
+      : /plafond_global/.test(eResa.message) ? 'plafond_global'
+        : /sans_compte/.test(eResa.message) ? 'sans_compte' : 'reservation'
+    return repondre({ refus: motif }, motif === 'sans_compte' ? 401 : 429)
+  }
+  const reste = Array.isArray(resa) ? resa[0]?.reste : undefined
+
   // ─── LA RECHERCHE ────────────────────────────────────────────────────────
   // Le connecteur `web_search` de Mistral : c'est lui, « le moteur suffisamment
   // puissant ». On lui demande UNE URL et rien d'autre — un modèle à qui on
@@ -216,5 +240,8 @@ Deno.serve(async (req) => {
     // document rapatrié qui ne dirait pas d'où il vient serait indistinguable
     // d'un document versé à la main, et c'est la distinction qui compte ici.
     source: cible.href,
+    // Ce qui reste voyage avec le résultat, comme pour les portraits : un solde
+    // qu'on ne découvre qu'en le heurtant n'est pas un solde, c'est un mur.
+    reste,
   })
 })
