@@ -4049,6 +4049,53 @@ En tant que pilote, je veux un signe que ce que je viens de saisir est gardé, a
 10. ⑩ Récits 17.5 et 18.4 — hors file, dès que Julian répond. 17.5 (les objectifs) et 18.4 (le réglage de l'envoi cloud) sont entièrement suspendus à une décision de lexique et à un chiffre de coût qui n'existe nulle part.
 
 
+
+## Les décisions de Julian, 25 août 2026
+
+Quatre questions bloquantes lui ont été posées. Ses réponses lèvent trois règles
+écrites du produit ; elles sont datées ici comme celles du 18 et du 23 août, et
+le code doit les citer là où il s'en écarte.
+
+**① LA CHECK-LIST — ni embarquée, ni purement dérivée : DÉRIVÉE D'UN RÉFÉRENTIEL.**
+Sa réponse est une troisième voie, et elle est meilleure que les deux proposées :
+
+> « Dans la réalité il y a bien des choses communes à chaque moto, qui doit être
+> complété par un websearch vers le manuel d'utilisation. J'ai une moto, je
+> cherche le manuel sur internet, je remplis et prépare tout ce qu'il peut
+> m'apporter sur la moto, mais c'est transparent pour l'utilisateur. »
+
+La règle du 23 août tient donc : la liste n'est PAS embarquée. Un socle commun à
+toute moto (huile, chaîne, freins, pneus) existe comme **référentiel**, et le
+manuel de CETTE moto le complète — intervalles réels, pièces réelles. Ce qui
+s'affiche reste dérivé de la machine du pilote, jamais d'une liste identique pour
+tout le monde.
+
+⚠ **ET IL A RAISON SUR UN POINT QUE PERSONNE N'AVAIT RELEVÉ : « il n'y a pas
+d'URL ».** La recherche web EXISTE déjà — `supabase/functions/manuel/index.ts`
+utilise le connecteur `web_search` de Mistral, la clé qu'il paie déjà, et la
+fonction est déployée et active. Ce qui manque n'est donc pas la recherche, c'est
+le **TRAITEMENT** : le PDF est rapatrié dans son espace privé, et rien ne le LIT.
+Aucun intervalle n'en sort, aucune horloge ne s'en remplit. C'est ce chaînon-là
+qui rend « vérifier l'huile » dérivable, et il n'est écrit nulle part.
+
+**② LE BUDGET — un plafond annuel ET un repère mensuel.** Les deux. La saison
+porte le plafond, le mois porte un repère.
+
+**③ LES OBJECTIFS — libres, avec un avertissement en pied d'application.**
+
+> « C'est la pratique d'un sport, un petit disclaimer en bas de l'app devrait
+> suffire. Dans les objectifs, on peut imaginer poser le genou à gauche, faire
+> 1 min 30, travailler les virages à gauche, etc., soit pas trop strict. »
+
+⚠ Ça lève DEUX règles écrites : le mot « objectif » interdit à l'écran, et
+l'interdiction de la cible chiffrée de chrono. Il les lève en connaissance de
+cause, et il pose la contrepartie — un avertissement permanent. Le code doit
+citer cette décision là où il s'écarte de l'épine UX.
+
+**④ L'ÉCRAN DE CHARGEMENT — durée minimale garantie, ~600 ms.** Ralentir
+volontairement l'ouverture est normalement une faute ; c'est ici la condition
+pour que l'écran existe. *(Fait le 25 août.)*
+
 ## Ce que Julian doit trancher
 
 Vingt-deux questions sont sorties de la relecture. Elles ne se valent pas : la
