@@ -50,7 +50,7 @@ console.log('   et dit que c\'est le SEUL endroit :', c.includes('seul endroit d
 // ── ③ FR-39 : aucun classement, nulle part, sous aucun nom.
 const classements = ['classement', 'podium', 'meilleur du cercle', 'ranking', '1er', 'top ']
 const trouves = classements.filter((m) => c.toLowerCase().includes(m))
-console.log('③ FR-39 — aucun classement :', trouves.length ? trouves : 'oui')
+console.log('③ FR-39 — aucun classement :', trouves.length ? 'NON — ' + trouves.join(', ') : 'oui')
 
 // ── ④ FR-39bis : un cap de bravoure ne part pas tout seul. Rien à l'écran ne
 //    propose de le partager, et le champ naît à faux.

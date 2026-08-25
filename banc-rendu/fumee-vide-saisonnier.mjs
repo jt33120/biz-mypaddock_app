@@ -87,7 +87,8 @@ console.log('   le coût est annoncé comme ESTIMÉ :', a3.includes('estimés') 
 // ── ④ FR-13 sur toutes les nouvelles formulations.
 const interdits = ['!', 'pense à', 'n\'oublie', 'il faut', 'tu dois', 'plus que', 'reste', 'en retard', 'urgent']
 const fautes = interdits.filter((m) => a3.toLowerCase().includes(m.toLowerCase()))
-console.log('④ FR-13 — aucun impératif, aucune échéance :', fautes.length ? fautes : 'oui')
+console.log('④ FR-13 — aucun impératif, aucune échéance :',
+  fautes.length ? 'NON — ' + fautes.join(', ') : 'oui')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/vide.png', fullPage: true })
 await nav.close()

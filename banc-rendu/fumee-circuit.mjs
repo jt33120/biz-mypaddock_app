@@ -8,6 +8,7 @@
 //   ④ deux orthographes du même circuit se comparent — la progression survit
 //   ⑤ la PWA n'écrit RIEN dans le référentiel (AD-12)
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -123,8 +124,8 @@ await page.click('text=Compter ce qui a survécu')
 await page.waitForSelector('text=/persisté :/', { timeout: 15_000 })
 const compte = await page.textContent('.plat.pile')
 const m = compte.match(/(\d+) circuits en référentiel/)
-console.log('⑤ référentiel local :', m ? `${m[1]} circuit(s)` : 'illisible',
-  m && m[1] === '0' ? '— aucune écriture, AD-12 tenu' : '— À VÉRIFIER')
+console.log('⑤ référentiel local :', m ? `${m[1]} circuit(s)` : 'NON — compteur illisible',
+  m && m[1] === '0' ? '— aucune écriture, AD-12 tenu' : '— NON, une écriture a eu lieu')
 
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)

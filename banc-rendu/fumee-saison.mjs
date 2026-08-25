@@ -47,7 +47,7 @@ console.log('   et le dit :', t.includes('pas un calendrier') ? 'oui' : 'NON')
 // ── ③ AUCUNE MOYENNE. C'est une absence, donc elle se vérifie par la négative.
 const moyennes = ['moyen', 'moyenne', 'par roulage', '/ roulage', 'en moyenne', 'ratio']
 const trouves = moyennes.filter((m) => t.toLowerCase().includes(m))
-console.log('③ aucune moyenne :', trouves.length ? trouves : 'oui')
+console.log('③ aucune moyenne :', trouves.length ? 'NON — ' + trouves.join(', ') : 'oui')
 
 // ── ④ FR-56 : un REPORT, jamais une prévision.
 await page.click('text=Ajouter une dépense').catch(() => {})

@@ -2,6 +2,7 @@
 // ne doit RIEN écrire, pas même en local. C'est la seule qui se vérifie en
 // regardant la base, pas l'écran.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -88,5 +89,5 @@ console.log('④ après refus + rechargement — ouvertures :', m ? m[2] : '?', 
 console.log('   AD-16 tenue :', m && m[2] === '1' ? 'oui' : 'NON — une ligne a été écrite malgré le refus')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/inst.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)

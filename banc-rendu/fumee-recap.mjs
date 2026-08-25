@@ -2,6 +2,7 @@
 // il s'affiche sans avoir été demandé, le type du blob est le vrai, le coût au
 // tour ne peut pas sortir sans son budget, et aucune cible n'est nommée.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 import fs from 'node:fs'
 
 const nav = await chromium.launch({
@@ -89,5 +90,5 @@ console.log('⑤ cibles nommées à l\'écran :', cibles.filter(c => ecran.inclu
 console.log('   cibles nommées dans le paquet :', cibles.filter(c => paquet.includes(c)).join(',') || 'aucune')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/recap.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)

@@ -62,7 +62,8 @@ await page.fill('.champ[placeholder="6"]', '3')
 await page.click('text=Suivre ce poste')
 await page.waitForTimeout(800)
 const tout = (await page.textContent('.ecran')).replace(/\s+/g, ' ')
-console.log('③ avec intervalle :', /Vidange\s*\d+ \/ 3/.test(tout) ? 'compté sur 3' : tout.slice(0, 90))
+console.log('③ avec intervalle :',
+  /Vidange\s*\d+ \/ 3/.test(tout) ? 'compté sur 3' : 'NON — ' + tout.slice(0, 90))
 console.log('   dépassement énoncé, jamais jugé :',
   tout.includes("Au-delà de l'intervalle") ? 'oui' : 'NON')
 
@@ -70,7 +71,7 @@ console.log('   dépassement énoncé, jamais jugé :',
 const verdicts = ['à changer', 'à remplacer', 'danger', 'usé', 'durée de vie', 'il te reste',
   'risque', 'critique', 'urgent', 'conforme']
 const trouves = verdicts.filter((v) => tout.toLowerCase().includes(v))
-console.log('④ FR-44 — aucun verdict :', trouves.length ? trouves : 'oui')
+console.log('④ FR-44 — aucun verdict :', trouves.length ? 'NON — ' + trouves.join(', ') : 'oui')
 console.log('   le barème se dit transcrit :',
   tout.includes('transcrit') || !tout.includes('Barème relevé') ? 'oui' : 'NON')
 

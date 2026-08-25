@@ -7,6 +7,7 @@
 //   ③ le refus est ÉNONCÉ, et la photo reste intacte
 //   ④ un candidat n'est rien tant qu'il n'est pas gardé
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 import { photoDEssai } from './photo-essai.mjs'
 
 const nav = await chromium.launch({
@@ -65,6 +66,8 @@ console.log('   requêtes parties vers la fabrique :', appels.length,
 console.log('   la photo est toujours là :', await page.isVisible('.photo-machine'))
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/portrait.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
-process.exit(appels.length || erreurs.length ? 1 : 0)
+// ⚠ UN APPEL D'IMAGE NON PRÉVU EST UNE ERREUR AU MÊME TITRE : c'est ce qui a
+// vidé les crédits Gemini une fois. Il rejoint donc les erreurs plutôt que de
+// vivre dans un `process.exit` à lui, où la garde des assertions ne le voyait pas.
+sortir([...erreurs, ...(appels.length ? [`appels image non prévus : ${appels.join(', ')}`] : [])])

@@ -12,6 +12,7 @@
 // retirée sans assertion est une fonctionnalité qui revient à la première
 // fusion distraite.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
@@ -77,7 +78,7 @@ for (let i = 0; i < 3; i++) {
 }
 await onglet('ACCUEIL')
 const invite = async () => await page.isVisible('text=Une phrase, une seule fois')
-console.log('② à 3 sessions — invite :', await invite() ? 'PRÉSENTE — RETIRÉE À TORT' : 'absente')
+console.log('② à 3 sessions — invite :', await invite() ? 'NON — présente, retirée à tort' : 'absente')
 
 // Le seuil de l'ancienne invite était QUATRE sessions saisies. On le franchit
 // exprès : c'est le seul point où elle serait réapparue.
@@ -85,7 +86,7 @@ await onglet('ROULAGES'); await page.click('.bloc')
 await page.click('text=Saisir une session')
 await enregistrerSession()
 await onglet('ACCUEIL')
-console.log('③ à 4 sessions — invite :', await invite() ? 'PRÉSENTE — RETIRÉE À TORT' : 'absente')
+console.log('③ à 4 sessions — invite :', await invite() ? 'NON — présente, retirée à tort' : 'absente')
 
 // Et rien ne l'a remplacée par un autre champ à remplir : l'accueil ne réclame
 // aucune saisie de texte au pilote. Le conseil se lit, il ne se remplit pas.
@@ -104,5 +105,5 @@ const notif = await page.evaluate(() => ({
 console.log('⑥ notifications :', JSON.stringify(notif), '(permission jamais demandée)')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/cons.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)

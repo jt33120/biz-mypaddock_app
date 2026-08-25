@@ -6,6 +6,7 @@
 //   ② il se lit SANS MYPADDOCK — le fichier porte ses propres unités
 //   ③ il DIT CE QU'IL NE CONTIENT PAS — un filet qui tait ses trous n'en est pas un
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 import { photoDEssai } from './photo-essai.mjs'
 
 const nav = await chromium.launch({
@@ -95,7 +96,8 @@ await page.click('button.bouton:has-text("Emporter")')
 await page.waitForSelector('.compte a[download]', { timeout: 30_000 })
 const sans = await lireFichier()
 console.log('② fichier :', sans.nom, `· ${(sans.texte.length / 1024).toFixed(0)} Ko`)
-console.log('   aucune sortie réseau pendant la composition :', sorties.length ? sorties : 'oui')
+console.log('   aucune sortie réseau pendant la composition :',
+  sorties.length ? 'NON — ' + sorties.join(', ') : 'oui')
 // Composer et partager sont deux gestes. `share()` échoue dans ce navigateur ;
 // l'écran ne doit pas pour autant annoncer que le fichier n'a pas été composé
 // alors qu'il est juste en dessous. Le défaut ne se voyait que sur la capture.
@@ -106,7 +108,7 @@ console.log('   échec de partage ≠ échec de composition :', await contradict
 // ── ② Il se lit sans MyPaddock.
 const o = JSON.parse(sans.texte)
 console.log('   JSON valide :', typeof o === 'object' ? 'oui' : 'NON')
-console.log('   unités portées :', Object.keys(o.a_lire_ainsi ?? {}).join(', ') || 'AUCUNE — ILLISIBLE DANS CINQ ANS')
+console.log('   unités portées :', Object.keys(o.a_lire_ainsi ?? {}).join(', ') || 'NON — aucune unité portée, illisible dans cinq ans')
 console.log('   roulage emporté :', o.roulage?.[0]?.circuit_nom, '· tours :', o.tour?.length)
 console.log('   référentiel exclu :', o.circuit === undefined && o.conseil === undefined ? 'oui' : 'NON')
 
@@ -138,5 +140,5 @@ console.log('④ sans compte — bloc d\'effacement :',
   await page.isVisible('text=effacer mon compte') ? 'NON — VISIBLE À TORT' : 'absent, correct')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/emport.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)

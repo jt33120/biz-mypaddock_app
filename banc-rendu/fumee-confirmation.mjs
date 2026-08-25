@@ -2,6 +2,7 @@
 // On n'appelle PAS Supabase : on force l'étape via une inscription refusée serait
 // fragile. On vérifie donc le rendu en pilotant l'état par le formulaire réel.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
@@ -40,5 +41,5 @@ await page.waitForSelector('text=Le compte est créé', { timeout: 15_000 })
 console.log('écran :', (await page.textContent('section.compte')).replace(/\s+/g, ' ').slice(0, 320))
 console.log('bouton principal :', await page.textContent('section.compte > .bouton'))
 await page.screenshot({ path: process.argv[2] ?? '/tmp/conf.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)

@@ -1,6 +1,7 @@
 // Épique 3 — verser une photo hors ligne, déclarer un geste, et vérifier les
 // deux pièges silencieux : le plafond de canevas iOS et le type du blob.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 import fs from 'node:fs'
 import { photoDEssai } from './photo-essai.mjs'
 
@@ -79,8 +80,8 @@ console.log('④ geste déclaré :', await page.textContent('.fait'))
 const txt = (await page.textContent('.ecran')).toLowerCase()
 const decerne = ['bravo', 'félicitation', 'débloqué', 'trophée', 'badge', 'médaille', 'points', '⭐', '🔥']
   .filter(m => txt.includes(m))
-console.log('⑤ énoncer et non décerner :', decerne.length ? 'FAUTE ' + decerne : 'aucun mot de récompense')
+console.log('⑤ énoncer et non décerner :', decerne.length ? 'NON — ' + decerne : 'aucun mot de récompense')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/ph.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)

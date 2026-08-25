@@ -2,6 +2,7 @@
 // un roulage, un chrono, une dépense, puis le coût — et la clause FR-24 vérifiée
 // dans les DEUX sens : sans budget le coût au tour est ABSENT, avec budget il est là.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -76,5 +77,5 @@ console.log('③ avec budget :', avec)
 console.log('   consommé dans le MÊME bloc :', avec.includes('consommé') ? 'oui' : 'NON — FR-21 VIOLÉE')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/cout.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)

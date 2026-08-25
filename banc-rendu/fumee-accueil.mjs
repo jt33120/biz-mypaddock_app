@@ -1,5 +1,6 @@
 // Récit 6.1 — les deux sources, dans l'ordre, et la clause FR-13 sur les libellés.
 import { chromium } from 'playwright-core'
+import { sortir } from './verdict.mjs'
 const nav = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
@@ -65,8 +66,8 @@ console.log('   « jamais roulé ici » sur un circuit neuf :', futur.includes('
 // FR-13 : aucun impératif, aucune exclamation, aucun mot de rareté.
 const interdits = [/\bplus que\b/i, /\bencore\b/i, /\breste\b/i, /!/, /\bpense[sz]?\b/i, /\bn'oublie/i, /\bvite\b/i, /\bdépêche/i]
 const fautes = interdits.filter(r => r.test(futur)).map(String)
-console.log('④ FR-13 — libellés :', fautes.length ? 'FAUTES ' + fautes.join(' ') : 'aucun impératif, aucune échéance')
+console.log('④ FR-13 — libellés :', fautes.length ? 'NON — ' + fautes.join(' ') : 'aucun impératif, aucune échéance')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/acc.png', fullPage: true })
-console.log('erreurs :', erreurs.length ? erreurs : 'aucune')
 await nav.close()
+sortir(erreurs)
