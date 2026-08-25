@@ -27,7 +27,14 @@ import REGLES_DE_SYNCHRO from '../../powersync/sync-config.yaml?raw'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
-import { CHARGEMENT_EMBARQUE, MOIS_AVANT_DOUTE, moisDepuis } from '../../src/db/checklist'
+import {
+  CHARGEMENT, CHARGEMENT_EMBARQUE, direLAge, direPublication, MOIS_AVANT_DOUTE, moisDepuis,
+  NOM_CATEGORIE,
+} from '../../src/db/checklist'
+// La migration telle qu'elle est appliquée. Comme le YAML de synchronisation :
+// rien ne la relie au code, et c'est précisément le problème.
+import MIGRATION_CATEGORIES from
+  '../../supabase/migrations/20260823000001_preparation_et_skin_equipement.sql?raw'
 import { nouveauCode } from '../../src/db/cercle'
 import { lireEnvironnement } from '../../src/product'
 import { direLAbri, type Abri } from '../../src/db/abri'
@@ -459,6 +466,69 @@ const essais = [
     for (const c of CHARGEMENT_EMBARQUE)
       vrai(c.categorie !== 'conformite', `« ${c.libelle} » se présente comme une règle`)
     vrai(CHARGEMENT_EMBARQUE.length > 6, 'chargement trop pauvre pour servir')
+  }),
+
+  /* ─── LE CHARGEMENT ET LA PRÉPARATION — MÊME TABLE, PAS MÊME LISTE ────── */
+  doit("le chargement ne regarde jamais « Avant d'y aller »", () => {
+    // ⚠ CET ESSAI EXISTE À CAUSE D'UN DÉFAUT BLOQUANT. `checklist_ligne` porte
+    // les deux listes sur le même roulage. L'écran du chargement lisait TOUTES
+    // les catégories et s'en servait pour décider s'il était déjà composé : une
+    // seule tâche de préparation rendait le chargement de ce roulage
+    // DÉFINITIVEMENT incomposable, sans une erreur nulle part.
+    vrai(!CHARGEMENT.includes('preparation' as never),
+      'la préparation est comptée dans le camion')
+    vrai(CHARGEMENT.length > 0, 'le chargement ne regarde plus rien')
+  }),
+  doit('aucune catégorie ne peut apparaître sans être rangée d\'un côté', () => {
+    // Une cinquième catégorie ajoutée demain doit OBLIGER à trancher : dans le
+    // camion, ou avant d'y aller ? Sans cet essai, elle serait silencieusement
+    // écrite, jamais rendue, et comptée quand même — exactement le défaut du
+    // 23 août, à l'identique.
+    const rangees = new Set<string>([...CHARGEMENT, 'preparation'])
+    for (const c of Object.keys(NOM_CATEGORIE))
+      vrai(rangees.has(c), `« ${c} » n'est ni du chargement ni de la préparation`)
+    egal(rangees.size, Object.keys(NOM_CATEGORIE).length,
+      'une catégorie est rangée mais n\'existe pas')
+  }),
+  doit('le serveur accepte exactement les catégories que le produit connaît', () => {
+    // Le même motif que le YAML de synchronisation : deux copies d'une même
+    // vérité, dont une prend du retard. Une catégorie ajoutée au code sans
+    // l'être à la contrainte serait refusée à l'envoi — donc une file bloquée,
+    // donc toute la saison qui cesse de monter. C'est l'incident du 19 août.
+    const m = MIGRATION_CATEGORIES.match(/check \(categorie in \(([^)]*)\)\)/)
+    vrai(!!m, 'la contrainte de catégories est introuvable dans la migration')
+    const serveur = new Set([...m![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]))
+    for (const c of Object.keys(NOM_CATEGORIE))
+      vrai(serveur.has(c), `« ${c} » existe dans le produit et serait REFUSÉE à l'envoi`)
+    for (const c of serveur)
+      vrai(c in NOM_CATEGORIE, `le serveur accepte « ${c} », que le produit ne sait pas nommer`)
+  }),
+
+  /* ─── L'ÂGE D'UNE FICHE — FR-51, et il ne s'arrondit pas ──────────────── */
+  doit("l'âge d'une fiche n'écrase jamais l'écart", () => {
+    // `Math.floor(mois / 12)` faisait lire IDENTIQUEMENT une fiche de treize
+    // mois et une de vingt-trois : « il y a 1 an(s) ». Or c'est justement
+    // l'écart que FR-51 demande de rendre exploitable.
+    vrai(direLAge(13) !== direLAge(23), 'treize et vingt-trois mois se lisent pareil')
+    egal(direLAge(18), 'il y a 18 mois')
+    egal(direLAge(13), 'il y a 13 mois')
+    egal(direLAge(24), 'il y a 2 ans')
+    egal(direLAge(30), 'il y a 2 ans et 6 mois')
+    // Et aucune forme de machine : « an(s) » n'est pas une phrase.
+    for (const m of [0, 1, 12, 13, 24, 37, 120])
+      vrai(!/\(s\)/.test(direLAge(m)), `« ${direLAge(m)} » n'est pas écrit pour un humain`)
+  }),
+  doit('une règle publiée dit QUI, et le dit en clair', () => {
+    // FR-50 : « publié par l'organisateur le 12 mars 2026 ». La ligne disait
+    // « publié le 2026-03-12 » — une date au format machine, et personne.
+    const dit = direPublication('2026-03-12', 'Moto Club de Pau')
+    vrai(dit.includes('Moto Club de Pau'), `« ${dit} » ne nomme pas le publieur`)
+    vrai(dit.includes('mars'), `« ${dit} » est un identifiant, pas une date`)
+    vrai(!dit.includes('2026-03'), `« ${dit} » laisse fuir le format machine`)
+    // Sans publieur connu, elle n'en invente pas un.
+    const sans = direPublication('2026-03-12', null)
+    vrai(!/publié par/.test(sans), `« ${sans} » invente un publieur`)
+    vrai(sans.includes('mars'), `« ${sans} » a perdu la date`)
   }),
 
   /* ─── LE CODE DE CERCLE — il se donne DE VIVE VOIX ────────────────────── */

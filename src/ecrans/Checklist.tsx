@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
-  ajouter, cocher, composer, lignes, moisDepuis, MOIS_AVANT_DOUTE, NOM_CATEGORIE, retirer,
-  type Categorie, type Ligne,
+  ajouter, CHARGEMENT, cocher, composer, direLAge, direPublication, lignesDuChargement,
+  moisDepuis, MOIS_AVANT_DOUTE, NOM_CATEGORIE, retirer, type Ligne,
 } from '../db/checklist'
 
 /**
@@ -13,6 +13,11 @@ import {
  * chose à finir produit exactement la pression que le produit s'interdit. Elle
  * se coche au fur et à mesure du chargement et reste attachée au roulage comme
  * trace — c'est tout ce qu'elle fait.
+ *
+ * ⚠ ELLE NE LIT QUE LES CATÉGORIES DE `CHARGEMENT`. « Avant d'y aller » vit dans
+ * la même table, sur le même roulage, et n'a rien à faire ici : une tâche de
+ * préparation comptée dans le camion rendait l'en-tête faux et le chargement
+ * incomposable. Le motif complet est dans src/db/checklist.ts.
  */
 export function Checklist({ db, roulageId, jour }: {
   db: PowerSyncDatabase; roulageId: string; jour: string
@@ -21,7 +26,8 @@ export function Checklist({ db, roulageId, jour }: {
   const [ouverte, setOuverte] = useState(false)
   const [ajout, setAjout] = useState('')
 
-  const charger = useCallback(async () => setListe(await lignes(db, roulageId)), [db, roulageId])
+  const charger = useCallback(
+    async () => setListe(await lignesDuChargement(db, roulageId)), [db, roulageId])
   useEffect(() => { void charger() }, [charger])
 
   const creer = async () => { await composer(db, roulageId); await charger(); setOuverte(true) }
@@ -33,9 +39,17 @@ export function Checklist({ db, roulageId, jour }: {
   }
 
   const cochees = liste.filter((l) => l.cochee).length
-  const parCategorie = (['machine', 'equipement', 'conformite'] as Categorie[])
+  // Dérivée de `CHARGEMENT`, jamais réécrite à la main : une seconde liste des
+  // mêmes catégories prendrait du retard sur la première, et c'est exactement
+  // comme ça que « Avant d'y aller » s'est retrouvée comptée sans être rendue.
+  const parCategorie = CHARGEMENT
     .map((c) => [c, liste.filter((l) => l.categorie === c)] as const)
-    .filter(([, l]) => l.length)
+    // ⚠ `conformite` SURVIT À SON VIDE. Les autres catégories disparaissent
+    // quand elles sont vides — il n'y a rien à dire d'une machine sans ligne.
+    // Celle-ci, non : faire disparaître la section sans un mot laisserait croire
+    // que l'organisateur n'exige rien, alors que la vérité est que le produit ne
+    // sait rien. Une absence se dit.
+    .filter(([c, l]) => l.length || c === 'conformite')
 
   return (
     <div className="bloc pile checklist">
@@ -49,8 +63,18 @@ export function Checklist({ db, roulageId, jour }: {
       </button>
 
       {ouverte && parCategorie.map(([c, l]) => (
-        <div className="pile" key={c}>
+        <div className={`pile ${c}`} key={c}>
           <div className="libelle faible">{NOM_CATEGORIE[c]}</div>
+          {c === 'conformite' && !l.length && (
+            /* FR-50 — le produit DIT qu'il ne sait rien, au lieu de laisser un
+               silence qu'on lirait comme « rien n'est exigé ». Et il ne promet
+               pas de le savoir un jour : il renvoie à la seule source qui fait
+               foi. */
+            <p className="note">
+              Aucune règle publiée n’est connue pour ce roulage. Ça ne veut pas dire qu’il n’y
+              en a pas — l’organisateur reste la seule source.
+            </p>
+          )}
           {l.map((ligne) => {
             const mois = ligne.publie_le ? moisDepuis(ligne.publie_le, jour) : 0
             return (
@@ -65,11 +89,14 @@ export function Checklist({ db, roulageId, jour }: {
                   </button>
                 )}
                 {ligne.source_url && (
-                  /* FR-50 — la source ET la date, toujours. Le produit rapporte
-                     ce qu'un organisateur a publié ; il ne certifie rien. */
+                  /* FR-50 — QUI l'a publiée, QUAND, et COMMENT elle a été lue.
+                     Le produit rapporte ce qu'un organisateur a publié ; il ne
+                     certifie rien, et il ne masque pas qu'une machine a lu la
+                     page à sa place (QO-6). */
                   <span className="libelle faible">
-                    publié le {ligne.publie_le}
-                    {mois > MOIS_AVANT_DOUTE ? ` · il y a ${Math.floor(mois / 12)} an(s)` : ''}
+                    {direPublication(ligne.publie_le ?? '', ligne.publie_par)}
+                    {mois > MOIS_AVANT_DOUTE ? ` · ${direLAge(mois)}` : ''}
+                    {ligne.extrait_par_ia ? ' · relevé automatiquement sur la page' : ''}
                   </span>
                 )}
               </div>

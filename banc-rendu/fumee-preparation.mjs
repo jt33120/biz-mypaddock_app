@@ -98,8 +98,52 @@ verifier('⑤ une tâche ajoutée se coche', await page.isVisible('.preparation 
 verifier('   une tâche dérivée ne se coche pas',
   await page.$$eval('.preparation .tache .coche', n => n.length) === 0)
 
-// ── ⑥ Le bloc ne déborde pas — le champ d'ajout l'a déjà fait une fois.
-verifier('⑥ le bloc tient dans l\'écran',
+// ── ⑥ « AVANT D'Y ALLER » ET « CHARGEMENT » PARTAGENT UNE TABLE, PAS UNE LISTE.
+//
+//    ⚠ CET ESSAI EXISTE À CAUSE D'UN DÉFAUT BLOQUANT QUI A VÉCU DEUX JOURS SANS
+//    QU'AUCUN ESSAI PUISSE LE VOIR — parce qu'aucun n'exerçait les deux listes
+//    sur le même roulage. Les deux écrivent dans `checklist_ligne` ; le
+//    chargement lisait TOUTES les catégories, et s'en servait pour décider s'il
+//    était déjà composé. Une seule tâche de préparation — « payer l'engagement »,
+//    le geste que Julian décrit lui-même — et le chargement de ce roulage
+//    devenait DÉFINITIVEMENT incomposable : plus de bouton, une liste vide, et
+//    un en-tête qui comptait dans le camion des choses qui n'y étaient pas.
+//
+//    L'ordre des gestes est celui du jeudi soir, et c'est le seul qui compte :
+//    on note d'abord ce qu'il reste à faire, on charge ensuite.
+await page.click('.preparation .coche')          // « Passer chercher le bidon » : fait.
+await page.waitForTimeout(400)
+await page.click('.bloc:has-text("Prochain roulage")')
+await page.waitForTimeout(800)
+
+const composable = await page.isVisible('text=Préparer le chargement')
+verifier('⑥ le chargement reste composable après une tâche de préparation', composable)
+
+// ⚠ ON NE CLIQUE QUE SI LE BOUTON EST LÀ. Sans ce garde-fou, le défaut fait
+// mourir l'essai sur un `Timeout` de Playwright au lieu de rendre son verdict —
+// il échoue bien, mais en cachant les trois vérifications suivantes derrière
+// une trace de pile. Un banc doit dire CE QUI ne va pas, pas seulement tomber.
+if (composable) {
+  await page.click('text=Préparer le chargement')
+  await page.waitForSelector('.checklist', { timeout: 20_000 })
+  const charge = await page.$$eval('.checklist .coche', n => n.length)
+  verifier('   il compose bien ses onze lignes', charge === 11, `${charge} ligne(s)`)
+
+  const tete = (await texte('.checklist .atelier-tete'))
+  verifier('   et il ne compte QUE le camion',
+    !/1 chargé/.test(tete) && !/12 lignes/.test(tete), tete)
+} else {
+  const tete = await page.isVisible('.checklist .atelier-tete')
+    ? await texte('.checklist .atelier-tete') : '(pas même d\'en-tête)'
+  verifier('   il compose bien ses onze lignes', false,
+    `chargement incomposable — en-tête : ${tete}`)
+  verifier('   et il ne compte QUE le camion', false, tete)
+}
+
+// ── ⑦ Le bloc ne déborde pas — le champ d'ajout l'a déjà fait une fois.
+await page.click('nav.barre .onglet:has-text("ACCUEIL")')
+await page.waitForSelector('.preparation', { timeout: 20_000 })
+verifier('⑦ le bloc tient dans l\'écran',
   await page.$eval('.preparation', n => n.scrollWidth <= n.clientWidth + 1))
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/preparation.png', fullPage: true })

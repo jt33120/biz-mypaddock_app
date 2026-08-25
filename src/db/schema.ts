@@ -334,6 +334,12 @@ const checklist_ligne = new Table({
   cochee: column.integer,
   source_url: column.text,
   publie_le: column.text,
+  // ⚠ QUI l'a publiée, et COMMENT elle a été lue. Les deux se perdaient à la
+  // composition — la mention « reconstruite par une machine » disparaissait
+  // exactement au moment où elle atteint un humain (QO-6). Dénormalisées : une
+  // trace dit ce qui était vrai le jour où elle a été prise.
+  publie_par: column.text,
+  extrait_par_ia: column.integer,
 })
 
 // Référentiel : les règles publiées par les organisateurs, récoltées.

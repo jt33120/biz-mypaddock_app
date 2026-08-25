@@ -56,14 +56,21 @@ await page.waitForTimeout(400)
 const t = (await page.textContent('.checklist')).replace(/\s+/g, ' ')
 const certifiants = ['conforme', 'validé', 'admis', 'autorisé', 'complet', 'terminé', '/ 11', 'sur 11', '%']
 const trouves = certifiants.filter((c) => t.toLowerCase().includes(c.toLowerCase()))
-console.log('③ FR-50 — rien ne certifie :', trouves.length ? trouves : 'oui')
+console.log('③ FR-50 — rien ne certifie :', trouves.length ? 'NON — ' + trouves.join(', ') : 'oui')
 console.log('   aucune barre de progression :',
   await page.isVisible('.checklist .jauge') ? 'NON' : 'oui')
 
 // ── ④ Le chargement embarqué ne contient AUCUNE règle : ce qui vient d'un
 //    organisateur porte sa source, ou n'existe pas.
-console.log('④ aucune ligne de conformité sans source :',
-  t.includes("Ce que l'organisateur publie") ? 'une section conformité existe sans référentiel' : 'oui')
+//
+//    ⚠ CE QU'ON VÉRIFIE EST LA LIGNE, PAS LA SECTION. La section existe
+//    désormais même vide, et c'est délibéré : la faire disparaître laisserait
+//    lire « l'organisateur n'exige rien » là où la vérité est « le produit ne
+//    sait rien ». Ce qui reste interdit, c'est une LIGNE sans source.
+const conformes = await page.$$eval('.checklist .conformite .coche', n => n.length)
+console.log('④ aucune ligne de conformité sans référentiel :', conformes === 0 ? 'oui' : 'NON')
+console.log('   et l\'absence est DITE, pas tue :',
+  t.includes('Aucune règle publiée n’est connue') ? 'oui' : 'NON')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/checklist.png', fullPage: true })
 await nav.close()
