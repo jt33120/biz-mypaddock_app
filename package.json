@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "essais": "node banc-rendu/essais.mjs",
-    "essais:unite": "node banc-rendu/unite.mjs"
+    "essais:unite": "node banc-rendu/unite.mjs",
+    "types": "tsc -b"
   },
   "dependencies": {
     "@powersync/react": "^2.0.0",
