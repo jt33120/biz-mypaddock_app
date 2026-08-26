@@ -1469,10 +1469,12 @@ const essais = [
     // Un sortant se reconnaît à ce qu'il FAIT — refermer la confirmation — et
     // pas seulement à son mot : « Garder » sert aussi à enregistrer une chute,
     // et ce bouton-là n'a rien d'un sortant.
+    // Ils sont QUATRE depuis le récit 18.2 : la journée, la chute, le compte, et
+    // la photo de l'album — un cliché du 12 septembre ne se retape pas.
     const sortants = Object.values(ECRANS).flatMap(boutonsDe)
       .filter((b) => b.libelles.some((l) => /^Garder( mon compte)?$/.test(l))
         && /set(Confirme|Ouvert)\(false\)/.test(b.gestionnaire))
-    vrai(sortants.length === 3, `${sortants.length} sortants de confirmation trouvés`)
+    vrai(sortants.length === 4, `${sortants.length} sortants de confirmation trouvés`)
     for (const s of sortants)
       egal(s.className, 'lien', `« ${s.libelles.join(' / ')} » ne sort pas en lien`)
   }),
@@ -2122,6 +2124,129 @@ const essais = [
     const publics = Object.keys(PUBLIC)
     vrai(!publics.some((c) => c.endsWith('/icons.svg')),
       'public/icons.svg est revenu : le jeu du gabarit Vite traîne encore')
+  }),
+
+  doit('18.3 — dix photos se versent EN SÉRIE, jamais en vol', () => {
+    /* ⚠ CE N'EST PAS UNE PRÉFÉRENCE DE STYLE, C'EST UN MUR. `reduire` alloue un
+       canevas de 1600 px et décode une image de 48 Mpx : dix décodages
+       simultanés tuent l'onglet WebContent d'iOS, sans erreur rattrapable et
+       sans qu'on puisse le reprendre. `Promise.all` sur ce tableau serait la
+       faute exacte, et elle ne se verrait qu'au paddock, sur le téléphone du
+       pilote, une fois les photos choisies. */
+    const brut = Object.entries(SOURCES).find(([c]) => c.endsWith('db/photos.ts'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const debut = source.indexOf('export const verserPlusieurs')
+    vrai(debut > 0, '`verserPlusieurs` a disparu : l\'album ne se remplira plus')
+    const corps = source.slice(debut, source.indexOf('export const', debut + 20))
+    vrai(/for \(const \w+ of /.test(corps), 'le versement multiple n\'est plus une boucle en série')
+    vrai(!/Promise\.all|Promise\.allSettled/.test(corps),
+      'le versement multiple met dix décodages en vol : l\'onglet meurt sans erreur rattrapable')
+    /* ⚠ ET LA NEUVIÈME QUI ÉCHOUE N'EMPORTE PAS LES HUIT PREMIÈRES. Le `try`
+       est DANS la boucle : dehors, la première erreur sortirait de la fonction
+       et le reste du lot ne serait jamais tenté. */
+    vrai(corps.indexOf('try') > corps.indexOf('for (const'),
+      'le try enveloppe la boucle : une photo ratée arrête tout le lot')
+    vrai(/echecs\.push/.test(corps), 'le produit ne dit plus laquelle a manqué')
+  }),
+
+  doit('18.3 — l\'écran choisit plusieurs photos et ne les compte pas', () => {
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Photos.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    // ⚠ CETTE LIGNE SE LIT SUR LE BRUT, ET C'EST NÉCESSAIRE. L'attribut
+    //   accept="image/" suivi d'une étoile contient littéralement une ouverture
+    //   de commentaire de bloc : `sansCommentaires` la prend pour telle et avale
+    //   tout ce qui suit jusqu'à la prochaine fermeture. Le premier essai écrit
+    //   ici a échoué exactement là-dessus, en affirmant que `multiple` avait
+    //   disparu alors qu'il était sous ses yeux.
+    vrai(/<input[^>]*multiple/.test(brut.replace(/\n/g, ' ')),
+      'l\'input a reperdu `multiple` : vingt photos sont vingt allers-retours')
+    vrai(!/e\.target\.files\?\.\[0\]/.test(source),
+      'l\'écran ne lit de nouveau que la première photo du lot')
+    /* ⚠ AUCUN COMPTEUR PENDANT LE VERSEMENT. Pas de « 4 sur 10 », pas de barre.
+       Un compteur transforme un versement en attente à surveiller — c'est la
+       même clause que la checklist, et c'est ici qu'elle serait la plus facile
+       à trahir « pour rassurer ». */
+    vrai(!/sur \{|\{[^}]*\} sur \d|\bprogress\b/i.test(source),
+      'un compteur de progression est apparu dans le versement')
+    // Et ce qui est versé s'affiche AU FUR ET À MESURE : le rappel existe.
+    vrai(/verserPlusieurs\(db, \{ roulageId \}, liste, \(\) => charger\(\)\)/.test(source),
+      'la grille ne se remplit plus au fur et à mesure : la file paraît bloquée')
+  }),
+
+  doit('18.2 — l\'album est une grille, et la décision est retournée par écrit', () => {
+    /* La feuille de style portait la décision inverse, et elle était juste au
+       moment où elle a été écrite : « au paddock on en verse une ou deux, pas
+       vingt, et une grille à trous fait vide ». C'était une CONSÉQUENCE du
+       défaut de 18.3, pas une observation d'usage. Une décision de ce dépôt ne
+       se contourne pas en silence : elle se retourne, datée, à l'endroit où elle
+       était écrite. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Photos.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(/grille-album/.test(source), 'l\'album est redevenu une bande')
+    vrai(/\.grille-album\s*\{/.test(FEUILLE), 'la grille de l\'album a disparu de la feuille')
+    vrai(/repeat\(auto-fill/.test(FEUILLE),
+      'la grille est passée en auto-fit : trois photos s\'étireraient sur toute la largeur')
+    // Le retournement est DIT, à l'endroit où la décision d'origine vivait.
+    vrai(/DÉCISION EST\s*\n?\s*RETOURNÉE|décision est retournée/i.test(FEUILLE),
+      'la décision de la bande a été contournée en silence')
+    /* ⚠ ET LA COLLISION DE `.vignette` EST FERMÉE. Elle était déclarée DEUX FOIS
+       au premier niveau — 96 px de haut pour les photos, 84 x 84 pour les pièces
+       d'atelier — et la seconde gagnait par cascade : les photos du roulage
+       n'avaient donc pas la taille que leur commentaire annonçait, et personne ne
+       pouvait le voir en lisant l'une ou l'autre déclaration. */
+    const declarations = (FEUILLE.match(/^\.vignette\s*[,{]/gm) ?? []).length
+    egal(declarations, 0, 'la règle `.vignette` est revenue : la collision peut se rejouer')
+  }),
+
+  doit('18.2 — une photo part seule, en rouge, et la facture n\'entre pas', () => {
+    /* La seule suppression de photo du produit était `supprimerRoulage`, qui les
+       emporte TOUTES avec la journée, ses sessions, ses tours et ses dépenses :
+       pour retirer un cliché raté il fallait détruire la journée. C'est la même
+       classe de défaut que les vingt-cinq roulages qu'on ne pouvait pas
+       effacer. */
+    const db = Object.entries(SOURCES).find(([c]) => c.endsWith('db/photos.ts'))?.[1] ?? ''
+    const ecran = Object.entries(ECRANS).find(([c]) => c.endsWith('/Photos.tsx'))?.[1] ?? ''
+    const dbs = sansCommentaires(db), es = sansCommentaires(ecran)
+    vrai(/export const oublierPhoto/.test(dbs), 'aucun chemin ne retire une photo seule')
+    const corps = dbs.slice(dbs.indexOf('export const oublierPhoto'))
+    vrai(/effacerLocale/.test(corps),
+      'la copie locale reste sur le téléphone : des octets que plus rien ne référence')
+    vrai(/DELETE FROM photo WHERE id = \?/.test(corps),
+      'la suppression ne porte plus sur une seule photo')
+    // En rouge, avec un second temps : une photo ne se retape pas.
+    vrai(/lien destructif/.test(es), 'le retrait d\'une photo a perdu son rouge')
+    vrai(/part définitivement/.test(es), 'le retrait d\'une photo ne dit plus ce qui part')
+    vrai(/Elle part seule/.test(es),
+      'la phrase ne dit plus que les autres photos restent : c\'est ce qui la distingue de la journée')
+    /* « La photo MONTRE un état, la facture PROUVE une dépense. » Le filtre est
+       dans la REQUÊTE et pas à l'écran — filtrer côté rendu laisserait la porte
+       ouverte au prochain lecteur. */
+    const requete = dbs.slice(dbs.indexOf('export const photosDuRoulage'))
+    vrai(/genre = 'photo'/.test(requete), 'l\'album a réavalé les factures d\'atelier')
+  }),
+
+  doit('18.2 — soixante photos ne tuent pas l\'onglet', () => {
+    /* `charger()` crée une URL d'objet par photo et ne libérait le lot précédent
+       qu'au `setState` suivant : soixante photos de saison, c'étaient soixante
+       blobs décodés retenus en mémoire, et l'onglet WebContent d'iOS meurt sans
+       erreur rattrapable bien avant.
+
+       Deux remèdes, et il faut les DEUX : la révocation à la sortie de vue, qui
+       ne peut pas passer par l'état React (il est déjà démonté), et le
+       chargement paresseux du navigateur, qui empêche le décodage de ce qui
+       n'est pas à l'écran. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Photos.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(/revokeObjectURL/.test(source), 'plus rien ne révoque les URL d\'objet')
+    vrai(/vivantes\.current/.test(source),
+      'la révocation à la sortie de vue a disparu : quitter l\'écran laisse tout le lot en vol')
+    vrai(/loading="lazy"/.test(source),
+      'la grille décode toutes les photos d\'un coup')
+    /* ⚠ ET RIEN N'EST CLASSÉ, NOTÉ NI ÉLU. L'album énonce ce qui a été pris,
+       dans l'ordre où ça a été pris — c'est ici que la tentation est la plus
+       forte de tout le produit. */
+    for (const mot of ['meilleure', 'préférée', 'favori', 'étoile', 'classement', 'à la une'])
+      vrai(!new RegExp(`\\b${mot}`, 'i').test(source), `l'album porte « ${mot} » : il classe`)
   }),
 ]
 

@@ -163,7 +163,7 @@ verifier('   aucun compteur de progression',
 verifier('④ « Saisir une session » reste atteignable',
   await page.isVisible('.journee-page .lien:has-text("Saisir une session")'))
 for (const [quoi, ou] of [
-  ['les photos', '.journee-page .bande, .journee-page label.bouton:has-text("Ajouter une photo")'],
+  ['les photos', '.journee-page .grille-album, .journee-page label.bouton:has-text("Ajouter des photos")'],
   ['« Déclarer un geste »', '.journee-page .lien:has-text("Déclarer un geste")'],
   ['« J\'ai chuté ce jour-là »', '.journee-page .lien:has-text("chuté ce jour-là")'],
   ['ce que la journée a coûté', '.journee-page .libelle:has-text("Ce que la journée a coûté")'],

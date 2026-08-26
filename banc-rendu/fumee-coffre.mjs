@@ -161,7 +161,7 @@ await page.click('text=Continuer')
 await enregistrerSession()
 
 await page.setInputFiles('input[type=file]', await photoDEssai())
-await page.waitForSelector('.vignette', { timeout: 60_000 })
+await page.waitForSelector('.case-album img', { timeout: 60_000 })
 
 const verse = await magasins()
 console.log('① photo versée sans createWritable :', JSON.stringify(verse))
@@ -179,7 +179,7 @@ await pret()
 await onglet('ROULAGES')
 await page.click('.pile > .bloc')
 await page.waitForSelector('.bloc:has-text("Photos et gestes")', { timeout: 30_000 })
-await page.waitForSelector('.vignette', { timeout: 30_000 })
+await page.waitForSelector('.case-album img', { timeout: 30_000 })
 
 /* ⚠ ON ATTEND LE DÉCODAGE, PAS L'ÉLÉMENT — et c'est ce qui manquait.
    `waitForSelector` rend la main dès que la balise EXISTE. À cet instant la
@@ -191,14 +191,14 @@ await page.waitForSelector('.vignette', { timeout: 30_000 })
    La condition est bornée : si elle n'arrive pas, c'est le décodage qui a
    vraiment échoué, et l'état observé est imprimé juste en dessous. */
 await page.waitForFunction(() => {
-  const n = document.querySelector('.vignette')
+  const n = document.querySelector('.case-album img')
   return !!n && n.src.startsWith('blob:') && n.complete && n.naturalWidth > 0
 }, null, { timeout: 30_000 }).catch(() => { /* l'état réel est dit plus bas */ })
 
-const revenue = await page.$eval('.vignette', n => ({
+const revenue = await page.$eval('.case-album img', n => ({
   src: n.src.slice(0, 5), l: n.naturalWidth, h: n.naturalHeight,
 }))
-console.log('② après rechargement, la vignette :', JSON.stringify(revenue))
+console.log('② après rechargement, la photo relue :', JSON.stringify(revenue))
 console.log('   servie depuis la copie locale (blob:) :', revenue.src === 'blob:' ? 'oui' : 'NON')
 // Une image qui ne décode pas rend 0 × 0 : le `blob:` seul ne prouve pas que
 // les octets sont les bons, seulement qu'une URL a été fabriquée.

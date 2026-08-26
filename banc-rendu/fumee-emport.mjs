@@ -82,7 +82,7 @@ await page.fill('.champ[placeholder="Pau-Arnos"]', 'Pau-Arnos')
 await page.click('text=Continuer')
 await enregistrerSession()
 await page.setInputFiles('input[type=file]', await photoDEssai())
-await page.waitForSelector('.vignette', { timeout: 60_000 })
+await page.waitForSelector('.case-album img', { timeout: 60_000 })
 
 // ── ① Sans compte, hors ligne : l'emport est là.
 await onglet('COMPTE')

@@ -69,8 +69,22 @@ console.log('   aucune barre de progression :',
 //    sait rien ». Ce qui reste interdit, c'est une LIGNE sans source.
 const conformes = await page.$$eval('.checklist .conformite .coche', n => n.length)
 console.log('④ aucune ligne de conformité sans référentiel :', conformes === 0 ? 'oui' : 'NON')
+// ⚠ ET C'EST LA BONNE ABSENCE QUI EST DITE — récit 17.4. Deux phrases
+//   existent, et ce parcours-ci relève de la SECONDE : le pilote du banc n'a
+//   pas de compte, donc son `circuit_id` reste nul pour toujours — le
+//   rattachement au référentiel se fait côté serveur (migration 20260825000003)
+//   et rien de lui n'y monte. Lui dire « aucune règle publiée n'est connue »
+//   présenterait une absence de savoir comme un savoir de l'absence : la
+//   question n'a même pas été posée pour sa journée.
+//   L'essai attend donc la phrase du NON-RATTACHEMENT, et refuse l'autre : se
+//   contenter de « l'une des deux » laisserait la distinction retomber sans un
+//   mot, et c'est exactement le défaut qu'elle corrige.
+const ditQuIlNAPasPuLire = t.includes('rattachée à aucun circuit')
+const ditQuIlNeSaitRien = t.includes('Aucune règle publiée n’est connue')
 console.log('   et l\'absence est DITE, pas tue :',
-  t.includes('Aucune règle publiée n’est connue') ? 'oui' : 'NON')
+  ditQuIlNAPasPuLire || ditQuIlNeSaitRien ? 'oui' : 'NON')
+console.log('   et c\'est la BONNE des deux — sans compte, il n\'a pas pu lire :',
+  ditQuIlNAPasPuLire && !ditQuIlNeSaitRien ? 'oui' : 'NON')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/checklist.png', fullPage: true })
 await nav.close()

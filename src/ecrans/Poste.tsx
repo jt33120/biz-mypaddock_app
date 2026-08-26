@@ -428,7 +428,7 @@ function Geste({ db, i, onEcrit }: {
   )
 }
 
-/** La vignette se sert TOUJOURS depuis la copie locale (FR-10, NFR-7) : une
+/** La pièce se sert TOUJOURS depuis la copie locale (FR-10, NFR-7) : une
  *  pièce « en attente d'envoi » ne peut pas être une pièce absente à l'écran. */
 function Vignette({ p }: { p: Photo }) {
   const [url, setUrl] = useState<string | null>(null)
@@ -442,9 +442,9 @@ function Vignette({ p }: { p: Photo }) {
     })
     return () => { vivant = false; if (cree) URL.revokeObjectURL(cree) }
   }, [p])
-  if (!url) return <div className="vignette vide" aria-hidden />
+  if (!url) return <div className="piece vide" aria-hidden />
   return (
-    <figure className="vignette">
+    <figure className="piece">
       <img src={url} alt={p.genre === 'facture' ? 'facture' : 'photo du geste'} />
       {p.genre === 'facture' && <figcaption>facture</figcaption>}
     </figure>

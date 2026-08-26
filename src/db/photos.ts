@@ -241,11 +241,97 @@ export const photoMachine = async (chemin: string | null): Promise<File | null> 
   return m ? lireLocale(nomLocalMachine(m[1], m[2])) : null
 }
 
+/**
+ * LES CLICHÉS D'UNE JOURNÉE — et RIEN QUE LES CLICHÉS.
+ *
+ * ⚠ LE GENRE EST DANS LA REQUÊTE, PAS À L'ÉCRAN. « La photo MONTRE un état, la
+ * facture PROUVE une dépense » : une facture d'atelier versée sur la même
+ * journée n'a rien à faire dans l'album, et la filtrer côté rendu laisserait la
+ * porte ouverte au prochain lecteur qui appellerait cette fonction sans y
+ * penser. C'est la même règle, et pour la même raison, que
+ * `lignesDuChargement` (src/db/checklist.ts).
+ *
+ * L'ordre est celui de l'IDENTIFIANT, qui est monotone dans le temps
+ * (`nouvelId`) : l'album se lit donc dans l'ordre où les photos ont été prises.
+ */
 export const photosDuRoulage = (db: PowerSyncDatabase, roulageId: string) =>
   db.getAll<Photo>(
     `SELECT id, roulage_id, machine_id, intervention_id, geste_id, chemin_objet,
             largeur, hauteur, etat, genre
-       FROM photo WHERE roulage_id = ? ORDER BY id`, [roulageId])
+       FROM photo WHERE roulage_id = ? AND genre = 'photo' ORDER BY id`, [roulageId])
+
+
+/**
+ * VERSER PLUSIEURS PHOTOS D'UN COUP — récit 18.3.
+ *
+ * ⚠ EN SÉRIE, ET C'EST UNE CONTRAINTE DE SURVIE, PAS DE STYLE. `reduire` alloue
+ * un canevas de 1600 px et décode une image de 48 Mpx : dix en vol tuent
+ * l'onglet WebContent, sans erreur rattrapable et sans qu'on puisse le
+ * reprendre. C'est le même mur que celui qui impose de lire les dimensions dans
+ * l'en-tête plutôt que de décoder — il est simplement atteint par un autre
+ * chemin. `Promise.all` sur ce tableau serait la faute exacte.
+ *
+ * ⚠ ET CE QUI EST VERSÉ RESTE VERSÉ. Si la neuvième échoue, les huit premières
+ * ne sont pas rejouées, pas annulées, pas perdues : le rappel `surChacune` les a
+ * déjà rendues à l'écran une par une. Une file qui recommencerait à zéro sur un
+ * échec redemanderait à un pilote de re-choisir dix photos sur un téléphone, au
+ * paddock — ce qu'il ne fera pas.
+ *
+ * ⚠ AUCUN COMPTEUR. Pas de « 4 sur 10 », pas de barre. Ce qui est versé
+ * apparaît ; ce qui reste ne se compte pas. Un compteur transforme un versement
+ * en attente à surveiller, et c'est exactement ce que le produit s'interdit
+ * partout ailleurs.
+ */
+export type Echec = { nom: string; motif: string }
+
+export const verserPlusieurs = async (
+  db: PowerSyncDatabase,
+  porteur: Porteur,
+  fichiers: readonly File[],
+  /** Appelé APRÈS chaque versement réussi, pour que l'écran se remplisse au fur
+   *  et à mesure. Une file qui ne rend rien avant la fin ressemble à une file
+   *  bloquée, et on la retape. */
+  surChacune?: (photo: Photo) => void | Promise<void>,
+): Promise<Echec[]> => {
+  const echecs: Echec[] = []
+  for (const f of fichiers) {
+    try {
+      const p = await verserPhoto(db, porteur, f)
+      await surChacune?.(p)
+    } catch (e) {
+      // ⚠ LE NOM DU FICHIER EST RETENU, ET C'EST TOUT L'INTÉRÊT. « Une photo n'a
+      // pas pu être préparée » sur un lot de dix laisse chercher laquelle parmi
+      // dix ; iOS rend souvent `image.jpg`, mais il rend aussi
+      // `IMG_4213.HEIC` — et quand il le rend, il faut le dire.
+      echecs.push({ nom: f.name || 'une photo', motif: (e as Error).message })
+    }
+  }
+  return echecs
+}
+
+/**
+ * OUBLIER UNE PHOTO — récit 18.2, et elle part SEULE.
+ *
+ * ⚠ IL N'Y AVAIT AUCUN CHEMIN POUR ÇA. La seule suppression de photo du produit
+ * était `supprimerRoulage`, qui les emporte toutes avec la journée : pour
+ * retirer un cliché raté, il fallait détruire la journée entière — ses sessions,
+ * ses tours, ses gestes et ses dépenses. C'est la même classe de défaut que les
+ * vingt-cinq roulages qu'on ne pouvait pas effacer : une donnée qu'on ne peut
+ * pas corriger cesse d'être saisie.
+ *
+ * Elle emporte la copie locale avec la ligne — sinon le téléphone garde des
+ * octets que plus rien ne référence. L'objet distant, lui, devient orphelin et
+ * sera ramassé par l'effacement de compte : c'est le seul endroit du produit qui
+ * parle au stockage, exactement comme pour `supprimerRoulage`.
+ */
+export const oublierPhoto = async (db: PowerSyncDatabase, photoId: string): Promise<void> => {
+  const p = await db.get<{ id: string; chemin_objet: string }>(
+    `SELECT id, chemin_objet FROM photo WHERE id = ?`, [photoId])
+  if (!p) return
+  try { await effacerLocale(nomLocal(p)) } catch { /* déjà partie : rien à faire */ }
+  await db.execute(`DELETE FROM photo WHERE id = ?`, [photoId])
+  await marquerSaisie(db)
+}
 
 /* ─── LE TÉLÉVERSEMENT DIFFÉRÉ ─────────────────────────────────────────────
    AD-6 : DEUX DÉCLENCHEURS EXACTEMENT — le retour au premier plan et le retour

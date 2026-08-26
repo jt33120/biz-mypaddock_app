@@ -82,15 +82,15 @@ verifier('   FR-48 — aucune échéance, aucun compte à rebours',
 // ── ⑧ LA PREUVE : une photo et une facture, comptées séparément.
 //    L'ordre des deux champs de fichier suit celui des boutons : photo, facture.
 await page.setInputFiles('.geste-atelier input[type=file] >> nth=0', PHOTO)
-await page.waitForSelector('.vignette img', { timeout: 60_000 })
+await page.waitForSelector('.piece img', { timeout: 60_000 })
 await page.setInputFiles('.geste-atelier input[type=file] >> nth=1', PHOTO)
-await page.waitForSelector('.vignette figcaption', { timeout: 60_000 })
+await page.waitForSelector('.piece figcaption', { timeout: 60_000 })
 await page.waitForTimeout(400)
 const preuve = await texte('.geste-atelier')
 verifier('⑧ photo et facture comptées séparément',
   /1 photo · 1 facture/.test(preuve), preuve.slice(0, 120))
 verifier('   la facture se distingue à l\'œil',
-  (await texte('.vignette figcaption')).includes('facture'))
+  (await texte('.piece figcaption')).includes('facture'))
 
 // ── ⑥ « C'est fait aujourd'hui » sur ce qui attendait.
 await page.click('.geste-atelier .bouton:has-text("aujourd")')

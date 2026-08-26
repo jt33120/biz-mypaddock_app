@@ -164,7 +164,7 @@ body {
    Un rouge qui sert à deux choses ne sert plus à rien.
 
    ⚠ ET LA COULEUR N'EST JAMAIS SEULE (UX-DR8). Deux signes la doublent PARTOUT,
-   sur les 12 gestes rouges du produit : le MOT dit ce qui part — retirer,
+   sur les 14 gestes rouges du produit : le MOT dit ce qui part — retirer,
    supprimer, effacer, oublier — et la FORME — filet plein sur tout le tour,
    texte de la même teinte — se distingue du secondaire même pour un œil qui ne
    sépare pas les rouges des gris. Retirer l'un des deux ramène le défaut que
@@ -172,15 +172,21 @@ body {
 
    ⚠ CE COMMENTAIRE AJOUTAIT UN TROISIÈME SIGNE, « la CONFIRMATION en deux temps
    reste entière », ET C'ÉTAIT FAUX POUR LA MOITIÉ D'ENTRE EUX. Les deux temps
-   existent pour 3 gestes — une journée de roulage et tout ce qu'elle emporte,
-   une chute, le compte entier — soit 6 boutons rouges sur 12, l'ouvrant et le
-   confirmant. Les 6 autres partent au premier tap : « Retirer ce que la sonde a
-   écrit », et cinq « retirer » au bout d'une ligne de liste (une horloge, un
-   document, une pièce d'équipement, deux lignes de checklist). La règle réelle
-   est là : les deux temps gardent ce qui ne se retape pas, pas ce qui se retape
-   en cinq secondes.
+   existent pour 4 gestes — une journée de roulage et tout ce qu'elle emporte,
+   une chute, le compte entier, une photo de l'album — soit 8 boutons rouges sur
+   14, l'ouvrant et le confirmant. Les 6 autres partent au premier tap :
+   « Retirer ce que la sonde a écrit », et cinq « retirer » au bout d'une ligne
+   de liste (une horloge, une pièce d'atelier, une pièce d'équipement, une ligne
+   de chargement, une tâche d'avant d'y aller). La règle réelle est là : les deux
+   temps gardent ce qui ne se retape pas, pas ce qui se retape en cinq secondes.
 
-   Ces 12 se répartissent en 4 `.bouton.destructif` et 8 `.lien.destructif`, et
+   ⚠ ET LA PHOTO EST ENTRÉE DANS LE PREMIER GROUPE, PAS DANS LE SECOND — récit
+   18.2. Une ligne de chargement se retape en cinq secondes ; un cliché du
+   12 septembre ne se retape pas du tout. Sa confirmation dit aussi qu'elle part
+   SEULE, parce que la seule suppression de photo qui existait jusque-là
+   emportait la journée entière.
+
+   Ces 14 se répartissent en 5 `.bouton.destructif` et 9 `.lien.destructif`, et
    un essai unitaire recompte les trois nombres écrits ici. Un commentaire est la
    mémoire du défaut dans ce dépôt : celui-ci décrivait une garde qu'on croyait
    tenue et qui ne tenait qu'à moitié, et c'est pire qu'une garde absente, parce
@@ -595,14 +601,19 @@ body {
 .tete .reglages { display: flex; gap: 14px; }
 .tete .reglages .lien { min-height: auto; padding: 2px 0; }
 
-/* Les photos du roulage. Une bande qui défile plutôt qu'une grille : au paddock
-   on en verse une ou deux, pas vingt, et une grille à trous fait vide. */
-.bande { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.bande::-webkit-scrollbar { display: none }
-.vignette {
-  height: 96px; width: auto; flex: 0 0 auto; object-fit: cover;
-  border: 1px solid var(--filet); background: rgba(8,12,28,.6);
-}
+/* ⚠ CE COMMENTAIRE A TRANCHÉ LA BANDE CONTRE LA GRILLE, ET LA DÉCISION EST
+   RETOURNÉE — 26 août 2026, récit 18.2. Il disait : « au paddock on en verse
+   une ou deux, pas vingt, et une grille à trous fait vide. » C'était vrai, et
+   c'était une CONSÉQUENCE : l'`input` n'avait pas `multiple` et le code ne
+   lisait que `files[0]`. La bande était la bonne forme pour un défaut, et elle
+   le perpétuait — elle rendait le versement en masse illisible.
+
+   L'album est maintenant une grille (`.grille-album`, plus bas). `.bande` et
+   `.vignette` PARTENT AVEC LUI : plus aucun écran ne les portait, et une règle
+   morte dans une feuille de style est exactement ce qui a produit la collision
+   de `.vignette` — deux déclarations au premier niveau, la seconde gagnant en
+   silence. On ne garde pas « au cas où ». */
+
 /* Un fait ÉNONCÉ. Pas un badge : ni pastille arrondie, ni couleur de médaille,
    ni icône, ni compteur. Le produit dit « genou gauche posé » et s'arrête là. */
 .fait {
@@ -698,16 +709,26 @@ label.bouton { cursor: pointer; }
   scrollbar-width: none;
 }
 .pieces::-webkit-scrollbar { display: none }
-.vignette {
+/* ⚠ CETTE RÈGLE S'APPELAIT `.vignette`, ET IL Y EN AVAIT UNE AUTRE — récit
+   18.2. `.vignette` était déclarée DEUX FOIS au premier niveau de cette
+   feuille : une fois pour les photos du roulage (96 px de haut, largeur
+   libre), une fois ici pour les pièces d'atelier (84 x 84, rognées). La
+   seconde gagnait par cascade, silencieusement : les photos du roulage
+   n'avaient donc PAS la taille que leur commentaire annonçait, et personne ne
+   pouvait le voir en lisant l'une ou l'autre déclaration.
+   Elle porte maintenant son vrai nom. Elle ne sert qu'aux pièces d'un geste
+   d'atelier (Poste.tsx), et une collision de ce genre ne peut plus se rejouer
+   sans être visible. */
+.piece {
   position: relative; flex: 0 0 auto; width: 84px; height: 84px;
   border: 1px solid var(--filet); background: var(--surface); overflow: hidden;
 }
-.vignette img { width: 100%; height: 100%; object-fit: cover; display: block }
-.vignette.vide { background: repeating-linear-gradient(-45deg,
+.piece img { width: 100%; height: 100%; object-fit: cover; display: block }
+.piece.vide { background: repeating-linear-gradient(-45deg,
   var(--surface) 0 6px, transparent 6px 12px); }
 /* La facture se signale, parce qu'elle ne prouve pas la même chose qu'une photo :
    l'une montre un état, l'autre prouve une dépense. */
-.vignette figcaption {
+.piece figcaption {
   position: absolute; left: 0; right: 0; bottom: 0;
   background: rgba(7,11,26,.86); color: var(--miami);
   font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
@@ -858,3 +879,44 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
   display: flex; align-items: center; justify-content: center;
   min-height: 44px; opacity: .45;
 }
+
+/* ─── L'ALBUM — récit 18.2, décision retournée le 26 août 2026 ──────────────
+   La bande qui défilait est devenue une grille. Le commentaire d'origine
+   disait « au paddock on en verse une ou deux, pas vingt, et une grille à
+   trous fait vide » — c'était vrai, et c'était une CONSÉQUENCE : l'`input`
+   n'avait pas `multiple` et le code ne lisait que `files[0]`. Le versement
+   multiple (18.3) est arrivé d'abord ; la grille ensuite, dans cet ordre et
+   pas dans l'autre.
+
+   `auto-fill` et non `auto-fit` : sur trois photos, `auto-fit` étirerait les
+   trois cases sur toute la largeur — trois pavés de 130 px qui hurlent leur
+   solitude. `auto-fill` garde la trame et laisse les cases à leur taille. */
+.grille-album {
+  display: grid; gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+.case-album {
+  padding: 0; border: 1px solid var(--filet); background: rgba(8,12,28,.6);
+  aspect-ratio: 1; overflow: hidden; cursor: pointer; display: block;
+}
+.case-album img { width: 100%; height: 100%; object-fit: cover; display: block }
+
+/* LA PHOTO EN GRAND. Aucun coin arrondi, aucune ombre, aucun fondu : c'est ce
+   qu'apportent PhotoSwipe et yet-another-react-lightbox, et c'est exactement
+   ce qu'il aurait fallu désécrire à coups de !important. */
+.plein-ecran {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  background: var(--fond);
+}
+.plein-tete, .plein-pied { display: flex; justify-content: space-between; align-items: center; }
+.plein-image {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.plein-image img { max-width: 100%; max-height: 100%; object-fit: contain; display: block }
+.plein-ecran .lien[disabled] { opacity: .3; }
+/* Le rouge du destructif porte aussi son tracé : le mot reste, l'icône aide à
+   le trouver vite, et ni l'un ni l'autre n'est seul (UX-DR8). */
+.plein-ecran .lien.destructif { display: flex; align-items: center; gap: 6px; }
