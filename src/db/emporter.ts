@@ -49,6 +49,12 @@ export const FORMAT = 1
  */
 const TABLES = ORDRE
 
+/** Une photo dont le retrait est demandé n'est plus une donnée à emporter. Le
+ * tombstone reste dans la base uniquement pour finir l'effacement Storage ;
+ * l'exporter révélerait encore son chemin et la ressusciterait à la restauration. */
+const filtreEmport = (table: string) =>
+  table === 'photo' ? ` WHERE etat != 'a_supprimer'` : ''
+
 /** Rendue au banc : c'est la clause « l'emport sort ce que la sauvegarde
  *  envoie » qui protège contre la divergence, pas la bonne volonté. */
 export const TABLES_EMPORTEES: readonly string[] = TABLES
@@ -61,6 +67,8 @@ const CONVENTIONS = {
     + "portent l'instant d'écriture en millisecondes depuis 1970",
   saison: "la saison n'est pas une plage de dates : c'est l'année du roulage, "
     + 'du premier au dernier saisi',
+  historique_crash: 'les statuts et récits de crash sont auto-déclarés par le pilote, '
+    + "sans constat ni vérification par MyPaddock",
 }
 
 export type Poids = {
@@ -75,7 +83,9 @@ export type Poids = {
 
 const photosLocales = async (db: PowerSyncDatabase) => {
   const toutes = await db.getAll<Photo>(
-    `SELECT id, roulage_id, geste_id, chemin_objet, largeur, hauteur, etat FROM photo ORDER BY id`)
+    `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id,
+            chemin_objet, largeur, hauteur, etat, genre
+       FROM photo WHERE etat != 'a_supprimer' ORDER BY id`)
   const presentes: { photo: Photo; fichier: File }[] = []
   const absentes: Photo[] = []
   for (const p of toutes) {
@@ -89,7 +99,8 @@ const photosLocales = async (db: PowerSyncDatabase) => {
 export const peser = async (db: PowerSyncDatabase): Promise<Poids> => {
   let lignes = 0
   for (const t of TABLES) {
-    const r = await db.get<{ n: number }>(`SELECT count(*) AS n FROM ${t}`)
+    const r = await db.get<{ n: number }>(
+      `SELECT count(*) AS n FROM ${t}${filtreEmport(t)}`)
     lignes += r.n
   }
   const { presentes, absentes } = await photosLocales(db)
@@ -127,7 +138,8 @@ export const composer = async (
   db: PowerSyncDatabase, avecPhotos: boolean, jour = new Date().toISOString(),
 ): Promise<File> => {
   const donnees: Record<string, unknown[]> = {}
-  for (const t of TABLES) donnees[t] = await db.getAll(`SELECT * FROM ${t}`)
+  for (const t of TABLES)
+    donnees[t] = await db.getAll(`SELECT * FROM ${t}${filtreEmport(t)}`)
 
   // Les libellés des caps CITÉS, pour que le fichier s'explique tout seul. La
   // base fait autorité quand elle a quelque chose, le repli embarqué sinon —

@@ -27,6 +27,8 @@ const onglet = async (n) => {
   // instrument, pas un lieu du produit.
   await page.click('nav.barre .onglet:has-text("COMPTE")')
   await page.waitForSelector('section.compte', { timeout: 10_000 })
+  if ((await page.getAttribute('details.compte-diagnostic', 'open')) == null)
+    await page.click('summary:has-text("Diagnostic et aide")')
   return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
 const propositions = () => page.$$eval('.circuit .nom', ns => ns.map(n => n.textContent))

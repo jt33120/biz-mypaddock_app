@@ -1,5 +1,5 @@
 import type { PowerSyncDatabase } from '@powersync/web'
-import { ajouter, lignes, retirer, type Ligne } from './checklist'
+import { ajouter, retirer, type Ligne } from './checklist'
 import { aplati } from './depot'
 import { listerCaps } from './gestes'
 import { ficheCircuit } from './circuits'
@@ -68,8 +68,12 @@ export type Objectif = Ligne
  *  premier — on ne classe pas ce qu'on vient chercher. */
 export const objectifsDuRoulage = async (
   db: PowerSyncDatabase, roulageId: string,
-): Promise<Objectif[]> =>
-  (await lignes(db, roulageId)).filter((l) => l.categorie === 'objectif')
+): Promise<Objectif[]> => db.getAll<Objectif>(
+  `SELECT id, libelle, categorie, cochee, source_url, publie_le,
+          publie_par, extrait_par_ia
+     FROM checklist_ligne
+    WHERE roulage_id = ? AND categorie = 'objectif'
+    ORDER BY id`, [roulageId])
 
 export const poserObjectif = (db: PowerSyncDatabase, roulageId: string, libelle: string) =>
   ajouter(db, roulageId, libelle, 'objectif')

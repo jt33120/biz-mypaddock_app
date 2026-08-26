@@ -112,16 +112,21 @@ export type Genre = 'photo' | 'facture'
 
 export type Photo = {
   id: string
-  /** L'un des trois est renseigné, jamais aucun : une photo appartient à une
-   *  journée, à une moto, ou à un geste d'atelier. Tenu côté serveur. */
+  /** Au moins un porteur est renseigné. Une photo de crash garde aussi son
+   *  roulage : retirer le récit du crash ne doit ni détruire la preuve, ni la
+   *  laisser sans porteur côté serveur. */
   roulage_id: string | null
   machine_id: string | null
   intervention_id: string | null
+  chute_id: string | null
   geste_id: string | null
   chemin_objet: string
   largeur: number | null
   hauteur: number | null
-  etat: 'locale' | 'montee'
+  /** `a_supprimer` est un tombstone synchronisé : la photo disparaît des
+   * lectures tout de suite, mais son chemin reste disponible tant que Storage
+   * n'a pas confirmé le retrait. */
+  etat: 'locale' | 'montee' | 'a_supprimer'
   genre: Genre
 }
 
@@ -135,33 +140,47 @@ export const nomLocal = (p: Pick<Photo, 'id' | 'chemin_objet'>) =>
  *  qu'un identifiant de machine était passé là où un identifiant de roulage
  *  était attendu — deux `string` se confondent, deux clés nommées non. */
 export type Porteur =
-  | { roulageId: string; machineId?: null; interventionId?: null }
-  | { machineId: string; roulageId?: null; interventionId?: null }
-  | { interventionId: string; roulageId?: null; machineId?: null }
+  | { roulageId: string; machineId?: null; interventionId?: null; chuteId?: null }
+  | { machineId: string; roulageId?: null; interventionId?: null; chuteId?: null }
+  | { interventionId: string; roulageId?: null; machineId?: null; chuteId?: null }
+  | { chuteId: string; roulageId?: null; machineId?: null; interventionId?: null }
 
 export const verserPhoto = async (
   db: PowerSyncDatabase, porteur: Porteur, fichier: Blob, genre: Genre = 'photo',
 ): Promise<Photo> => {
-  const roulageId = porteur.roulageId ?? null
+  const chuteId = porteur.chuteId ?? null
+  let roulageId = porteur.roulageId ?? null
   const machineId = porteur.machineId ?? null
   const interventionId = porteur.interventionId ?? null
+  if (chuteId) {
+    const chute = await db.getOptional<{ roulage_id: string }>(
+      `SELECT roulage_id FROM chute WHERE id = ?`, [chuteId])
+    if (!chute) throw new Error('Ce crash est introuvable.')
+    // Une photo de crash reste une photo de la journée. Ce second lien rend
+    // vraie la promesse « retirer le crash ne détruit pas sa photo » tout en
+    // respectant la contrainte serveur qui refuse une photo sans porteur.
+    roulageId = chute.roulage_id
+  }
   const r = await reduire(fichier)
   const id = nouvelId()
   // Le chemin porte le pilote en PREMIER SEGMENT : c'est ce que la politique du
   // bucket compare à auth.uid(). Il est posé à `local` tant qu'aucun compte
   // n'existe, et réécrit au moment du téléversement — comme le propriétaire
   // d'une ligne, qui est une conséquence du compte et non une donnée locale.
-  const chemin = `local/${roulageId ?? machineId ?? interventionId}/${id}.${r.extension}`
+  const chemin = `local/${chuteId ?? roulageId ?? machineId ?? interventionId}/${id}.${r.extension}`
   await ecrireLocale(`${id}.${r.extension}`, r.blob)
   await db.execute(
     `INSERT INTO photo
-       (id, roulage_id, machine_id, intervention_id, chemin_objet, largeur, hauteur, etat, genre)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'locale', ?)`,
-    [id, roulageId, machineId, interventionId, chemin, r.largeur, r.hauteur, genre])
+       (id, roulage_id, machine_id, intervention_id, chute_id,
+        chemin_objet, largeur, hauteur, etat, genre)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'locale', ?)`,
+    [id, roulageId, machineId, interventionId, chuteId,
+      chemin, r.largeur, r.hauteur, genre])
   await marquerSaisie(db)
   return {
     id, roulage_id: roulageId, machine_id: machineId, intervention_id: interventionId,
-    geste_id: null, chemin_objet: chemin, largeur: r.largeur, hauteur: r.hauteur,
+    chute_id: chuteId, geste_id: null, chemin_objet: chemin,
+    largeur: r.largeur, hauteur: r.hauteur,
     etat: 'locale', genre,
   }
 }
@@ -170,9 +189,10 @@ export const verserPhoto = async (
  *  (donc chronologique, l'UUID v7 portant l'instant, AD-14). */
 export const piecesDeLIntervention = (db: PowerSyncDatabase, interventionId: string) =>
   db.getAll<Photo>(
-    `SELECT id, roulage_id, machine_id, intervention_id, geste_id, chemin_objet,
+    `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id, chemin_objet,
             largeur, hauteur, etat, genre
-       FROM photo WHERE intervention_id = ? ORDER BY id`, [interventionId])
+       FROM photo WHERE intervention_id = ? AND etat != 'a_supprimer' ORDER BY id`,
+    [interventionId])
 
 /**
  * LA PHOTO DE LA MACHINE — récit 3bis.3.
@@ -256,9 +276,40 @@ export const photoMachine = async (chemin: string | null): Promise<File | null> 
  */
 export const photosDuRoulage = (db: PowerSyncDatabase, roulageId: string) =>
   db.getAll<Photo>(
-    `SELECT id, roulage_id, machine_id, intervention_id, geste_id, chemin_objet,
+    `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id, chemin_objet,
             largeur, hauteur, etat, genre
-       FROM photo WHERE roulage_id = ? AND genre = 'photo' ORDER BY id`, [roulageId])
+       FROM photo
+      WHERE roulage_id = ? AND genre = 'photo' AND etat != 'a_supprimer'
+      ORDER BY id`, [roulageId])
+
+/** Les clichés attachés à un crash. Ils ont aussi `roulage_id`, afin de rester
+ * lisibles dans l'album si le récit du crash est retiré. */
+export const photosDeLaChute = (db: PowerSyncDatabase, chuteId: string) =>
+  db.getAll<Photo>(
+    `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id, chemin_objet,
+            largeur, hauteur, etat, genre
+       FROM photo
+      WHERE chute_id = ? AND genre = 'photo' AND etat != 'a_supprimer'
+      ORDER BY id`, [chuteId])
+
+/** Lit d'abord le coffre hors ligne. Sur un second appareil, une métadonnée
+ * synchronisée peut désigner un objet déjà monté sans avoir encore ses octets :
+ * on le télécharge alors une fois et on le remet dans le même coffre local. */
+export const lirePhoto = async (p: Photo): Promise<File | null> => {
+  if (p.etat === 'a_supprimer') return null
+  const nom = nomLocal(p)
+  const locale = await lireLocale(nom)
+  if (locale) return locale
+  if (!supabase || p.etat !== 'montee' || p.chemin_objet.startsWith('local/')) return null
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return null
+  if (!envoiCloudActif()) return null
+  const { data, error } = await supabase.storage.from('photos').download(p.chemin_objet)
+  if (error || !data) return null
+  // Le cache est un gain hors ligne, pas une condition de lecture : un WebView
+  // qui refuse ses deux magasins doit quand même pouvoir montrer l'objet reçu.
+  try { await ecrireLocale(nom, data) } catch { /* lisible maintenant, non cachée */ }
+  return new File([data], nom, { type: data.type || 'image/webp' })
+}
 
 
 /**
@@ -284,6 +335,35 @@ export const photosDuRoulage = (db: PowerSyncDatabase, roulageId: string) =>
  */
 export type Echec = { nom: string; motif: string }
 
+/** Le noyau déterministe du lot. Une relecture d'écran qui échoue APRÈS
+ * `verser` ne transforme jamais une photo déjà écrite en échec de versement :
+ * sinon l'UI la reproposerait et fabriquerait un doublon. */
+export const verserEnSerie = async <F extends { name?: string }, P>(
+  fichiers: readonly F[],
+  verser: (fichier: F) => Promise<P>,
+  surChacune?: (photo: P) => void | Promise<void>,
+  surAffichageEnRetard?: (photo: P) => void | Promise<void>,
+): Promise<Echec[]> => {
+  const echecs: Echec[] = []
+  for (const f of fichiers) {
+    let photo: P
+    try {
+      photo = await verser(f)
+    } catch (e) {
+      echecs.push({ nom: f.name || 'une photo', motif: (e as Error).message })
+      continue
+    }
+    try {
+      await surChacune?.(photo)
+    } catch {
+      // Le fait est déjà écrit. Le signal est séparé et lui-même best-effort :
+      // aucune panne de rendu ne doit remonter dans la file de versement.
+      try { await surAffichageEnRetard?.(photo) } catch { /* affichage seulement */ }
+    }
+  }
+  return echecs
+}
+
 export const verserPlusieurs = async (
   db: PowerSyncDatabase,
   porteur: Porteur,
@@ -292,21 +372,15 @@ export const verserPlusieurs = async (
    *  et à mesure. Une file qui ne rend rien avant la fin ressemble à une file
    *  bloquée, et on la retape. */
   surChacune?: (photo: Photo) => void | Promise<void>,
+  /** Signal distinct : la photo est enregistrée, seul l'affichage doit être
+   * rechargé. Il ne rejoint jamais `Echec[]`. */
+  surAffichageEnRetard?: (photo: Photo) => void | Promise<void>,
 ): Promise<Echec[]> => {
-  const echecs: Echec[] = []
-  for (const f of fichiers) {
-    try {
-      const p = await verserPhoto(db, porteur, f)
-      await surChacune?.(p)
-    } catch (e) {
-      // ⚠ LE NOM DU FICHIER EST RETENU, ET C'EST TOUT L'INTÉRÊT. « Une photo n'a
-      // pas pu être préparée » sur un lot de dix laisse chercher laquelle parmi
-      // dix ; iOS rend souvent `image.jpg`, mais il rend aussi
-      // `IMG_4213.HEIC` — et quand il le rend, il faut le dire.
-      echecs.push({ nom: f.name || 'une photo', motif: (e as Error).message })
-    }
-  }
-  return echecs
+  // ⚠ LE NOM DU FICHIER EST RETENU par `verserEnSerie`. « Une photo n'a pas pu
+  // être préparée » sur un lot de dix laisse chercher laquelle parmi dix ; iOS
+  // rend souvent `image.jpg`, mais aussi `IMG_4213.HEIC`.
+  return verserEnSerie(
+    fichiers, (f) => verserPhoto(db, porteur, f), surChacune, surAffichageEnRetard)
 }
 
 /**
@@ -319,18 +393,127 @@ export const verserPlusieurs = async (
  * vingt-cinq roulages qu'on ne pouvait pas effacer : une donnée qu'on ne peut
  * pas corriger cesse d'être saisie.
  *
- * Elle emporte la copie locale avec la ligne — sinon le téléphone garde des
- * octets que plus rien ne référence. L'objet distant, lui, devient orphelin et
- * sera ramassé par l'effacement de compte : c'est le seul endroit du produit qui
- * parle au stockage, exactement comme pour `supprimerRoulage`.
+ * La ligne passe D'ABORD à `a_supprimer`. Ce tombstone est la file de reprise :
+ * il disparaît de toutes les lectures, se synchronise comme les autres
+ * métadonnées, et garde le chemin de l'objet tant que Storage n'a pas confirmé
+ * son retrait. Supprimer les octets avant cette écriture ferait perdre à la fois
+ * la photo et le seul moyen de reprendre une suppression distante interrompue.
  */
-export const oublierPhoto = async (db: PowerSyncDatabase, photoId: string): Promise<void> => {
-  const p = await db.get<{ id: string; chemin_objet: string }>(
-    `SELECT id, chemin_objet FROM photo WHERE id = ?`, [photoId])
-  if (!p) return
-  try { await effacerLocale(nomLocal(p)) } catch { /* déjà partie : rien à faire */ }
-  await db.execute(`DELETE FROM photo WHERE id = ?`, [photoId])
-  await marquerSaisie(db)
+export type ResultatSuppressionPhoto =
+  | { statut: 'introuvable'; distante: 'sans_objet' }
+  | { statut: 'terminee'; distante: 'sans_objet' | 'supprimee' }
+  | {
+      statut: 'en_attente'
+      distante: 'sans_objet' | 'en_attente' | 'supprimee'
+      /** `base_locale` = la demande elle-même n'est pas persistée, la photo
+       * reste visible. `finalisation_locale` = tombstone persisté et masqué,
+       * mais sa ligne ou son cache doit encore être nettoyé. */
+      motif: 'base_locale' | 'finalisation_locale' | 'hors_ligne' | 'stockage'
+    }
+
+const estUnObjetDistant = (p: Pick<Photo, 'chemin_objet'>) =>
+  !p.chemin_objet.startsWith('local/')
+
+export type IssueSuppressionObjet = 'supprimee' | 'hors_ligne' | 'stockage'
+
+export type OperationsStockagePhoto = {
+  peutTeleverser: () => boolean
+  televerser: (chemin: string, fichier: Blob) => Promise<boolean>
+  supprimer: (chemin: string) => Promise<IssueSuppressionObjet>
+}
+
+const STOCKAGE_PHOTO: OperationsStockagePhoto = {
+  peutTeleverser: () => !!supabase && typeof navigator !== 'undefined' && navigator.onLine,
+  televerser: async (chemin, fichier) => {
+    if (!supabase || typeof navigator === 'undefined' || !navigator.onLine) return false
+    try {
+      const { error } = await supabase.storage.from('photos').upload(
+        chemin, fichier, { upsert: true, contentType: fichier.type || 'image/webp' })
+      return !error
+    } catch { return false }
+  },
+  supprimer: async (chemin) => {
+    if (!supabase || typeof navigator === 'undefined' || !navigator.onLine) return 'hors_ligne'
+    try {
+      const { error } = await supabase.storage.from('photos').remove([chemin])
+      return error ? 'stockage' : 'supprimee'
+    } catch { return 'stockage' }
+  },
+}
+
+/** Termine un tombstone déjà écrit. Storage vient d'abord : si le réseau
+ * refuse, le chemin reste durablement disponible. Le coffre est ensuite vidé
+ * AVANT le DELETE SQLite : si son effacement refuse, le tombstone garde une
+ * reprise ; si le DELETE refuse, il garde la même reprise, désormais
+ * idempotente. Une relecture après DELETE ne peut rien sécuriser et risquerait
+ * au contraire de laisser un blob sans aucune ligne pour le retrouver. */
+const finaliserSuppressionPhoto = async (
+  db: PowerSyncDatabase, p: Photo,
+  supprimerObjet: OperationsStockagePhoto['supprimer'] = STOCKAGE_PHOTO.supprimer,
+): Promise<ResultatSuppressionPhoto> => {
+  let distante: 'sans_objet' | 'en_attente' | 'supprimee' = 'sans_objet'
+  if (estUnObjetDistant(p)) {
+    const issue = await supprimerObjet(p.chemin_objet)
+    if (issue !== 'supprimee')
+      return { statut: 'en_attente', distante: 'en_attente', motif: issue }
+    distante = 'supprimee'
+  }
+
+  try { await effacerLocale(nomLocal(p)) } catch {
+    return { statut: 'en_attente', distante, motif: 'finalisation_locale' }
+  }
+  try {
+    await db.execute(
+      `DELETE FROM photo WHERE id = ? AND etat = 'a_supprimer'`, [p.id])
+  } catch {
+    return { statut: 'en_attente', distante, motif: 'finalisation_locale' }
+  }
+  return { statut: 'terminee', distante }
+}
+
+export const oublierPhoto = async (
+  db: PowerSyncDatabase, photoId: string,
+): Promise<ResultatSuppressionPhoto> => {
+  const p = await db.getOptional<Photo>(
+    `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id, chemin_objet,
+            largeur, hauteur, etat, genre
+       FROM photo WHERE id = ?`, [photoId])
+  if (!p) return { statut: 'introuvable', distante: 'sans_objet' }
+  if (p.etat !== 'a_supprimer') {
+    try {
+      await db.execute(`UPDATE photo SET etat = 'a_supprimer' WHERE id = ?`, [photoId])
+    } catch {
+      return {
+        statut: 'en_attente',
+        distante: estUnObjetDistant(p) ? 'en_attente' : 'sans_objet',
+        motif: 'base_locale',
+      }
+    }
+    // La mesure d'usage est auxiliaire : le tombstone, lui, est déjà durable.
+    // Une sonde qui refuse ne doit ni ressusciter la photo ni faire croire que
+    // la demande n'a pas été enregistrée.
+    try { await marquerSaisie(db) } catch { /* tombstone déjà écrit */ }
+  }
+  return finaliserSuppressionPhoto(db, { ...p, etat: 'a_supprimer' })
+}
+
+/** Rejoue les suppressions interrompues. Le résultat ne prétend jamais que le
+ * cloud est propre tant que Storage ne l'a pas confirmé. */
+export const supprimerPhotosEnAttente = async (
+  db: PowerSyncDatabase,
+  supprimerObjet: OperationsStockagePhoto['supprimer'] = STOCKAGE_PHOTO.supprimer,
+): Promise<{ terminees: number; enAttente: number }> => {
+  const photos = await db.getAll<Photo>(
+    `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id, chemin_objet,
+            largeur, hauteur, etat, genre
+       FROM photo WHERE etat = 'a_supprimer' ORDER BY id`)
+  let terminees = 0, enAttente = 0
+  for (const p of photos) {
+    const resultat = await finaliserSuppressionPhoto(db, p, supprimerObjet)
+    if (resultat.statut === 'terminee') terminees++
+    else enAttente++
+  }
+  return { terminees, enAttente }
 }
 
 /* ─── CE QUI QUITTE LE TÉLÉPHONE, ET LE MOYEN DE LE COUPER — récit 18.4 ─────
@@ -387,6 +570,34 @@ export const poserEnvoiCloud = (actif: boolean): void => {
   try { localStorage.setItem(CLE_ENVOI, actif ? '1' : '0') } catch { /* rien à faire */ }
 }
 
+/** Un upload peut finir après que son DELETE local a gagné la course. Si le
+ * retrait Storage échoue à cet instant, cette ligne recrée uniquement la file
+ * de suppression — jamais une photo visible — avec le chemin distant exact.
+ *
+ * Le tombstone est volontairement détaché : son ancien roulage/chute peut déjà
+ * avoir été supprimé. Réutiliser ces identifiants transformerait une reprise
+ * Storage sûre en violation de FK (23503). La contrainte serveur autorise ce
+ * seul cas sans porteur quand `etat = 'a_supprimer'`. */
+const conserverSuppressionDistante = async (
+  db: PowerSyncDatabase, p: Photo, chemin: string,
+): Promise<boolean> => {
+  try {
+    await db.execute(
+      `INSERT INTO photo
+         (id, roulage_id, machine_id, intervention_id, chute_id, geste_id,
+          chemin_objet, largeur, hauteur, etat, genre)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'a_supprimer', ?)
+       ON CONFLICT(id) DO UPDATE SET
+         chemin_objet = excluded.chemin_objet, etat = 'a_supprimer'
+       WHERE photo.etat = 'a_supprimer'`,
+      [p.id, null, null, null, null, null,
+        chemin, p.largeur, p.hauteur, p.genre])
+    const gardee = await db.getOptional<Pick<Photo, 'etat' | 'chemin_objet'>>(
+      `SELECT etat, chemin_objet FROM photo WHERE id = ?`, [p.id])
+    return gardee?.etat === 'a_supprimer' && gardee.chemin_objet === chemin
+  } catch { return false }
+}
+
 /* ─── LE TÉLÉVERSEMENT DIFFÉRÉ ─────────────────────────────────────────────
    AD-6 : DEUX DÉCLENCHEURS EXACTEMENT — le retour au premier plan et le retour
    de connectivité. Rien d'autre : sur iOS rien ne s'exécute pendant que
@@ -395,9 +606,16 @@ export const poserEnvoiCloud = (actif: boolean): void => {
    prochaine ouverture, pas avant. */
 
 export const televerserEnAttente = async (
-  db: PowerSyncDatabase, piloteId: string,
+  db: PowerSyncDatabase, piloteId: string | null,
+  stockage: OperationsStockagePhoto = STOCKAGE_PHOTO,
 ): Promise<number> => {
-  if (!supabase || !navigator.onLine) return 0
+  // Une demande d'effacement n'est pas un envoi : elle se rejoue même lorsque
+  // le pilote a coupé les sauvegardes cloud ou utilise encore l'app sans compte.
+  await supprimerPhotosEnAttente(db, stockage.supprimer)
+  // Seul le téléversement exige une identité. La finalisation locale ci-dessus
+  // doit rester possible avant la connexion du pilote.
+  if (!piloteId) return 0
+  if (!stockage.peutTeleverser()) return 0
   /* ⚠ LE PILOTE PEUT COUPER L'ENVOI, ET C'EST LE SEUL ENDROIT QUI LE LIT — récit
      18.4. Couper ne casse RIEN : la copie locale existe déjà (elle est écrite
      avant toute chose), l'album s'affiche depuis elle, et le produit marche
@@ -408,12 +626,19 @@ export const televerserEnAttente = async (
      enverrait quand même, et ce réglage-là ne peut pas se rater. */
   if (!envoiCloudActif()) return 0
   const l = await db.getAll<Photo>(
-    `SELECT id, roulage_id, machine_id, intervention_id, geste_id, chemin_objet,
+    `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id, chemin_objet,
             largeur, hauteur, etat, genre
        FROM photo WHERE etat = 'locale'`)
   let montees = 0
   for (const p of l) {
-    const f = await lireLocale(nomLocal(p))
+    // Revalidation juste avant les octets : une suppression gagnée pendant la
+    // lecture de la liste ne doit jamais démarrer un upload.
+    const courante = await db.getOptional<Photo>(
+      `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id, chemin_objet,
+              largeur, hauteur, etat, genre
+         FROM photo WHERE id = ? AND etat = 'locale'`, [p.id])
+    if (!courante) continue
+    const f = await lireLocale(nomLocal(courante))
     if (!f) continue
     // ⚠ LE DEUXIÈME SEGMENT EST LE PORTEUR RÉEL, pas `roulage_id` en dur.
     // Une photo de machine ou de geste d'atelier a un `roulage_id` nul : le
@@ -424,14 +649,47 @@ export const televerserEnAttente = async (
     // c'est-à-dire dans un rangement qui ment. Un chemin qui ment se paie au
     // premier ménage : c'est le genre de dossier qu'on supprime en le croyant
     // vide de sens.
-    const porteur = p.roulage_id ?? p.machine_id ?? p.intervention_id ?? 'sans-porteur'
-    const chemin = `${piloteId}/${porteur}/${nomLocal(p)}`
-    const { error } = await supabase.storage.from('photos')
-      .upload(chemin, f, { upsert: true, contentType: f.type || 'image/webp' })
-    if (error) continue      // on retentera : ce n'est pas une perte, c'est un report
-    await db.execute(`UPDATE photo SET etat = 'montee', chemin_objet = ? WHERE id = ?`,
-      [chemin, p.id])
-    montees++
+    const porteur = courante.chute_id ?? courante.roulage_id ?? courante.machine_id
+      ?? courante.intervention_id ?? 'sans-porteur'
+    const chemin = `${piloteId}/${porteur}/${nomLocal(courante)}`
+    if (!await stockage.televerser(chemin, f)) continue
+
+    // Le WHERE rend la victoire explicite : un tombstone écrit pendant l'HTTP
+    // n'est jamais ressuscité en `montee`.
+    try {
+      await db.execute(
+        `UPDATE photo SET etat = 'montee', chemin_objet = ?
+          WHERE id = ? AND etat = 'locale'`, [chemin, courante.id])
+    } catch { /* la relecture ci-dessous décide selon l'état durable */ }
+    const apres = await db.getOptional<Photo>(
+      `SELECT id, roulage_id, machine_id, intervention_id, chute_id, geste_id, chemin_objet,
+              largeur, hauteur, etat, genre FROM photo WHERE id = ?`, [courante.id])
+    if (apres?.etat === 'montee' && apres.chemin_objet === chemin) {
+      montees++
+      continue
+    }
+
+    // La photo a été retirée pendant l'upload. L'objet tout juste créé repart
+    // immédiatement ; si Storage refuse, son chemin redevient un tombstone
+    // durable et sera rejoué au prochain montage.
+    const retiree = await stockage.supprimer(chemin)
+    if (retiree === 'supprimee') continue
+    if (!apres || apres.etat === 'a_supprimer') {
+      // Ligne absente peut signifier que son roulage vient lui aussi d'être
+      // supprimé : ne recrée alors aucune FK vers un parent disparu. Un
+      // tombstone encore présent conserve en revanche ses porteurs valides.
+      const porteur = apres ?? {
+        ...courante,
+        roulage_id: null, machine_id: null, intervention_id: null,
+        chute_id: null, geste_id: null,
+      }
+      const gardee = await conserverSuppressionDistante(db, porteur, chemin)
+      if (gardee) continue
+      // Dernier essai avant de reconnaître que ni Storage ni SQLite n'a gardé
+      // la responsabilité de cet objet.
+      if (await stockage.supprimer(chemin) === 'supprimee') continue
+    }
+    throw new Error("La fin d'un envoi photo n'a pas pu être sécurisée.")
   }
   return montees
 }
@@ -439,6 +697,10 @@ export const televerserEnAttente = async (
 /** Les deux seuls déclencheurs, posés une fois. Rend de quoi les retirer. */
 export const surRetourDeReseau = (relancer: () => void): (() => void) => {
   const visible = () => { if (document.visibilityState === 'visible') relancer() }
+  // Le montage est déjà un retour dans l'application : attendre un prochain
+  // événement laisserait une suppression interrompue dormir jusqu'à la fois
+  // suivante.
+  visible()
   document.addEventListener('visibilitychange', visible)
   window.addEventListener('online', relancer)
   return () => {

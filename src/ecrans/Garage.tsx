@@ -16,6 +16,7 @@ import { Poste } from './Poste'
 import { Refaire } from './Refaire'
 import type { Categorie } from '../db/atelier'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
+import { aujourdhui } from '../db/vecu'
 
 /**
  * Le garage — l'axe machine d'AD-2 gagne enfin une surface.
@@ -192,7 +193,7 @@ export function Garage({ db, onEcrit }: {
             spécifique à une machine ». Exiger une moto pour déclarer une
             combinaison contredit sa définition même. Et un budget existe dès la
             première inscription payée, avant qu'aucune moto ne soit déclarée. */}
-        <Budget db={db} annee={anneeSaison(new Date().toISOString())}
+        <Budget db={db} annee={anneeSaison(aujourdhui())}
                 machineId={null} onEcrit={onEcrit} />
         <Equipement db={db} onEcrit={onEcrit} />
       </section>
@@ -465,7 +466,7 @@ export function Garage({ db, onEcrit }: {
           lignes naissent d'un geste consigné juste au-dessus. Et il porte la
           saison, pas la machine : une assurance et une remorque ne désignent
           aucune moto, et les ranger sous l'une des deux serait faux. */}
-      <Budget db={db} annee={anneeSaison(new Date().toISOString())}
+      <Budget db={db} annee={anneeSaison(aujourdhui())}
               machineId={machine.id} onEcrit={onEcrit} />
 
       {/* ─── L'ÉQUIPEMENT — la troisième racine ──────────────────────────────

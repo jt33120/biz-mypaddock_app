@@ -47,17 +47,24 @@ const verifier = (titre, vrai, detail = '') => {
   console.log(`${vrai ? '  ok ' : '  ÉCHEC '} ${titre}${detail ? ' — ' + detail : ''}`)
   if (!vrai) manques.push(titre)
 }
+const enCentimes = (texte) => Math.round(Number(
+  texte.replace(/[^\d,.-]/g, '').replace(',', '.'),
+) * 100)
 
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
 await pret()
 
-// ── ⓪ L'ACCUEIL VIDE N'OFFRE QU'UNE SEULE ACTION ───────────────────────────
-// Le raccourci de dépense (récit 19.3) vit sur l'accueil — mais PAS ici. Sans
-// aucune donnée, FR-14 ne laisse qu'un seul chemin : saisir son premier roulage.
-// Un second lien à côté le dilue, et c'est le seul écran du produit où l'on ne
-// peut pas se permettre de disperser.
-verifier('⓪ l\'accueil vide ne propose pas le raccourci de dépense',
-  !(await page.textContent('.ecran')).includes('Noter une dépense'))
+// ── ⓪ LA DÉPENSE EST UN GESTE QUOTIDIEN, MÊME SANS ROULAGE ──────────────────
+verifier('⓪ l\'accueil vide propose Noter une dépense',
+  (await page.textContent('.ecran')).includes('Noter une dépense'))
+await page.click('.action-depense')
+await page.waitForSelector('section.depense', { timeout: 20_000 })
+const ordreSaisie = await page.$$eval('section.depense input, section.depense button.puce',
+  (n) => n.map((x) => x.id || x.textContent.trim()))
+verifier('   le montant arrive avant le poste',
+  ordreSaisie[0] === 'montant' && ordreSaisie.indexOf('ENGAGEMENT') > 0, ordreSaisie.join(' · '))
+await page.click('section.depense .bouton.secondaire:has-text("Annuler la saisie")')
+await page.waitForSelector('.action-depense', { timeout: 20_000 })
 
 await page.click('nav.barre .onglet:has-text("GARAGE")')
 
@@ -297,33 +304,44 @@ verifier('   aucune barre qui se remplit vers le repère — plafond posé',
 
    L'essai éprouve les deux moitiés : ce qui est refusé est DIT, et ce qui est
    accepté se retrouve vraiment là où le produit a promis qu'il serait. */
+const totalAvantRaccourci = enCentimes(
+  await page.textContent('.atelier.budget .atelier-tete .chiffre'))
 await page.click('nav.barre .onglet:has-text("ACCUEIL")')
 await page.waitForSelector('.raccourci-depense', { timeout: 20_000 })
-await page.click('.raccourci-depense .lien:has-text("Noter une dépense")')
-await page.click('.raccourci-depense .puce:has-text("ESSENCE")')
-await page.waitForSelector('.raccourci-depense input[type=date]', { timeout: 20_000 })
-await page.fill('.raccourci-depense .champ[placeholder="montant en €"]', '42')
+await page.click('.action-depense')
+await page.waitForSelector('section.depense', { timeout: 20_000 })
+await page.click('section.depense .puce:has-text("ESSENCE")')
+await page.fill('#montant', '42')
 const anneeEnCours = new Date().getFullYear()
-await page.fill('.raccourci-depense input[type=date]', `${anneeEnCours - 1}-12-30`)
+await page.fill('section.depense input[type=date]', `${anneeEnCours - 1}-12-30`)
 await page.waitForTimeout(300)
-const horsAnnee = (await page.textContent('.raccourci-depense')).replace(/\s+/g, ' ')
+const horsAnnee = (await page.textContent('section.depense')).replace(/\s+/g, ' ')
 verifier('⑥ un 30 décembre de l\'an dernier est refusé, et le refus est DIT',
-  await page.isDisabled('.raccourci-depense .bouton.secondaire'),
-  `champ à ${await page.inputValue('.raccourci-depense input[type=date]')}`)
+  await page.isDisabled('section.depense .bouton:not(.secondaire)'),
+  `champ à ${await page.inputValue('section.depense input[type=date]')}`)
 verifier('   l\'écran dit POURQUOI, sans corriger la date en douce',
   new RegExp(`hors de l'année ${anneeEnCours}`).test(horsAnnee)
-  && /aucun écran du produit ne la montrerait/.test(horsAnnee),
+  && /n'y apparaîtrait nulle part/.test(horsAnnee),
   horsAnnee.slice(-220))
 
 // Corrigée dans l'année, elle passe — et la promesse doit alors être tenue.
-await page.fill('.raccourci-depense input[type=date]', `${anneeEnCours}-01-15`)
+await page.fill('section.depense input[type=date]', `${anneeEnCours}-01-15`)
 await page.waitForTimeout(300)
-await page.click('.raccourci-depense .bouton.secondaire:has-text("Ajouter à")')
-await page.waitForSelector('.raccourci-depense .note', { timeout: 20_000 })
-const annonce = (await page.textContent('.raccourci-depense')).replace(/\s+/g, ' ')
+await page.click('section.depense .bouton:not(.secondaire)')
+await page.waitForSelector('.raccourci-depense + .note', { timeout: 20_000 })
+const annonce = (await page.textContent('.ecran')).replace(/\s+/g, ' ')
 verifier('   notée, l\'annonce désigne le garage',
-  /Noté · 42 € sur essence/.test(annonce) && /Le détail vit au garage/.test(annonce), annonce)
+  /Dépense notée · 42 €/.test(annonce), annonce.slice(0, 220))
+const totalAnnonce = annonce.match(/Saison ([\d\s]+(?:,\d{2})?) €/)?.[1] ?? ''
+verifier('   et relit le total exact de la saison',
+  enCentimes(totalAnnonce) === totalAvantRaccourci + 4200,
+  `${totalAvantRaccourci} + 4200 → ${totalAnnonce}`)
 
+await page.click('nav.barre .onglet:has-text("GARAGE")')
+await page.waitForSelector('.atelier.budget', { timeout: 20_000 })
+await page.click('nav.barre .onglet:has-text("ACCUEIL")')
+verifier('   la confirmation part après avoir quitté l’accueil',
+  !await page.isVisible('text=Dépense notée'))
 await page.click('nav.barre .onglet:has-text("GARAGE")')
 await page.waitForSelector('.atelier.budget', { timeout: 20_000 })
 await page.click('.atelier-tete:has-text("Budget ·")')

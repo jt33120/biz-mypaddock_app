@@ -136,7 +136,14 @@ export const ouverture = async (db: PowerSyncDatabase) => {
  *  aucune ouverture à marquer, puisqu'aucune n'a été écrite. */
 export const marquerSaisie = async (db: PowerSyncDatabase) => {
   if (!ouvertureCourante) return
-  await db.execute(`UPDATE mesure SET valeur = 1 WHERE id = ? AND valeur = 0`, [ouvertureCourante])
+  // Cette ligne mesure l'usage ; elle ne fait pas partie du fait métier qui
+  // vient d'être écrit. Si SQLite refuse uniquement la sonde après un INSERT
+  // réussi, propager le rejet ferait proposer de recommencer et dupliquerait
+  // dépense, crash ou réparation. L'instrument peut manquer un point ; le
+  // carnet, lui, ne doit jamais mentir sur ce qu'il a gardé.
+  try {
+    await db.execute(`UPDATE mesure SET valeur = 1 WHERE id = ? AND valeur = 0`, [ouvertureCourante])
+  } catch { /* instrumentation auxiliaire, toujours best-effort */ }
 }
 
 /** ② Les deux moitiés de FR-58, et l'écart entre elles est tout l'intérêt :

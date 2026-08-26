@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
   anneeSaison, creerDepense, enCentimes, listerMachines, type Cible, type Machine,
 } from '../db/depot'
 import { EXEMPLE_POSTE, jourDansLAnnee, NOM_POSTE, POSTES, type Poste } from '../db/budget'
+import { aujourdhui } from '../db/vecu'
+import { ecrireDepenseUneFois, type VerrouEcritureDepense } from './ecriture-depense'
 
 /**
  * SAISIR UNE DÉPENSE — récit 5.1.
@@ -43,13 +45,9 @@ type Props = {
    *  n'a rien à désigner et ne s'affiche pas — plutôt que de s'afficher morte. */
   roulageId: string | null
   dateRoulage: string | null
-  onFini: () => void
+  onFini: (centimes: number) => void | Promise<void>
   onAnnuler: () => void
 }
-
-/* L'HORLOGE DU PRODUIT, une seule fois — même règle que dans Budget.tsx : deux
-   manières de dire « aujourd'hui » finiraient par ne plus dire le même jour. */
-const aujourdhui = () => new Date().toISOString().slice(0, 10)
 
 export function Depense({ db, roulageId, dateRoulage, onFini, onAnnuler }: Props) {
   const [cible, setCible] = useState<Cible>(roulageId ? 'roulage' : 'saison')
@@ -73,11 +71,16 @@ export function Depense({ db, roulageId, dateRoulage, onFini, onAnnuler }: Props
   const [machines, setMachines] = useState<Machine[]>([])
   const [machineId, setMachineId] = useState<string | null>(null)
   const [occupe, setOccupe] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const [enregistree, setEnregistree] = useState<number | null>(null)
+  const verrou = useRef<VerrouEcritureDepense>({ enregistree: false, enVol: false })
 
   useEffect(() => {
     void listerMachines(db).then((m) => {
       setMachines(m)
-      setMachineId((a) => a ?? m[0]?.id ?? null)
+      // Une seule moto répond à la question sans choix. À plusieurs, aucune ne
+      // gagne parce qu'elle est arrivée en premier dans la requête.
+      setMachineId((a) => a ?? (m.length === 1 ? m[0].id : null))
     })
   }, [db])
 
@@ -99,23 +102,68 @@ export function Depense({ db, roulageId, dateRoulage, onFini, onAnnuler }: Props
     && (cible !== 'machine' || !!machineId)
 
   const valider = async () => {
-    if (!pret || centimes == null) return
-    setOccupe(true)
-    await creerDepense(db, {
-      cible,
-      roulageId: cible === 'roulage' ? roulageId : null,
-      machineId: cible === 'machine' ? machineId : null,
-      centimes,
-      libelle: libelle.trim(),
-      poste,
-      // Le jour du PAIEMENT, celui que le pilote a sous les yeux. Il fixe la
-      // saison (AD-18) et il fixe le mois — et il ne se dérive plus de la
-      // journée visée, qui pouvait être à venir.
-      date: leJour,
-    })
-    setOccupe(false)
-    onFini()
+    if (!pret || centimes == null || enregistree != null) return
+    setOccupe(true); setErreur(null)
+    try {
+      const resultat = await ecrireDepenseUneFois(
+        verrou.current,
+        () => creerDepense(db, {
+          cible,
+          roulageId: cible === 'roulage' ? roulageId : null,
+          machineId: cible === 'machine' ? machineId : null,
+          centimes,
+          libelle: libelle.trim(),
+          poste,
+          // Le jour du PAIEMENT, celui que le pilote a sous les yeux. Il fixe la
+          // saison (AD-18) et il fixe le mois — et il ne se dérive plus de la
+          // journée visée, qui pouvait être à venir.
+          date: leJour,
+        }),
+        () => onFini(centimes),
+        // Dès cet instant la ligne existe. Même si le total refuse ensuite de se
+        // relire, aucun contrôle de cet écran ne doit pouvoir la recréer.
+        () => setEnregistree(centimes),
+      )
+      if (resultat === 'a_relire') {
+        setErreur(
+          'La dépense est enregistrée, mais le total n’a pas pu être relu. Ne la saisis pas à nouveau.')
+      }
+    } catch {
+      setErreur('La dépense n’a pas été enregistrée. La saisie reste ici : réessaie.')
+    } finally {
+      setOccupe(false)
+    }
   }
+
+  const relire = async () => {
+    if (enregistree == null || verrou.current.enVol) return
+    verrou.current.enVol = true
+    setOccupe(true); setErreur(null)
+    try {
+      await onFini(enregistree)
+    } catch {
+      setErreur('La dépense reste enregistrée, mais le total n’a pas pu être relu.')
+    } finally {
+      verrou.current.enVol = false
+      setOccupe(false)
+    }
+  }
+
+  if (enregistree != null) return (
+    <section className="depense pile" data-enregistree="1">
+      <p className="libelle">Dépense enregistrée</p>
+      <p className="texte" role="status">
+        La dépense est gardée. Il reste seulement à relire le total.
+      </p>
+      {erreur && <p className="mot-erreur" role="alert">{erreur}</p>}
+      <button type="button" className="bouton" disabled={occupe}
+              onClick={() => void relire()}>
+        {occupe ? 'relecture…' : 'Relire le total'}
+      </button>
+      <button type="button" className="bouton secondaire" disabled={occupe}
+              onClick={onAnnuler}>Retour</button>
+    </section>
+  )
 
   return (
     <section className="depense">
@@ -142,7 +190,8 @@ export function Depense({ db, roulageId, dateRoulage, onFini, onAnnuler }: Props
         <div className="libelle">De quoi il s'agit</div>
         <div className="puces">
           {POSTES.map((p) => (
-            <button key={p} className="puce" data-actif={poste === p ? '1' : '0'}
+            <button key={p} type="button" className="puce" data-actif={poste === p ? '1' : '0'}
+                    aria-pressed={poste === p}
                     onClick={() => setPoste(p)}>{NOM_POSTE[p].toUpperCase()}</button>
           ))}
         </div>
@@ -155,14 +204,17 @@ export function Depense({ db, roulageId, dateRoulage, onFini, onAnnuler }: Props
         <div className="libelle">À quoi ça se rattache</div>
         <div className="puces">
           {roulageId && (
-            <button className="puce" data-actif={cible === 'roulage' ? '1' : '0'}
+            <button type="button" className="puce" data-actif={cible === 'roulage' ? '1' : '0'}
+                    aria-pressed={cible === 'roulage'}
                     onClick={() => setCible('roulage')}>CETTE JOURNÉE</button>
           )}
           {/* FR-26 : ce qui est une pièce se rattache à la MOTO, jamais au
               roulage pendant lequel on l'a achetée. */}
-          <button className="puce" data-actif={cible === 'machine' ? '1' : '0'}
+          <button type="button" className="puce" data-actif={cible === 'machine' ? '1' : '0'}
+                  aria-pressed={cible === 'machine'}
                   onClick={() => setCible('machine')}>PIÈCE OU ENTRETIEN</button>
-          <button className="puce" data-actif={cible === 'saison' ? '1' : '0'}
+          <button type="button" className="puce" data-actif={cible === 'saison' ? '1' : '0'}
+                  aria-pressed={cible === 'saison'}
                   onClick={() => setCible('saison')}>LA SAISON</button>
         </div>
         {/* ⚠ CE QUE LA JOURNÉE DONNE, ET CE QU'ELLE NE DONNE PAS. Elle est la
@@ -185,7 +237,8 @@ export function Depense({ db, roulageId, dateRoulage, onFini, onAnnuler }: Props
           {machines.length ? (
             <div className="puces">
               {machines.map((m) => (
-                <button key={m.id} className="puce" data-actif={machineId === m.id ? '1' : '0'}
+                <button key={m.id} type="button" className="puce" data-actif={machineId === m.id ? '1' : '0'}
+                        aria-pressed={machineId === m.id}
                         onClick={() => setMachineId(m.id)}>{m.modele.toUpperCase()}</button>
               ))}
             </div>
@@ -223,10 +276,12 @@ export function Depense({ db, roulageId, dateRoulage, onFini, onAnnuler }: Props
                placeholder="Pneus, essence, engagement…" autoComplete="off" />
       </div>
 
-      <button className="bouton" disabled={!pret || occupe} onClick={() => void valider()}>
-        {occupe ? 'un instant…' : 'Enregistrer'}
+      {erreur && <p className="mot-erreur" role="alert">{erreur}</p>}
+
+      <button type="button" className="bouton" disabled={!pret || occupe} onClick={() => void valider()}>
+        {occupe ? 'enregistrement…' : 'Enregistrer la dépense'}
       </button>
-      <button className="bouton secondaire" onClick={onAnnuler}>Annuler</button>
+      <button type="button" className="bouton secondaire" onClick={onAnnuler}>Annuler la saisie</button>
 
       <p className="note">
         La saison, c'est {anneeSaison(leJour)} — l'année du PAIEMENT, fixée maintenant

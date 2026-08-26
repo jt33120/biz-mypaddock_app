@@ -165,7 +165,7 @@ verifier('④ « Saisir une session » reste atteignable',
 for (const [quoi, ou] of [
   ['les photos', '.journee-page .grille-album, .journee-page label.bouton:has-text("Ajouter des photos")'],
   ['« Déclarer un geste »', '.journee-page .lien:has-text("Déclarer un geste")'],
-  ['« J\'ai chuté ce jour-là »', '.journee-page .lien:has-text("chuté ce jour-là")'],
+  ['« Documenter un crash »', '.journee-page .lien:has-text("Documenter un crash")'],
   ['ce que la journée a coûté', '.journee-page .libelle:has-text("Ce que la journée a coûté")'],
   ['« Ajouter une dépense »', '.journee-page :has-text("Ajouter une dépense")'],
   ['« Voir le récapitulatif »', '.journee-page .bouton:has-text("Voir le récapitulatif")'],
@@ -173,6 +173,80 @@ for (const [quoi, ou] of [
 ]) {
   verifier(`   ${quoi} · la porte est ouverte`, await page.isVisible(ou))
 }
+
+// ── ④bis DEUX OBJECTIFS ET DEUX COCHES RESTENT DEUX ÉCRITURES ─────────────
+verifier('④bis le titre est Objectif',
+  (await page.textContent('.objectifs > .libelle')).trim() === 'Objectif')
+await page.click('.objectifs .lien:has-text("Ajouter un objectif")')
+await page.fill('.objectifs input[placeholder="autre chose"]', 'Travailler la sortie')
+await page.click('.objectifs .bouton:has-text("Enregistrer l\'objectif")')
+await page.fill('.objectifs input[placeholder="autre chose"]', 'Relâcher les épaules')
+await page.click('.objectifs .bouton:has-text("Enregistrer l\'objectif")')
+await page.waitForFunction(() => {
+  const t = document.querySelector('.objectifs')?.textContent ?? ''
+  return t.includes('Travailler la sortie') && t.includes('Relâcher les épaules')
+    && !t.includes('enregistrement…')
+}, null, { timeout: 20_000 })
+verifier('   deux ajouts rapprochés restent visibles',
+  await page.$$eval('.objectifs .ligne-atelier .texte', (n) => n.length) === 2)
+for (const largeur of [375, 390, 430]) {
+  await page.setViewportSize({ width: largeur, height: 844 })
+  const cible = await page.locator('.objectifs .ligne-atelier .lien.destructif').first()
+    .boundingBox()
+  verifier(`   retrait objectif · cible tactile à ${largeur}px`,
+    !!cible && cible.width >= 44 && cible.height >= 44,
+    cible ? `${Math.round(cible.width)}×${Math.round(cible.height)}` : 'absente')
+}
+await page.setViewportSize({ width: 390, height: 844 })
+
+if (await page.isVisible('text=Préparer le chargement')) {
+  await page.click('text=Préparer le chargement')
+  await page.waitForSelector('.checklist', { timeout: 20_000 })
+}
+if ((await page.getAttribute('.checklist .atelier-tete', 'aria-expanded')) !== 'true')
+  await page.click('.checklist .atelier-tete')
+const urlAvantCoches = page.url()
+await page.click('.checklist .coche:has-text("Casque")')
+await page.click('.checklist .coche:has-text("Gants")')
+verifier('   deux coches répondent immédiatement',
+  (await texte('.checklist .atelier-tete')).includes('2 chargés'))
+verifier('   la checklist reste ouverte et la route ne bouge pas',
+  (await page.getAttribute('.checklist .atelier-tete', 'aria-expanded')) === 'true'
+  && page.url() === urlAvantCoches)
+await page.waitForFunction(() => {
+  const entete = document.querySelector('.checklist .atelier-tete')?.textContent ?? ''
+  return entete.includes('2 chargés') && !entete.includes('enregistrement…')
+}, null, { timeout: 20_000 })
+
+await page.reload({ waitUntil: 'networkidle' })
+await pret()
+await onglet('ROULAGES')
+await page.click(`.groupe-roulages .bloc:has-text("${jour(18)}") >> nth=0`)
+await page.waitForSelector('.journee-page', { timeout: 20_000 })
+const apresRecharge = await texte('.journee-page')
+verifier('   objectifs et coches persistent après rechargement',
+  apresRecharge.includes('Travailler la sortie')
+  && apresRecharge.includes('Relâcher les épaules')
+  && (await texte('.checklist .atelier-tete')).includes('2 chargés'),
+  `${apresRecharge.includes('Travailler la sortie')}/${apresRecharge.includes('Relâcher les épaules')}`
+    + ` · ${await texte('.checklist .atelier-tete')}`)
+
+const retraitObjectif = page.locator(
+  '.objectifs .ligne-atelier:has-text("Travailler la sortie") .lien.destructif')
+await retraitObjectif.focus()
+await retraitObjectif.press('Enter')
+await page.waitForFunction(() => {
+  const t = document.querySelector('.objectifs')?.textContent ?? ''
+  return !t.includes('Travailler la sortie') && t.includes('Relâcher les épaules')
+}, null, { timeout: 20_000 })
+await page.reload({ waitUntil: 'networkidle' })
+await pret()
+await onglet('ROULAGES')
+await page.click(`.groupe-roulages .bloc:has-text("${jour(18)}") >> nth=0`)
+await page.waitForSelector('.journee-page', { timeout: 20_000 })
+const apresRetrait = await texte('.objectifs')
+verifier('   retirer un objectif ne retire pas l\'autre',
+  !apresRetrait.includes('Travailler la sortie') && apresRetrait.includes('Relâcher les épaules'))
 
 // ── ⑤ ELLE EST À L'ACCUEIL, ET LE TAP OUVRE CE QUI LA PRÉPARE.
 await onglet('ACCUEIL')
@@ -189,17 +263,44 @@ verifier('   le tap ouvre la préparation, pas le bilan',
 // ── ⑥ ET LE MÊME TAP DEPUIS LA LISTE DES ROULAGES. Deux chemins vers la même
 //    journée ne peuvent pas ouvrir deux écrans différents.
 await onglet('ROULAGES')
-await page.waitForSelector('.pile > .bloc', { timeout: 20_000 })
+await page.waitForSelector('.ligne-glissante', { timeout: 20_000 })
 const liste = await texte('.ecran')
 verifier('⑥ la journée à venir RESTE dans la liste — elle est saisie, elle compte',
   liste.includes(jour(18)), liste.slice(0, 200))
+const sections = await page.$$eval('.groupe-roulages', (groupes) => groupes.map((g) => ({
+  titre: g.querySelector('h2')?.textContent.trim(),
+  reference: g.getAttribute('aria-labelledby'),
+  titreId: g.querySelector('h2')?.id,
+  ids: [...g.querySelectorAll('[data-roulage-id]')].map((n) => n.getAttribute('data-roulage-id')),
+  dates: [...g.querySelectorAll('.ligne-glissante .rang:first-child .libelle')]
+    .map((n) => n.textContent.trim()),
+})))
+verifier('   les trois sections sont distinctes et dans le bon ordre',
+  JSON.stringify(sections.map((s) => s.titre)) === JSON.stringify(["Aujourd'hui", 'À venir', 'Passés']),
+  sections.map((s) => s.titre).join(' · '))
+verifier('   les trois sections référencent un titre par un identifiant stable',
+  JSON.stringify(sections.map((s) => s.reference)) === JSON.stringify([
+    'roulages-aujourdhui', 'roulages-a-venir', 'roulages-passes',
+  ]) && sections.every((s) => s.reference === s.titreId),
+  JSON.stringify(sections.map((s) => [s.reference, s.titreId])))
+const futur = sections.find((s) => s.titre === 'À venir')
+const passes = sections.find((s) => s.titre === 'Passés')
+verifier('   à venir monte, passés descend',
+  JSON.stringify(futur?.dates) === JSON.stringify([...(futur?.dates ?? [])].sort())
+    && JSON.stringify(passes?.dates) === JSON.stringify([...(passes?.dates ?? [])].sort().reverse()),
+  JSON.stringify(sections.map((s) => [s.titre, s.dates])))
+const ids = sections.flatMap((s) => s.ids)
+verifier('   chaque carte vit dans une seule section',
+  ids.length === new Set(ids).size, `${ids.length} cartes · ${new Set(ids).size} identifiants`)
 // ⚠ ON VISE LA JOURNÉE QU'ON VIENT DE SAISIR, PAS LE PREMIER BLOC. `nth=0`
 // tapait sur le roulage semé par la démonstration — septembre, Pau-Arnos lui
 // aussi — et la vérification passait donc quel que soit le résultat : elle
 // ouvrait une autre journée à venir, qui ouvre le même écran pour d'autres
 // raisons. La date est le seul trait qui sépare les deux, et c'est elle qu'on
 // vise ; la vérification lit ensuite l'écart, qui n'appartient qu'à celle-ci.
-await page.click(`.pile > .bloc:has-text("${jour(18)}") >> nth=0`)
+const carteFuture = page.locator(`.ligne-glissante:has-text("${jour(18)}") .glissable`).first()
+await carteFuture.focus()
+await carteFuture.press('Enter')
 await page.waitForSelector('.journee-page', { timeout: 20_000 })
 const ouverte = await texte('.journee-page')
 verifier('   et le tap y ouvre le même écran, sur LA journée tapée',
@@ -207,7 +308,7 @@ verifier('   et le tap y ouvre le même écran, sur LA journée tapée',
 
 // ── ⑦ AUCUN COMPTEUR DE JOURNÉES VÉCUES NE L'INCLUT.
 await onglet('GARAGE')
-await page.waitForSelector('.garage .chiffres', { timeout: 20_000 })
+await page.waitForSelector('.garage .chiffres[data-charge="1"]', { timeout: 20_000 })
 const roulagesApres = await compterRoulages()
 verifier('⑦ le garage ne compte pas la journée annoncée',
   Number.isFinite(roulagesApres) && roulagesApres === roulagesAvant,

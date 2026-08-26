@@ -13,6 +13,12 @@ const erreurs = []
 page.on('console', m => { if (m.type() === 'error') erreurs.push('console: ' + m.text()) })
 page.on('pageerror', e => erreurs.push('pageerror: ' + e.message))
 page.on('response', r => { if (r.status() >= 400) erreurs.push(`http ${r.status()} ${r.url()}`) })
+// Le banc choisit explicitement l'état anonyme. Un jeton laissé par une autre
+// exécution ne doit pas transformer un test du formulaire en test du profil.
+await page.addInitScript(() => {
+  for (const cle of Object.keys(localStorage))
+    if (cle.startsWith('sb-') && cle.endsWith('-auth-token')) localStorage.removeItem(cle)
+})
 
 // LE COMPTE EST UN ONGLET DE LA BARRE depuis le retour de Julian. La sonde
 // reste un instrument et s'atteint depuis le compte.
@@ -24,6 +30,8 @@ const onglet = async (n) => {
   // instrument, pas un lieu du produit.
   await page.click('nav.barre .onglet:has-text("COMPTE")')
   await page.waitForSelector('section.compte', { timeout: 10_000 })
+  if ((await page.getAttribute('details.compte-diagnostic', 'open')) == null)
+    await page.click('summary:has-text("Diagnostic et aide")')
   return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
 
@@ -114,8 +122,14 @@ console.log('bilan :', (await page.textContent('.ecran')).replace(/\s+/g, ' ').s
 // 3. Le compte, qui doit annoncer exactement ce qui vient d'être saisi.
 await onglet('COMPTE')
 await page.waitForSelector('section.compte', { timeout: 10_000 })
-await page.fill('#email', 'julian@exemple.fr')
-await page.fill('#mdp', 'motdepasse')
+const supabaseConfigure = await page.getAttribute('.compte-page', 'data-supabase-configure') === '1'
+if (supabaseConfigure) {
+  await page.waitForSelector('#email', { timeout: 10_000 })
+  await page.fill('#email', 'julian@exemple.fr')
+  await page.fill('#mdp', 'motdepasse')
+} else {
+  console.log('compte : SKIP formulaire — VITE_SUPABASE_URL/KEY absentes du paquet testé')
+}
 // Le décompte arrive d'une requête : on l'attend, sinon on mesure une course.
 await page.waitForSelector('section.compte .repris', { timeout: 10_000 })
 console.log('repris :', (await page.textContent('.repris .detail')).replace(/\s+/g, ' ').trim())

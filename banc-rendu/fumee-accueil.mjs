@@ -88,12 +88,16 @@ console.log('④ FR-13 — libellés :', fautes.length ? 'NON — ' + fautes.joi
 console.log('⑤ le raccourci est sur l\'accueil :',
   await page.isVisible('.raccourci-depense') ? 'oui' : 'NON')
 await page.click('text=Noter une dépense')
-await page.click('.raccourci-depense .puce:has-text("ENGAGEMENT")')
-await page.fill('.raccourci-depense .champ[placeholder="montant en €"]', '230')
-await page.click('.raccourci-depense .bouton.secondaire:has-text("Ajouter à")')
-await page.waitForSelector('.raccourci-depense .note', { timeout: 20_000 })
+await page.waitForSelector('section.depense', { timeout: 20_000 })
+await page.click('.depense .puce:has-text("ENGAGEMENT")')
+await page.fill('.depense #montant', '230')
+await page.click('.depense .bouton:has-text("Enregistrer la dépense")')
+await page.waitForSelector('text=Dépense notée · 230 €', { timeout: 20_000 })
 const note = await ecran()
-console.log('   ce qui vient d\'être noté est dit :', /Noté · 230 €/.test(note) ? 'oui' : 'NON')
+console.log('   la saisie dédiée revient à la lecture :',
+  await page.isVisible('.raccourci-depense') && !await page.isVisible('section.depense') ? 'oui' : 'NON')
+console.log('   ce qui vient d\'être noté est dit :',
+  /Dépense notée · 230 € · Saison 230 €/.test(note) ? 'oui' : 'NON')
 // Et il ne réclame rien : replié, c'est un lien et rien d'autre.
 console.log('   aucune relance, aucune pastille :',
   /tu n'as|pense[sz]? à|n'oublie|ce mois-ci/i.test(note) ? 'NON' : 'oui')

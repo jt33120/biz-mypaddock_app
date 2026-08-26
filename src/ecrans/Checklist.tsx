@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
   ajouter, CHARGEMENT, cocher, composer, direLAge, direPublication, lignesDuChargement,
@@ -26,6 +26,10 @@ export function Checklist({ db, roulageId, jour }: {
   const [liste, setListe] = useState<Ligne[]>([])
   const [ouverte, setOuverte] = useState(false)
   const [ajout, setAjout] = useState('')
+  const [enregistrement, setEnregistrement] = useState(0)
+  const [erreur, setErreur] = useState('')
+  const listeCourante = useRef<Ligne[]>([])
+  const ecritures = useRef(new Map<string, Promise<void>>())
   /** Récit 17.4 — « je ne sais rien » et « je n'ai pas pu lire » sont deux
    *  phrases, et jusqu'ici l'écran ne disait que la première. */
   const [lien, setLien] = useState<Rattachement>('rattache')
@@ -42,11 +46,57 @@ export function Checklist({ db, roulageId, jour }: {
        — ce qui est le cas ordinaire. */
     await verserLesReglesManquantes(db, roulageId)
     setLien(await rattachement(db, roulageId))
-    setListe(await lignesDuChargement(db, roulageId))
+    const l = await lignesDuChargement(db, roulageId)
+    listeCourante.current = l
+    setListe(l)
   }, [db, roulageId])
   useEffect(() => { void charger() }, [charger])
 
   const creer = async () => { await composer(db, roulageId); await charger(); setOuverte(true) }
+
+  /** L'écran répond avant SQLite et sérialise les changements d'une même ligne.
+   *  Deux taps sur deux lignes restent deux écritures ; aucun rechargement ne
+   *  referme le panneau ni ne ramène vers la journée précédente. */
+  const basculer = (id: string) => {
+    const ligne = listeCourante.current.find((l) => l.id === id)
+    if (!ligne) return
+    const oui = !ligne.cochee
+    const suivante = listeCourante.current.map((l) =>
+      l.id === id ? { ...l, cochee: oui ? 1 : 0 } : l)
+    listeCourante.current = suivante
+    setListe(suivante)
+    setErreur('')
+    setEnregistrement((total) => total + 1)
+
+    const precedente = ecritures.current.get(id)
+    /* La première écriture part DANS le gestionnaire du clic. La faire passer
+       par `Promise.resolve().then(...)` la repoussait d'une micro-tâche : un
+       rechargement déclenché juste après deux taps pouvait interrompre les deux
+       appels avant même leur entrée dans SQLite. Seuls les taps suivants sur
+       LA MÊME ligne attendent leur prédécesseur. */
+    const action = (precedente
+      ? precedente.catch(() => {}).then(() => cocher(db, id, oui))
+      : cocher(db, id, oui))
+      .catch(() => {
+        /* Une écriture refusée ne doit ni annuler une coche plus récente sur
+           la même ligne, ni recharger la liste et écraser les autres réponses
+           optimistes encore en vol. On ne restaure donc que CETTE intention,
+           si elle est toujours la dernière visible. */
+        const courant = listeCourante.current.find((l) => l.id === id)
+        if (courant?.cochee === (oui ? 1 : 0)) {
+          const restauree = listeCourante.current.map((l) =>
+            l.id === id ? { ...l, cochee: ligne.cochee } : l)
+          listeCourante.current = restauree
+          setListe(restauree)
+        }
+        setErreur('La coche n’a pas été enregistrée. Réessaie.')
+      })
+      .finally(() => setEnregistrement((total) => Math.max(0, total - 1)))
+    ecritures.current.set(id, action)
+    void action.finally(() => {
+      if (ecritures.current.get(id) === action) ecritures.current.delete(id)
+    })
+  }
 
   if (!liste.length) {
     /* ⚠ ELLE PORTE SON NOM AVANT D'EXISTER — et la classe n'est PAS `checklist`.
@@ -65,7 +115,9 @@ export function Checklist({ db, roulageId, jour }: {
         <p className="sous-titre">
           Ce que tu emportes : la moto, ce que tu portes, ce que l'organisateur publie.
         </p>
-        <button className="lien" onClick={() => void creer()}>Préparer le chargement</button>
+        <button type="button" className="lien" onClick={() => void creer()}>
+          Préparer le chargement
+        </button>
       </div>
     )
   }
@@ -85,14 +137,18 @@ export function Checklist({ db, roulageId, jour }: {
 
   return (
     <div className="bloc pile checklist">
-      <button className="rang atelier-tete" onClick={() => setOuverte(!ouverte)}>
+      <button type="button" className="rang atelier-tete"
+              aria-expanded={ouverte} onClick={() => setOuverte(!ouverte)}>
         <span className="libelle">Chargement</span>
         {/* Un DÉCOMPTE, pas une progression : « 8 chargés » énonce ce qui est
             dans le camion. « 8 sur 11 » énoncerait ce qui manque. */}
-        <span className="libelle faible">
+        <span className="libelle faible" aria-live="polite">
           {cochees ? `${cochees} chargé${cochees > 1 ? 's' : ''}` : `${liste.length} lignes`}
+          {enregistrement ? ' · enregistrement…' : ''}
         </span>
       </button>
+
+      {erreur && <p className="note erreur" role="alert">{erreur}</p>}
 
       {ouverte && parCategorie.map(([c, l]) => (
         <div className={`pile ${c}`} key={c}>
@@ -127,12 +183,12 @@ export function Checklist({ db, roulageId, jour }: {
             const mois = ligne.publie_le ? moisDepuis(ligne.publie_le, jour) : 0
             return (
               <div className="rang ligne-atelier" key={ligne.id}>
-                <button className="coche" data-actif={ligne.cochee ? '1' : '0'}
-                        onClick={() => void cocher(db, ligne.id, !ligne.cochee).then(charger)}>
+                <button type="button" className="coche" data-actif={ligne.cochee ? '1' : '0'}
+                        aria-pressed={!!ligne.cochee} onClick={() => basculer(ligne.id)}>
                   <span className="texte">{ligne.libelle}</span>
                 </button>
                 {!ligne.source_url && (
-                  <button className="lien destructif"
+                  <button type="button" className="lien destructif"
                           onClick={() => void retirer(db, ligne.id).then(charger)}>
                     retirer
                   </button>
@@ -167,7 +223,7 @@ export function Checklist({ db, roulageId, jour }: {
         <div className="rang">
           <input className="champ" value={ajout} onChange={(e) => setAjout(e.target.value)}
                  placeholder="autre chose à charger" autoComplete="off" />
-          <button className="lien" disabled={!ajout.trim()}
+          <button type="button" className="lien" disabled={!ajout.trim()}
                   onClick={() => void ajouter(db, roulageId, ajout, 'machine')
                     .then(() => { setAjout(''); return charger() })}>
             ajouter

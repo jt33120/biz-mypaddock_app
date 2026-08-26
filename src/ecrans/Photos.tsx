@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
-  lireLocale, nomLocal, oublierPhoto, photosDuRoulage, verserPlusieurs,
+  lirePhoto, oublierPhoto, photosDuRoulage, verserPlusieurs,
   type Echec, type Photo,
 } from '../db/photos'
 import { declarerGeste, gestesDuRoulage, listerCaps, type Cap, type Geste } from '../db/gestes'
@@ -11,11 +11,10 @@ import { useGeste } from './geste'
 /**
  * L'ALBUM ET LE GESTE — récits 3.1, 3.2, 18.2 et 18.3.
  *
- * ⚠ LA PHOTO S'AFFICHE TOUJOURS DEPUIS SA COPIE LOCALE, montée ou non. Une
- * photo « en attente d'envoi » ne peut pas être une photo absente à l'écran :
- * FR-10 exige que la pose réussisse hors ligne, NFR-7 interdit toute
- * dégradation visible. Il n'y a donc ici ni pastille d'attente, ni indicateur
- * d'échec, ni message d'excuse — l'état d'envoi n'est pas l'affaire du pilote.
+ * ⚠ LA PHOTO S'AFFICHE D'ABORD DEPUIS SA COPIE LOCALE. Sur un second appareil,
+ * une photo déjà montée redescend de Storage puis rejoint le même cache local.
+ * Une photo fraîchement prise reste donc visible hors ligne, sans empêcher son
+ * album de suivre le pilote sur un autre téléphone.
  *
  * Et le geste est PUREMENT DÉCLARATIF (FR-28). Aucune reconnaissance d'image,
  * jamais : la photo n'est pas lue par une machine pour en déduire un fait.
@@ -57,6 +56,9 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
   const [caps, setCaps] = useState<Cap[]>([])
   const [ouvert, setOuvert] = useState(false)
   const [echecs, setEchecs] = useState<Echec[]>([])
+  const [suppression, setSuppression] = useState<{
+    genre: 'info' | 'erreur'; texte: string
+  } | null>(null)
   /** L'index de la photo ouverte en grand, ou `null`. Un index et non un
    *  identifiant : la navigation d'une photo à l'autre est un déplacement dans
    *  la liste, et un identifiant obligerait à la re-parcourir à chaque flèche. */
@@ -88,7 +90,7 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
     setCaps(await listerCaps(db))
     const u: Record<string, string> = {}
     for (const p of l) {
-      const f = await lireLocale(nomLocal(p))
+      const f = await lirePhoto(p)
       if (f) u[p.id] = URL.createObjectURL(f)
     }
     setUrls((anciennes) => {
@@ -115,15 +117,43 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
     const liste = fichiers ? Array.from(fichiers) : []
     if (!liste.length) return
     setEchecs([])
-    const rates = await verserPlusieurs(db, { roulageId }, liste, () => charger())
+    setSuppression(null)
+    let affichageEnRetard = false
+    const rates = await verserPlusieurs(
+      db, { roulageId }, liste, () => charger(), () => { affichageEnRetard = true })
     setEchecs(rates)
-    await charger()
+    try { await charger(); affichageEnRetard = false } catch { affichageEnRetard = true }
+    if (affichageEnRetard) setSuppression({
+      genre: 'info', texte: 'Photo enregistrée. Recharge l’écran pour l’afficher.',
+    })
   })
 
-  const retirer = async (p: Photo) => {
-    await oublierPhoto(db, p.id)
-    setEnGrand(null)
-    await charger()
+  const retirer = async (p: Photo): Promise<{ retiree: boolean; message: string }> => {
+    setSuppression(null)
+    try {
+      const resultat = await oublierPhoto(db, p.id)
+      if (resultat.statut === 'en_attente' && resultat.motif === 'base_locale') {
+        return {
+          retiree: false,
+          message: 'La photo n’a pas été retirée. Elle reste dans le carnet et sur ce téléphone : réessaie.',
+        }
+      }
+      setPhotos((l) => l.filter((x) => x.id !== p.id))
+      setEnGrand(null)
+      try { await charger() } catch { /* tombstone déjà persisté */ }
+      const message = resultat.statut === 'en_attente'
+        ? resultat.motif === 'finalisation_locale'
+          ? 'Retrait enregistré. La photo n’est plus dans le carnet ; le nettoyage local reprendra à la prochaine ouverture.'
+          : 'Retrait enregistré. La photo n’est plus dans le carnet ; ses copies finiront d’être supprimées au retour du réseau.'
+        : 'Photo retirée du carnet, du téléphone et du stockage quand elle y était sauvegardée.'
+      setSuppression({ genre: 'info', texte: message })
+      return { retiree: true, message }
+    } catch {
+      return {
+        retiree: false,
+        message: 'La photo n’a pas été retirée. Elle reste dans le carnet : réessaie.',
+      }
+    }
   }
 
   return (
@@ -173,6 +203,13 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
         </p>
       )}
 
+      {suppression && (
+        <p className={suppression.genre === 'erreur' ? 'mot-erreur' : 'note'}
+           role={suppression.genre === 'erreur' ? 'alert' : 'status'}>
+          {suppression.texte}
+        </p>
+      )}
+
       <label className="bouton secondaire">
         {occupe ? 'préparation…' : 'Ajouter des photos'}
         {/* ⚠ `multiple`, ET C'EST TOUT LE RÉCIT 18.3. Sans lui, vingt photos
@@ -205,7 +242,7 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
                  onFermer={() => setEnGrand(null)}
                  onDeplacer={(d) => setEnGrand((i) =>
                    i == null ? null : Math.min(photos.length - 1, Math.max(0, i + d)))}
-                 onRetirer={() => void retirer(photos[enGrand])} />
+                 onRetirer={() => retirer(photos[enGrand])} />
       )}
     </div>
   )
@@ -225,9 +262,20 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
  */
 function EnGrand({ photo, url, rang, total, onFermer, onDeplacer, onRetirer }: {
   photo: Photo; url: string | undefined; rang: number; total: number
-  onFermer: () => void; onDeplacer: (d: -1 | 1) => void; onRetirer: () => void
+  onFermer: () => void; onDeplacer: (d: -1 | 1) => void
+  onRetirer: () => Promise<{ retiree: boolean; message: string }>
 }) {
   const [confirme, setConfirme] = useState(false)
+  const [occupe, setOccupe] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+
+  const retirer = async () => {
+    setOccupe(true)
+    setErreur(null)
+    const resultat = await onRetirer()
+    if (!resultat.retiree) setErreur(resultat.message)
+    setOccupe(false)
+  }
 
   useEffect(() => {
     const au = (e: KeyboardEvent) => {
@@ -264,13 +312,19 @@ function EnGrand({ photo, url, rang, total, onFermer, onDeplacer, onRetirer }: {
           {/* ⚠ ELLE PART SEULE, et la phrase le dit. La seule suppression de
               photo du produit était `supprimerRoulage`, qui les emporte toutes
               avec la journée, ses sessions, ses tours et ses dépenses. */}
-          <p className="note">Cette photo part définitivement. Elle part seule : la journée
-            et les autres photos restent.</p>
+          <p className="note">
+            Elle disparaît du carnet maintenant. Ses copies locale et distante sont
+            supprimées maintenant ou dès le retour du réseau. La journée et les autres
+            photos restent.
+          </p>
+          {erreur && <p className="mot-erreur" role="alert">{erreur}</p>}
           <div className="rang">
-            <button className="bouton destructif" onClick={onRetirer}>
-              Retirer cette photo
+            <button className="bouton destructif" disabled={occupe}
+                    onClick={() => void retirer()}>
+              {occupe ? 'suppression…' : 'Retirer cette photo'}
             </button>
-            <button className="lien" onClick={() => setConfirme(false)}>Garder</button>
+            <button className="lien" disabled={occupe}
+                    onClick={() => setConfirme(false)}>Garder</button>
           </div>
         </div>
       ) : (

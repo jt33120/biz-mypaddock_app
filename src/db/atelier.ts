@@ -21,9 +21,22 @@ import { aplati } from './depot'
 export type Categorie = 'entretien' | 'amelioration' | 'reparation_non_vitale'
 export type Etat = 'visee' | 'faite'
 
+/** La liste canonique sert aussi aux frontières qui reçoivent une valeur issue
+ * d'un formulaire. Le type TypeScript protège les appelants compilés ; cette
+ * garde protège les anciennes versions de l'application et les valeurs
+ * restaurées depuis une sauvegarde. */
+export const CATEGORIES_INTERVENTION = [
+  'entretien', 'amelioration', 'reparation_non_vitale',
+] as const satisfies readonly Categorie[]
+
+export const estCategorieIntervention = (valeur: unknown): valeur is Categorie =>
+  typeof valeur === 'string'
+  && (CATEGORIES_INTERVENTION as readonly string[]).includes(valeur)
+
 export type Intervention = {
   id: string
   machine_id: string
+  chute_id: string | null
   categorie: Categorie
   etat: Etat
   libelle: string
@@ -84,7 +97,7 @@ export const interventions = (
   db: PowerSyncDatabase, machineId: string, categorie: Categorie,
 ) => db.getAll<Intervention>(
   `SELECT id, machine_id, categorie, etat, libelle, date_jour, cout_centimes,
-          depense_id, photo_id
+          chute_id, depense_id, photo_id
      FROM intervention WHERE machine_id = ? AND categorie = ?
     ORDER BY etat DESC, coalesce(date_jour, '9999') DESC, id DESC`,
   [machineId, categorie])
@@ -112,14 +125,16 @@ export const consigner = async (
   i: {
     machineId: string; categorie: Categorie; libelle: string; date: string
     centimes?: number | null; depenseId?: string | null; photoId?: string | null
+    chuteId?: string | null
   },
 ) => {
   const id = nouvelId()
   await db.execute(
     `INSERT INTO intervention
-       (id, machine_id, categorie, etat, libelle, date_jour, cout_centimes, depense_id, photo_id)
-     VALUES (?, ?, ?, 'faite', ?, ?, ?, ?, ?)`,
-    [id, i.machineId, i.categorie, i.libelle.trim(), i.date,
+       (id, machine_id, chute_id, categorie, etat, libelle, date_jour,
+        cout_centimes, depense_id, photo_id)
+     VALUES (?, ?, ?, ?, 'faite', ?, ?, ?, ?, ?)`,
+    [id, i.machineId, i.chuteId ?? null, i.categorie, i.libelle.trim(), i.date,
       i.centimes ?? null, i.depenseId ?? null, i.photoId ?? null])
   await marquerSaisie(db)
   return id
@@ -136,14 +151,16 @@ export const viser = async (
   i: {
     machineId: string; categorie: Categorie; libelle: string
     centimes?: number | null; depenseId?: string | null; photoId?: string | null
+    chuteId?: string | null
   },
 ) => {
   const id = nouvelId()
   await db.execute(
     `INSERT INTO intervention
-       (id, machine_id, categorie, etat, libelle, cout_centimes, depense_id, photo_id)
-     VALUES (?, ?, ?, 'visee', ?, ?, ?, ?)`,
-    [id, i.machineId, i.categorie, i.libelle.trim(),
+       (id, machine_id, chute_id, categorie, etat, libelle,
+        cout_centimes, depense_id, photo_id)
+     VALUES (?, ?, ?, ?, 'visee', ?, ?, ?, ?)`,
+    [id, i.machineId, i.chuteId ?? null, i.categorie, i.libelle.trim(),
       i.centimes ?? null, i.depenseId ?? null, i.photoId ?? null])
   await marquerSaisie(db)
   return id

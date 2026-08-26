@@ -86,59 +86,83 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
   const [engage, setEngage] = useState(false)
 
   return (
-    <>
-      {engage ? null : !supabaseConfigure ? (
-        <section className="compte">
-          <p className="libelle">compte</p>
-          <h1 className="titre">Sauvegarde non configurée</h1>
-          <p className="texte">
-            Cette version ne connaît aucun serveur. Tout ce qui est saisi vit dans le téléphone,
-            et l'emport ci-dessous est alors la seule copie possible.
-          </p>
-        </section>
-      ) : identite ? <Connecte db={db} identite={identite} adoption={adoption} />
-                   : <Anonyme db={db} onLegal={onLegal} />}
+    <div className="compte-page"
+         data-supabase-configure={supabaseConfigure ? '1' : '0'}
+         data-session={identite ? '1' : '0'}>
+      <header className="compte-entete">
+        <p className="libelle">Réglages</p>
+        <h1 className="titre">Compte</h1>
+      </header>
 
-      {/* HORS DES TROIS BRANCHES, et c'est tout l'intérêt : l'emport ne dépend
-          ni d'un compte, ni d'un serveur, ni même d'une configuration. Il est
-          le dernier filet précisément quand les autres ont cédé.
-          Il s'efface tout de même une fois l'effacement engagé : proposer
-          d'emporter une saison qui n'existe plus serait une fausse promesse, et
-          les nombres qu'il affiche datent d'avant. */}
-      {engage ? null : <section className="compte"><Emporter db={db} /></section>}
+      {!engage && (
+        <>
+          <section className="compte compte-groupe" aria-labelledby="compte-connexion">
+            <h2 id="compte-connexion" className="titre-section">Connexion</h2>
+            {!supabaseConfigure ? (
+              <>
+                <p className="libelle">Sauvegarde non configurée</p>
+                <p className="texte">
+                  Cette version ne connaît aucun serveur. Tout reste sur ce téléphone ;
+                  l'export ci-dessous est la seule copie possible.
+                </p>
+              </>
+            ) : identite ? (
+              <div className="bloc pile identite-compte">
+                <span className="libelle">Adresse</span>
+                <span className="texte email-compte">{identite.email ?? 'Pilote'}</span>
+                <span className="hud-12 miami">CONNECTÉ</span>
+              </div>
+            ) : <Anonyme db={db} onLegal={onLegal} />}
+          </section>
 
-      {/* Hors des branches aussi, et pour la même famille de raisons : la mesure
-          démarre à la première ouverture, donc le refus doit être atteignable
-          sans compte. Un consentement qu'il faut mériter n'en est pas un. */}
-      {engage ? null : <section className="compte"><Mesures /></section>}
+          <section className="compte compte-groupe" aria-labelledby="compte-sauvegarde">
+            <h2 id="compte-sauvegarde" className="titre-section">Sauvegarde</h2>
+            {identite && supabaseConfigure && (
+              <SauvegardeConnectee db={db} identite={identite} adoption={adoption} />
+            )}
+            <Emporter db={db} />
+          </section>
 
-      {/* EN DERNIER, et seulement avec un compte : c'est le geste le plus
-          destructeur de l'application, et il n'a rien à faire sur le chemin de
-          quelqu'un qui n'a rien à effacer. */}
-      {engage ? null : <section className="compte">
-        <button className="lien" onClick={onLegal}>
-          Ce que fait cette application, tes données, qui écrire
-        </button>
-        <button className="lien" onClick={onSonde}>
-          Instruments et sonde — ce que l'appareil fait réellement
-        </button>
-        {/* ⚠ LA VERSION SE LIT EN DEUX TAPS, et ce n'est pas une coquetterie de
-            développeur. Une PWA installée sur iOS n'est jamais fermée : elle
-            peut servir un paquet vieux de plusieurs jours pendant que la
-            production, elle, est à jour. C'est arrivé — un retour a signalé
-            comme absente une fonctionnalité déjà livrée. Sans ce numéro, ce
-            genre de malentendu se débogue comme un fantôme. */}
-        <p className="note">version {__BUILD__}</p>
-      </section>}
+          <section className="compte compte-groupe" aria-labelledby="compte-donnees">
+            <h2 id="compte-donnees" className="titre-section">Données et confidentialité</h2>
+            <EnvoiDesPhotos />
+            <Mesures />
+            <button type="button" className="lien" onClick={onLegal}>
+              Lire les informations légales
+            </button>
+          </section>
 
-      {/* ⚠ `identite || engage`, ET L'ORDRE DES DEUX COMPTE. Une fois l'effacement
-          engagé, l'identité tombe à zéro pendant le geste : sans `engage`, la
-          section qui porte le résultat disparaît au moment exact où elle a
-          quelque chose à dire. */}
-      {(identite || engage) && (
-        <section className="compte"><Effacer db={db} onEngager={() => setEngage(true)} /></section>
+          <details className="compte compte-groupe compte-diagnostic">
+            <summary className="titre-section">Diagnostic et aide</summary>
+            <button type="button" className="lien" onClick={onSonde}>
+              Ouvrir — Instruments et sonde
+            </button>
+            {/* Le numéro reste atteignable pour distinguer une PWA restée sur
+                un ancien paquet de la production courante. */}
+            <p className="note">Version {__BUILD__}</p>
+          </details>
+        </>
       )}
-    </>
+
+      {/* Toujours en dernier. Après le point de non-retour, cette seule zone
+          reste montée afin que le résultat de l'effacement soit lisible. */}
+      {(identite || engage) && (
+        <section className="compte compte-groupe zone-sensible" aria-labelledby="compte-sensible">
+          <h2 id="compte-sensible" className="titre-section">Zone sensible</h2>
+          {!engage && (
+            <>
+              <button type="button" className="lien" onClick={() => void seDeconnecter()}>
+                Se déconnecter de cet appareil
+              </button>
+              <p className="note">
+                La déconnexion ne touche que cet appareil et n'efface aucune saisie.
+              </p>
+            </>
+          )}
+          <Effacer db={db} onEngager={() => setEngage(true)} />
+        </section>
+      )}
+    </div>
   )
 }
 
@@ -374,9 +398,8 @@ function Anonyme({ db, onLegal }: { db: PowerSyncDatabase; onLegal: () => void }
 
   if (etape === 'confirmation') {
     return (
-      <section className="compte">
-        <p className="libelle">compte</p>
-        <h1 className="titre neon">Le compte est créé</h1>
+      <>
+        <h3 className="titre neon">Le compte est créé</h3>
         <p className="texte">
           Un message part vers <b>{email}</b>. Ouvre-le et clique le lien.
         </p>
@@ -388,9 +411,9 @@ function Anonyme({ db, onLegal }: { db: PowerSyncDatabase; onLegal: () => void }
 
         {erreur && <p className="mot-erreur">{erreur}</p>}
 
-        <button className="bouton" disabled={occupe}
+        <button type="button" className="bouton" disabled={occupe}
                 onClick={() => void lancer(() => seConnecter(email, mdp))}>
-          {occupe ? 'un instant…' : "J'ai confirmé — me connecter"}
+          {occupe ? 'un instant…' : 'Me connecter'}
         </button>
 
         {/* Chemin secondaire, et il ne marche que si le gabarit d'e-mail porte
@@ -401,23 +424,22 @@ function Anonyme({ db, onLegal }: { db: PowerSyncDatabase; onLegal: () => void }
           <p className="libelle">Si l'e-mail contient un code à six chiffres</p>
           <input className="champ" value={code} onChange={(e) => setCode(e.target.value)}
                  inputMode="numeric" autoComplete="one-time-code" placeholder="123456" />
-          <button className="bouton secondaire" disabled={occupe || code.trim().length < 6}
+          <button type="button" className="bouton secondaire" disabled={occupe || code.trim().length < 6}
                   onClick={() => void lancer(() => confirmerParCode(email, code))}>
             Valider le code
           </button>
         </div>
 
-        <button className="lien" onClick={() => { setEtape('formulaire'); setErreur(null) }}>
+        <button type="button" className="lien" onClick={() => { setEtape('formulaire'); setErreur(null) }}>
           Changer d'adresse
         </button>
-      </section>
+      </>
     )
   }
 
   return (
-    <section className="compte">
-      <p className="libelle">compte</p>
-      <h1 className="titre neon">Que la saison survive au téléphone</h1>
+    <>
+      <h3 className="titre neon">Créer un compte</h3>
       <p className="texte">
         Tout marche déjà sans compte. Le compte ne sert qu'à une chose : ce que tu as saisi
         ne disparaît pas si tu changes de téléphone ou désinstalles l'application.
@@ -440,11 +462,11 @@ function Anonyme({ db, onLegal }: { db: PowerSyncDatabase; onLegal: () => void }
 
       {erreur && <p className="mot-erreur">{erreur}</p>}
 
-      <button className="bouton" disabled={!pret || occupe}
+      <button type="button" className="bouton" disabled={!pret || occupe}
               onClick={() => void lancer(() => sInscrire(email, mdp))}>
         {occupe ? 'un instant…' : 'Créer mon compte'}
       </button>
-      <button className="bouton secondaire" disabled={!pret || occupe}
+      <button type="button" className="bouton secondaire" disabled={!pret || occupe}
               onClick={() => void lancer(() => seConnecter(email, mdp))}>
         J'ai déjà un compte
       </button>
@@ -455,9 +477,9 @@ function Anonyme({ db, onLegal }: { db: PowerSyncDatabase; onLegal: () => void }
           lire, et le produit énonce (FR-13). */}
       <p className="note">
         Créer un compte fait partir ta saison vers un serveur en Europe.
-        {' '}<button className="lien" onClick={onLegal}>Ce qu'on en fait, et tes droits</button>.
+        {' '}<button type="button" className="lien" onClick={onLegal}>Lire tes droits</button>.
       </p>
-    </section>
+    </>
   )
 }
 
@@ -495,7 +517,7 @@ function Repris({ etat }: { etat: BilanEnvoi }) {
 
 /* ─── AVEC COMPTE ────────────────────────────────────────────────────────── */
 
-function Connecte({ db, identite, adoption }: {
+function SauvegardeConnectee({ db, identite, adoption }: {
   db: PowerSyncDatabase; identite: Identite; adoption: Adoption
 }) {
   const [bilan, setBilan] = useState<BilanEnvoi | null>(null)
@@ -539,14 +561,7 @@ function Connecte({ db, identite, adoption }: {
   const total = bilan ? Object.values(bilan).reduce((a, b) => a + b, 0) : 0
 
   return (
-    <section className="compte">
-      <header className="garage-tete">
-        <p className="libelle">compte</p>
-        <p className="libelle">connecté</p>
-      </header>
-
-      <h1 className="titre">{identite.email ?? 'Pilote'}</h1>
-
+    <>
       <div className="bloc pile">
         <div className="rang">
           <span className="libelle">Synchronisation continue</span>
@@ -574,13 +589,11 @@ function Connecte({ db, identite, adoption }: {
         )}
       </div>
 
-      <EnvoiDesPhotos />
-
       {/* LE BOUTON RESTE, comme recours et comme preuve : on peut toujours
           forcer, et voir ligne par ligne ce qui est parti. Ce qui a changé est
           qu'on n'ATTEND plus rien de lui — une sauvegarde qu'il faut penser à
           faire est une sauvegarde qu'on n'a pas. */}
-      <button className="bouton" disabled={occupe || adoption.etat === 'en_cours'}
+      <button type="button" className="bouton" disabled={occupe || adoption.etat === 'en_cours'}
               onClick={() => void envoyer()}>
         {occupe || adoption.etat === 'en_cours' ? 'envoi…' : 'Sauvegarder maintenant'}
       </button>
@@ -619,13 +632,7 @@ function Connecte({ db, identite, adoption }: {
         </div>
       )}
 
-      <button className="lien" onClick={() => void seDeconnecter()}>
-        Se déconnecter de cet appareil
-      </button>
-      <p className="note">
-        La déconnexion ne touche que cet appareil, et n'efface rien de ce qui est saisi ici.
-      </p>
-    </section>
+    </>
   )
 }
 
@@ -644,7 +651,9 @@ function Mesures() {
     <div className="plat repris">
       <div className="rang">
         <span className="libelle">Mesures sur le produit</span>
-        <button className="puce" data-actif={oui ? '1' : '0'} onClick={basculer}>
+        <button type="button" className="puce" data-actif={oui ? '1' : '0'}
+                aria-label="Mesures sur le produit" aria-pressed={oui}
+                onClick={basculer}>
           {oui ? 'ACTIVES' : 'REFUSÉES'}
         </button>
       </div>
@@ -688,8 +697,8 @@ function EnvoiDesPhotos() {
     <div className="bloc pile">
       <div className="rang">
         <span className="libelle">Envoyer les photos</span>
-        <button className="puce" data-actif={actif ? '1' : '0'}
-                aria-pressed={actif}
+        <button type="button" className="puce" data-actif={actif ? '1' : '0'}
+                aria-label="Envoyer les photos" aria-pressed={actif}
                 onClick={() => { poserEnvoiCloud(!actif); setActif(!actif) }}>
           {actif ? 'OUI' : 'NON'}
         </button>

@@ -95,7 +95,7 @@ export const poserChiffres = (l: Cle[]) => {
 export const valeurs = async (
   db: PowerSyncDatabase, jour = aujourdhui(),
 ): Promise<Record<Cle, Valeur>> => {
-  const annee = new Date().getFullYear()
+  const annee = Number(jour.slice(0, 4))
   // ⚠ « X ROULAGES » ET « Y CIRCUITS » COMPTAIENT UNE JOURNÉE QUI N'A PAS EU
   // LIEU. `count(*) FROM roulage`, sans filtre de date ni d'état : le 12
   // septembre saisi le 25 août faisait passer l'accueil de 5 à 6 le jour de sa

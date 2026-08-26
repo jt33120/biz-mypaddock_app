@@ -210,7 +210,8 @@ export const DEFAUTS_SERVEUR: Readonly<Record<string, Readonly<Record<string, un
   intervention: { etat: 'faite' },             // écrite : src/db/usure.ts, src/db/atelier.ts
   mesure: { valeur: 0 },                       // écrite : src/db/mesures.ts:102-103
   photo: { etat: 'locale', genre: 'photo' },   // écrites : src/db/photos.ts:169-172
-  roulage: { chrono_visible: 0, etat: 'usage' },  // écrites : src/db/depot.ts, même INSERT
+  roulage: { chrono_visible: 0, etat: 'usage', crash_statut: 'a_renseigner' },
+  // Les trois valeurs sont écrites explicitement dans `depot.ts` et `chute.ts`.
 }
 
 /** Poser le défaut du serveur là où le local n'a jamais rien écrit. Ne touche

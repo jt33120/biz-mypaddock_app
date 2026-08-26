@@ -3,6 +3,7 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import {
   cestFaitDepuisLHorloge, horloges, oublierHorloge, poserHorloge, type Horloge,
 } from '../db/usure'
+import { aujourdhui } from '../db/vecu'
 
 /**
  * LES HORLOGES D'USURE À L'ÉCRAN — FR-40, FR-44.
@@ -19,8 +20,6 @@ import {
  *     faut faire. Une horloge qui a dépassé son intervalle l'énonce — « au-delà
  *     de l'intervalle » — et s'arrête là.
  */
-const aujourdhui = () => new Date().toISOString().slice(0, 10)
-
 export function Usure({ db, machineId, onEcrit }: {
   db: PowerSyncDatabase; machineId: string; onEcrit?: () => void
 }) {

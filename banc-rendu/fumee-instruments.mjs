@@ -21,6 +21,9 @@ const onglet = async (n) => {
   // instrument, pas un lieu du produit.
   await page.click('nav.barre .onglet:has-text("COMPTE")')
   await page.waitForSelector('section.compte', { timeout: 10_000 })
+  const diagnostic = page.locator('details.compte-diagnostic')
+  if ((await diagnostic.getAttribute('open')) == null)
+    await page.click('summary:has-text("Diagnostic et aide")')
   return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
 const pret = () => page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
@@ -71,8 +74,15 @@ console.log('   délai calculé :', /Délai roulage → saisie/.test(apres) ? 'o
 
 // ── AD-16 : on refuse, on recharge, et RIEN de nouveau ne doit être écrit.
 await onglet('COMPTE')
-await page.click('.plat.repris .puce')
-console.log('③ bascule :', await page.textContent('.plat.repris .puce'))
+const mesures = page.locator('button[aria-label="Mesures sur le produit"]')
+const photos = page.locator('button[aria-label="Envoyer les photos"]')
+const accessibles = await mesures.count() === 1 && await photos.count() === 1
+  && (await mesures.getAttribute('aria-pressed')) !== null
+  && (await photos.getAttribute('aria-pressed')) !== null
+console.log('   réglages nommés et pressés :', accessibles ? 'oui' : 'NON')
+if (!accessibles) erreurs.push('les deux interrupteurs du compte ne portent pas leur nom/état')
+await mesures.click()
+console.log('③ bascule :', await mesures.textContent())
 
 const compte = () => page.evaluate(async () => {
   const r = await window.__db.getAll('SELECT count(*) AS n FROM mesure')

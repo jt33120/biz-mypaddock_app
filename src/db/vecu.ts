@@ -26,10 +26,19 @@
  * d'être COMPTÉE comme vécue.
  */
 
-/** Le jour courant, au format que porte `date_jour`. Deux dates ISO se
- *  comparent comme deux chaînes — aucun fuseau n'intervient, et c'est
- *  volontaire : on compare deux JOURS, pas deux instants (AD-8). */
-export const aujourdhui = () => new Date().toISOString().slice(0, 10)
+/** Une date civile LOCALE, au format que porte `date_jour`.
+ *
+ * `toISOString()` décrit UTC : à Paris, entre minuit et 2 h l'été, il rend
+ * encore la veille et classe donc le roulage du jour dans « À venir ». Le
+ * décalage est injectable pour éprouver ce bord sans dépendre du fuseau de la
+ * machine qui lance le banc. `getTimezoneOffset()` tient aussi l'heure d'été. */
+export const dateCivileLocale = (
+  instant: Date = new Date(), decalageMinutes: number = instant.getTimezoneOffset(),
+): string => new Date(instant.getTime() - decalageMinutes * 60_000).toISOString().slice(0, 10)
+
+/** Deux jours ISO se comparent comme deux chaînes ; le fuseau n'intervient
+ * qu'une fois, ici, au passage d'un instant au jour vécu par le pilote. */
+export const aujourdhui = (instant: Date = new Date()) => dateCivileLocale(instant)
 
 /**
  * LE PRÉDICAT, EN SQL — `etat = 'usage' AND date_jour <= :jour`.

@@ -3,8 +3,8 @@ import { ENVIRONNEMENT, EST_PRODUCTION, MOT_ENVIRONNEMENT, PRODUCT_NAME } from '
 import { demanderPersistance, ouvrirBase } from './db/powersync'
 import { direLAbri, lireAbri, proposerInstallation, surAbri, type Abri } from './db/abri'
 import {
-  ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
-  listerMachines, type Machine,
+  ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, depenseSaison, formaterChrono,
+  classerRoulages, listerMachines, type Machine,
   circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
   modifierRoulage, normaliserEtats, poserBudget, supprimerRoulage,
   type ContenuDuRoulage, type Propose,
@@ -89,6 +89,10 @@ export default function App() {
   // est caché dessous.
   useEffect(() => { if (db || panne) retirerLEcranDeChargement() }, [db, panne])
   const [ecran, setEcran] = useState<Ecran>('accueil')
+  /** L'accueil ouvre une dépense libre ; une journée conserve son rattachement.
+   *  Sans ce témoin, le dernier roulage resté en mémoire gagnerait en silence. */
+  const [depenseLibre, setDepenseLibre] = useState(false)
+  const [depenseNote, setDepenseNote] = useState<string | null>(null)
   /** La journée que le récit 22.1 va corriger. Un identifiant et non la ligne :
    *  la liste se rafraîchit après l'enregistrement, et une copie figée
    *  afficherait l'ancien circuit sur l'écran qu'on vient de quitter. */
@@ -284,8 +288,10 @@ export default function App() {
     if (!db) return
     return surRetourDeReseau(() => {
       void rafraichir(db)
+      // La reprise d'une suppression locale ne dépend pas d'un compte ; seul
+      // l'envoi d'une nouvelle photo est court-circuité sans identité.
+      void televerserEnAttente(db, identite?.id ?? null)
       if (identite) {
-        void televerserEnAttente(db, identite.id)
         // Les documents suivent le même chemin et les mêmes deux déclencheurs :
         // un manuel versé au paddock part au retour du réseau, pas avant.
         void televerserDocuments(db, identite.id)
@@ -400,10 +406,19 @@ export default function App() {
    */
   const gestesDeLaJournee = bilan && courant ? {
     photos: <Photos db={db} roulageId={courant} />,
-    chutes: <Chutes db={db} roulageId={courant} onEcrit={() => void rafraichir(db)} />,
+    chutes: (
+      <Chutes db={db} roulageId={courant} machineId={bilan.machine_id} date={bilan.date}
+              onEcrit={() => {
+                void rafraichir(db)
+                // Une réparation de crash écrit bien une dépense de machine,
+                // mais ce bloc est un instantané de la journée. Le recalculer
+                // ici évite d'exiger une navigation pour voir le coût gardé.
+                void coutDuRoulage(db, courant, anneeSaison(bilan.date)).then(setCout)
+              }} />
+    ),
     cout: cout && (
       <BlocCout c={cout} annee={anneeSaison(bilan.date)}
-                onDepense={() => setEcran('depense')}
+                onDepense={() => { setDepenseLibre(false); setEcran('depense') }}
                 onBudget={async (centimes: number) => {
                   await poserBudget(db, anneeSaison(bilan.date), centimes)
                   setCout(await coutDuRoulage(db, courant, anneeSaison(bilan.date)))
@@ -440,10 +455,15 @@ export default function App() {
         )}
         {ecran === 'accueil' && (
           <Accueil db={db} src={src} conseil={conseil} abri={abri}
-                   onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirRoulage}
-                   onLegal={() => setEcran('legal')}
-                   onEcrit={() => void rafraichir(db)}
+                   onNouveau={() => { setDepenseNote(null); setEcran('nouveau') }}
+                   onOuvrir={(id) => { setDepenseNote(null); return ouvrirRoulage(id) }}
+                   onLegal={() => { setDepenseNote(null); setEcran('legal') }}
+                   depenseNote={depenseNote}
+                   onDepense={() => {
+                     setDepenseNote(null); setDepenseLibre(true); setEcran('depense')
+                   }}
                    onAller={(vers, roulageId) => {
+                     setDepenseNote(null)
                      // L'argent d'une journée se saisit SUR la journée : la
                      // dépense d'engagement porte `cible = 'roulage'`, et la
                      // saisir ailleurs la rattacherait à la saison seule.
@@ -451,7 +471,10 @@ export default function App() {
                      // afficherait la journée une fraction de seconde avant de
                      // basculer sur la dépense, et un écran qui apparaît pour
                      // disparaître se lit comme un bug.
-                     if (vers === 'budget') void chargerRoulage(roulageId).then(() => setEcran('depense'))
+                     if (vers === 'budget') {
+                       setDepenseLibre(false)
+                       void chargerRoulage(roulageId).then(() => setEcran('depense'))
+                     }
                      else setEcran('garage')
                    }} />
         )}
@@ -528,7 +551,7 @@ export default function App() {
             visibilite={gestesDeLaJournee.visibilite}
             onRecap={gestesDeLaJournee.onRecap}
             onAller={(vers) => {
-              if (vers === 'budget') setEcran('depense')
+              if (vers === 'budget') { setDepenseLibre(false); setEcran('depense') }
               else setEcran('garage')
             }}
             onSession={() => setEcran('session')}
@@ -539,10 +562,24 @@ export default function App() {
         {ecran === 'recap' && matiere && courant && (
           <Recap db={db} matiere={matiere} onFermer={() => void ouvrirRoulage(courant)} />
         )}
-        {ecran === 'depense' && courant && bilan && (
-          <Depense db={db} roulageId={courant} dateRoulage={bilan.date}
-                   onFini={() => void ouvrirRoulage(courant)}
-                   onAnnuler={() => void ouvrirRoulage(courant)} />
+        {ecran === 'depense' && (depenseLibre || (courant && bilan)) && (
+          <Depense db={db}
+                   roulageId={depenseLibre ? null : courant}
+                   dateRoulage={depenseLibre ? null : bilan?.date ?? null}
+                   onFini={async (centimes) => {
+                     await rafraichir(db)
+                     if (depenseLibre) {
+                       const total = await depenseSaison(db, Number(aujourdhui().slice(0, 4)))
+                       setDepenseNote(
+                         `Dépense notée · ${formaterEuros(centimes)} · Saison ${formaterEuros(total)}`)
+                       setDepenseLibre(false); setEcran('accueil')
+                     }
+                     else if (courant) void ouvrirRoulage(courant)
+                   }}
+                   onAnnuler={() => {
+                     if (depenseLibre) { setDepenseLibre(false); setEcran('accueil') }
+                     else if (courant) void ouvrirRoulage(courant)
+                   }} />
         )}
         {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
         {ecran === 'compte' && <Compte db={db} identite={identite} adoption={adoption}
@@ -619,9 +656,9 @@ export default function App() {
 
       <nav className="barre">
         <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
-        <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => setEcran('garage')}>GARAGE</button>
-        <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => setEcran('roulages')}>ROULAGES</button>
-        <button className="onglet" data-actif={ecran === 'compte' || ecran === 'sonde' ? '1' : '0'} onClick={() => setEcran('compte')}>COMPTE</button>
+        <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('garage') }}>GARAGE</button>
+        <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('roulages') }}>ROULAGES</button>
+        <button className="onglet" data-actif={ecran === 'compte' || ecran === 'sonde' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('compte') }}>COMPTE</button>
       </nav>
     </>
   )
@@ -642,20 +679,16 @@ export default function App() {
    FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
    échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
    rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
-function Accueil({ db, src, conseil, abri, onNouveau, onOuvrir, onLegal, onAller, onEcrit }: {
+function Accueil({ db, src, conseil, abri, depenseNote, onNouveau, onOuvrir, onLegal, onDepense, onAller }: {
   db: Db; src: Source | null; conseil: string | null; abri: Abri | null
+  depenseNote: string | null
   onNouveau: () => void; onOuvrir: (id: string) => void
   onLegal: () => void
-  /** Une dépense notée depuis l'accueil change ce que l'accueil affiche —
-   *  « dépensé cette saison » est un des chiffres proposés (FR-15). */
-  onEcrit: () => void
+  onDepense: () => void
   /** Chaque tâche de préparation MÈNE QUELQUE PART. Une liste de rappels dont
    *  les lignes ne mènent nulle part se lit une fois et ne se relit jamais. */
   onAller: (vers: 'atelier' | 'usure' | 'budget', roulageId: string) => void
 }) {
-  /** Un compteur, pas un booléen : un booléen déjà vrai ne relirait rien à la
-   *  deuxième dépense notée dans la même minute. */
-  const [maj, setMaj] = useState(0)
   return (
     <>
       <header className="tete">
@@ -687,20 +720,11 @@ function Accueil({ db, src, conseil, abri, onNouveau, onOuvrir, onLegal, onAller
                                 date: src.roulage.date_jour }}
                      onAller={(vers) => onAller(vers, src.roulage.id)} />
       )}
-      {src && src.genre !== 'vide' && <ZoneChiffres db={db} key={maj} />}
-      {/* ⚠ LE RACCOURCI DE DÉPENSE — « d'ailleurs avec un raccourci sur la page
-          d'accueil ça ne peut pas faire de mal » (Julian, 25 août 2026).
-          Il vit SOUS les chiffres et n'apparaît PAS sur l'accueil vide : là, une
-          seule action existe — saisir le premier roulage (FR-14) — et un second
-          chemin à côté d'elle la dilue. Replié, il ne dit rien ; déplié, il écrit
-          la même ligne complète que le garage.
-          ⚠ `key={maj}` SUR LES CHIFFRES, ET C'EST LE POINT : « dépensé cette
-          saison » est lu une fois au montage. Sans remontage, on noterait 230 €
-          au-dessus d'un total qui n'a pas bougé — et un chiffre qui ne suit pas
-          ce qu'on vient de saisir est lu comme une saisie perdue. */}
-      {src && src.genre !== 'vide' && (
-        <NoterUneDepense db={db} onEcrit={() => { setMaj((n) => n + 1); onEcrit() }} />
-      )}
+      {/* La saisie vit avant l'analyse et sur tout accueil, même sans roulage :
+          un achat existe toute l'année. Le formulaire s'ouvre sur sa page. */}
+      <NoterUneDepense onOuvrir={onDepense} />
+      {depenseNote && <p className="note" role="status">{depenseNote}</p>}
+      {src && src.genre !== 'vide' && <ZoneChiffres db={db} />}
       {conseil && <Conseil texte={conseil} />}
     </>
   )
@@ -786,8 +810,7 @@ function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
         <div className="bloc pile">
           <div className="libelle">Rien de saisi</div>
           <div style={{ fontSize: 18 }}>
-            Le premier roulage suffit à faire fonctionner l'application.
-            Le coût se saisit plus tard, pas maintenant.
+            Un premier roulage ouvrira les analyses. Une dépense peut déjà être notée ci-dessous.
           </div>
         </div>
         <button className="bouton" onClick={onNouveau}>Saisir mon premier roulage</button>
@@ -1042,6 +1065,7 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
   db: Db; liste: Liste; onOuvrir: (id: string) => void; onModifier: (id: string) => void
   onNouveau: () => void; onEcrit: () => void
 }) {
+  const groupes = classerRoulages(liste)
   return (
     <>
       {/* Le bilan de saison ouvre l'écran des roulages : c'est la vue d'ensemble
@@ -1053,12 +1077,15 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
           rappeler, ce qui veut dire que l'écran ne le disait pas. Il le dit
           maintenant, une fois, à l'endroit où l'on compte. */}
       <div className="libelle">Roulages · {liste.length} journée{liste.length > 1 ? 's' : ''}</div>
-      <div className="pile">
-        {liste.map((r) => (
-          <LigneRoulage key={r.id} db={db} r={r} onOuvrir={onOuvrir}
-                        onModifier={onModifier} onEcrit={onEcrit} />
-        ))}
-      </div>
+      <SectionRoulages id="aujourdhui" titre="Aujourd'hui" vide="Aucun roulage aujourd'hui."
+                       db={db} liste={groupes.aujourdhui} onOuvrir={onOuvrir}
+                       onModifier={onModifier} onEcrit={onEcrit} />
+      <SectionRoulages id="a-venir" titre="À venir" vide="Aucun roulage à venir."
+                       db={db} liste={groupes.aVenir} onOuvrir={onOuvrir}
+                       onModifier={onModifier} onEcrit={onEcrit} />
+      <SectionRoulages id="passes" titre="Passés" vide="Aucun roulage passé."
+                       db={db} liste={groupes.passes} onOuvrir={onOuvrir}
+                       onModifier={onModifier} onEcrit={onEcrit} />
       <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
       {/* FR-54 — L'ÉVÉNEMENT VISÉ vit ici et non au garage : il ne touche pas la
           machine, il vise une SORTIE. « Désiré avant d'être réservé » : c'est
@@ -1066,6 +1093,21 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
           chose à montrer quand rien n'est encore réservé. */}
       <Evenements db={db} onEcrit={onEcrit} />
     </>
+  )
+}
+
+function SectionRoulages({ id, titre, vide, db, liste, onOuvrir, onModifier, onEcrit }: {
+  id: 'aujourdhui' | 'a-venir' | 'passes'; titre: string; vide: string; db: Db; liste: Liste
+  onOuvrir: (id: string) => void; onModifier: (id: string) => void; onEcrit: () => void
+}) {
+  return (
+    <section className="pile groupe-roulages" aria-labelledby={`roulages-${id}`}>
+      <h2 id={`roulages-${id}`} className="titre-section">{titre}</h2>
+      {liste.length ? liste.map((r) => (
+        <LigneRoulage key={r.id} db={db} r={r} onOuvrir={onOuvrir}
+                      onModifier={onModifier} onEcrit={onEcrit} />
+      )) : <p className="note">{vide}</p>}
+    </section>
   )
 }
 
@@ -1092,6 +1134,11 @@ function LigneRoulage({ db, r, onOuvrir, onModifier, onEcrit }: {
     await supprimerRoulage(db, r.id)
     onEcrit()
   })
+  const chronoAccessible = r.meilleur != null
+    ? `chrono ${formaterChrono(r.meilleur)}` : 'aucun chrono'
+  const crashAccessible = r.chutes > 0
+    ? r.chutes === 1 ? 'Crash documenté' : `${r.chutes} crashs documentés`
+    : r.crash_statut === 'aucun' ? 'Aucun crash déclaré' : 'Crash à renseigner'
 
   /* ⚠ LA PHRASE NOMME CE QUI EST LÀ. La suppression emporte aussi les gestes,
      la checklist et LES DÉPENSES DE LA JOURNÉE : promettre moins que ce qu'on
@@ -1104,6 +1151,7 @@ function LigneRoulage({ db, r, onOuvrir, onModifier, onEcrit }: {
     if (c.sessions) p.push(`${c.sessions} session${c.sessions > 1 ? 's' : ''} chronométrée${c.sessions > 1 ? 's' : ''}`)
     if (c.photos) p.push(`${c.photos} photo${c.photos > 1 ? 's' : ''}`)
     if (c.gestes) p.push(`${c.gestes} geste${c.gestes > 1 ? 's' : ''} déclaré${c.gestes > 1 ? 's' : ''}`)
+    if (c.chutes) p.push(`${c.chutes} crash${c.chutes > 1 ? 's' : ''} documenté${c.chutes > 1 ? 's' : ''}`)
     if (c.depenses) p.push(`${c.depenses} dépense${c.depenses > 1 ? 's' : ''} — ${formaterEuros(c.depenses_centimes)}`)
     if (c.checklist) p.push('sa checklist')
     if (!p.length) return ''
@@ -1111,12 +1159,20 @@ function LigneRoulage({ db, r, onOuvrir, onModifier, onEcrit }: {
   }
 
   return (
-    <div className="bloc pile ligne-glissante" data-ouvert={glisse.ouvert ? '1' : '0'}>
+    <div className="bloc pile ligne-glissante" data-ouvert={glisse.ouvert ? '1' : '0'}
+         data-roulage-id={r.id}>
       {/* ⚠ `touch-action: pan-y` VIT DANS LA FEUILLE, SUR CETTE CLASSE. Sans lui
           le navigateur ne sait pas qu'il garde le défilement vertical pour lui,
           et une liste qu'on fait défiler s'entrouvre sous le pouce. */}
       <div className="pile glissable" {...glisse.liaisons}
-           onClick={() => { if (!glisse.ouvert) onOuvrir(r.id) }}>
+           role="button" tabIndex={0}
+           aria-label={`Ouvrir ${r.circuit_nom}, ${r.date_jour}, ${chronoAccessible}, ${crashAccessible}`}
+           onClick={() => { if (!glisse.ouvert) onOuvrir(r.id) }}
+           onKeyDown={(e) => {
+             if (!glisse.ouvert && (e.key === 'Enter' || e.key === ' ')) {
+               e.preventDefault(); onOuvrir(r.id)
+             }
+           }}>
         <div className="rang">
           <span className="titre" style={{ fontSize: 20 }}>{r.circuit_nom}</span>
           <span className="libelle">{r.date_jour}</span>
@@ -1125,8 +1181,16 @@ function LigneRoulage({ db, r, onOuvrir, onModifier, onEcrit }: {
           <span className="hud-12 faible">
             {r.groupe_nom ?? '—'}{r.groupe_rang ? ` · ${r.groupe_rang}/${r.groupe_total}` : ''}
           </span>
-          <span className="chiffre hud-24 miami">
-            {r.meilleur != null ? formaterChrono(r.meilleur) : '—'}
+          <span className="rang ligne-roulage-resultats">
+            {r.chutes > 0 && (
+              <span className="marqueur-crash">
+                <Icone nom="impact" taille={14} />
+                {r.chutes === 1 ? 'Crash' : `${r.chutes} crashs`}
+              </span>
+            )}
+            <span className="chiffre hud-24 miami">
+              {r.meilleur != null ? formaterChrono(r.meilleur) : '—'}
+            </span>
           </span>
         </div>
       </div>

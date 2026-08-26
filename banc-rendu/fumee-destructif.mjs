@@ -192,6 +192,7 @@ await passer('compte')
 //    quatre DELETE au premier tap. Il n'est ni tapé ni approché — on le lit.
 //    C'est le second `.bouton.destructif` du parcours, et le seul du produit qui
 //    détruise d'un seul geste.
+await page.click('summary:has-text("Diagnostic et aide")')
 await page.click('.lien:has-text("Instruments et sonde")')
 await page.waitForSelector('text=Sonde 0.1 — instrument', { timeout: 20_000 })
 await passer('sonde')

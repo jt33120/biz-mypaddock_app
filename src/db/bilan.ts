@@ -74,7 +74,8 @@ export const bilanSaison = async (
                JOIN roulage r ON r.id = s.roulage_id
               WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}) AS meilleur,
             (SELECT count(*) FROM photo p JOIN roulage r ON r.id = p.roulage_id
-              WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}) AS photos,
+              WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}
+                AND p.etat != 'a_supprimer') AS photos,
             (SELECT count(*) FROM geste g JOIN roulage r ON r.id = g.roulage_id
               WHERE substr(r.date_jour, 1, 4) = ? AND ${A_EU_LIEU('r')}) AS gestes`,
     [a, jour, a, jour, a, jour, a, jour])

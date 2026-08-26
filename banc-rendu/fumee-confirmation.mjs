@@ -10,6 +10,10 @@ const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceSc
 const erreurs = []
 page.on('pageerror', e => erreurs.push('pageerror: ' + e.message))
 page.on('console', m => { if (m.type() === 'error') erreurs.push('console: ' + m.text()) })
+await page.addInitScript(() => {
+  for (const cle of Object.keys(localStorage))
+    if (cle.startsWith('sb-') && cle.endsWith('-auth-token')) localStorage.removeItem(cle)
+})
 
 // Supabase est injoignable depuis ce test : on coupe le réseau vers lui pour que
 // l'inscription échoue proprement et qu'on voie le message d'erreur réel.
@@ -28,12 +32,22 @@ const onglet = async (n) => {
   // instrument, pas un lieu du produit.
   await page.click('nav.barre .onglet:has-text("COMPTE")')
   await page.waitForSelector('section.compte', { timeout: 10_000 })
+  if ((await page.getAttribute('details.compte-diagnostic', 'open')) == null)
+    await page.click('summary:has-text("Diagnostic et aide")')
   return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
 
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
 await page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
 await onglet('COMPTE')
+const configure = await page.getAttribute('.compte-page', 'data-supabase-configure') === '1'
+if (!configure) {
+  console.log('SKIP confirmation — VITE_SUPABASE_URL/KEY absentes du paquet testé')
+  await nav.close()
+  sortir(erreurs)
+}
+if (await page.getAttribute('.compte-page', 'data-session') === '1')
+  throw new Error('La fixture anonyme a conservé une session Supabase.')
 await page.fill('#email', 'julian@exemple.fr')
 await page.fill('#mdp', 'motdepasse')
 await page.click('section.compte .bouton')

@@ -4,7 +4,7 @@ import { nouvelId } from '../db/ids'
 import { NOM_BASE, VFS_DEMANDE, opfsDisponible, ouvrirBase, vfsReel } from '../db/powersync'
 import { SEUIL_H, tableauDeBord, type Tableau } from '../db/mesures'
 import { capaciteLocale, inventaireDuCoffre } from '../db/coffre'
-import { TOUTES_JOURNEES } from '../db/vecu'
+import { aujourdhui, TOUTES_JOURNEES } from '../db/vecu'
 
 type Etat = { cle: string; val: string; ton?: 'oui' | 'non' | 'attente' }
 
@@ -115,7 +115,7 @@ export function Sonde({ db, onFermer }: { db: PowerSyncDatabase; onFermer: () =>
       // roulages sans circuit, que la contrainte serveur refuse, et une file
       // d'envoi bloquée derrière eux. La sonde écrit maintenant comme le produit.
       await db.execute(`INSERT INTO roulage (id, date_jour, circuit_nom) VALUES (?, ?, 'Sonde')`,
-        [r, new Date().toISOString().slice(0, 10)])
+        [r, aujourdhui()])
       await db.execute(`INSERT INTO session (id, roulage_id, ordre) VALUES (?, ?, 1)`, [s, r])
       for (let i = 0; i < 40; i++) {
         await db.execute(`INSERT INTO tour (id, session_id, temps_ms, provenance) VALUES (?, ?, ?, 'saisie_manuelle')`,

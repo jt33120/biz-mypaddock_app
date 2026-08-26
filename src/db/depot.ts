@@ -2,9 +2,10 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
 import { CIRCUITS_EMBARQUES } from './corpus'
-import { effacerLocale, nomLocal } from './photos'
+import { supprimerPhotosEnAttente } from './photos'
 import { A_EU_LIEU, aujourdhui, TOUTES_JOURNEES } from './vecu'
 import type { Poste } from './budget'
+import type { StatutCrash } from './chute'
 
 /** Toutes les lectures et écritures passent ici. Aucun écran n'écrit de SQL. */
 
@@ -16,6 +17,9 @@ export type Roulage = {
   groupe_rang: number | null
   groupe_total: number | null
   machine_id: string | null
+  /** Une qualification explicite : l'absence de chute enregistrée ne vaut
+   *  jamais « aucun crash » tant que le pilote ne l'a pas déclaré. */
+  crash_statut: StatutCrash
 }
 
 export type Machine = {
@@ -256,8 +260,8 @@ export const creerRoulage = async (
     // ceci ferme la source, et rend le masquage EXPLICITE au lieu d'inconnu.
     `INSERT INTO roulage
        (id, machine_id, date_jour, groupe_nom, groupe_rang, groupe_total, circuit_nom,
-        etat, chrono_visible)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'usage', 0)`,
+        etat, chrono_visible, crash_statut)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'usage', 0, 'a_renseigner')`,
     [id, machineId, r.date, r.groupeNom, r.rang, r.total, r.circuit],
   )
   await marquerSaisie(db)
@@ -283,22 +287,24 @@ export const creerRoulage = async (
  */
 export type ContenuDuRoulage = {
   sessions: number; photos: number; gestes: number
-  depenses: number; depenses_centimes: number; checklist: number
+  depenses: number; depenses_centimes: number; checklist: number; chutes: number
 }
 
 export const listerRoulages = (db: PowerSyncDatabase) =>
   db.getAll<Roulage & ContenuDuRoulage & { meilleur: number | null }>(
     `SELECT r.id, r.circuit_nom, r.date_jour, r.groupe_nom, r.groupe_rang,
-            r.groupe_total, r.machine_id,
+            r.groupe_total, r.machine_id, r.crash_statut,
             (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
                JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur,
             -- ⚠ CE QUE LA JOURNÉE EMPORTERAIT SI ON LA RETIRAIT, compté ICI et
             -- non au moment du tap. Une confirmation qui attend une requête
             -- pour s'afficher est une confirmation qu'on tape deux fois.
-            (SELECT count(*) FROM photo p WHERE p.roulage_id = r.id) AS photos,
+            (SELECT count(*) FROM photo p
+              WHERE p.roulage_id = r.id AND p.etat != 'a_supprimer') AS photos,
             (SELECT count(*) FROM geste g WHERE g.roulage_id = r.id) AS gestes,
             (SELECT count(*) FROM checklist_ligne c WHERE c.roulage_id = r.id) AS checklist,
+            (SELECT count(*) FROM chute c WHERE c.roulage_id = r.id) AS chutes,
             (SELECT count(*) FROM depense d
               WHERE d.cible = 'roulage' AND d.roulage_id = r.id) AS depenses,
             (SELECT coalesce(sum(d.montant_centimes), 0) FROM depense d
@@ -310,6 +316,21 @@ export const listerRoulages = (db: PowerSyncDatabase) =>
        FROM roulage r ${TOUTES_JOURNEES}
       ORDER BY r.date_jour DESC, r.id DESC`,
   )
+
+/** Trois temps, sans recouvrement. Le tri vit avec la donnée pour que l'accueil,
+ * les essais et tout futur lecteur ne réinventent pas « à venir » à l'envers. */
+export const classerRoulages = <T extends { id: string; date_jour: string }>(
+  liste: readonly T[], jour: string = aujourdhui(),
+) => {
+  const comparerAsc = (a: T, b: T) =>
+    a.date_jour.localeCompare(b.date_jour) || a.id.localeCompare(b.id)
+  const comparerDesc = (a: T, b: T) => -comparerAsc(a, b)
+  return {
+    aujourdhui: liste.filter((r) => r.date_jour === jour).sort(comparerDesc),
+    aVenir: liste.filter((r) => r.date_jour > jour).sort(comparerAsc),
+    passes: liste.filter((r) => r.date_jour < jour).sort(comparerDesc),
+  }
+}
 
 /**
  * RETIRER UNE JOURNÉE — et c'est la seule opération destructive que le pilote
@@ -328,32 +349,41 @@ export const listerRoulages = (db: PowerSyncDatabase) =>
  * Ce qu'elle NE touche pas, délibérément :
  *   · les dépenses de cible `machine` ou `saison` — elles ne désignent pas cette
  *     journée, et AD-7 fait des trois cibles des mondes séparés ;
- *   · les octets déjà partis au stockage objet. La ligne disparaît, la copie
- *     locale aussi ; l'objet distant devient orphelin et sera ramassé par
- *     l'effacement de compte, qui est le seul endroit qui parle au stockage.
+ *   · aucun octet n'est oublié : la métadonnée devient un tombstone détaché du
+ *     roulage, puis Storage et le coffre sont nettoyés maintenant ou à la
+ *     prochaine ouverture.
  */
 export const supprimerRoulage = async (db: PowerSyncDatabase, roulageId: string) => {
-  // Les photos d'abord, parce qu'elles ont un corps hors de la base : leur
-  // copie locale doit partir avec leur ligne, sinon le téléphone garde des
-  // octets que plus rien ne référence.
-  const ph = await db.getAll<{ id: string; chemin_objet: string }>(
-    `SELECT id, chemin_objet FROM photo WHERE roulage_id = ?`, [roulageId])
-  for (const p of ph) {
-    try { await effacerLocale(nomLocal(p)) } catch { /* déjà partie : rien à faire */ }
-  }
-
   await db.writeTransaction(async (tx) => {
+    // D'ABORD le chemin durable de reprise, détaché de tout porteur qui va
+    // disparaître. PowerSync rejoue ainsi le PATCH photo avant le DELETE du
+    // roulage ; `ON DELETE SET NULL` est le deuxième filet côté serveur.
+    await tx.execute(
+      `UPDATE photo
+          SET etat = 'a_supprimer', roulage_id = NULL, chute_id = NULL, geste_id = NULL
+        WHERE roulage_id = ?
+           OR chute_id IN (SELECT id FROM chute WHERE roulage_id = ?)
+           OR geste_id IN (SELECT id FROM geste WHERE roulage_id = ?)`,
+      [roulageId, roulageId, roulageId])
     await tx.execute(
       `DELETE FROM tour WHERE session_id IN (SELECT id FROM session WHERE roulage_id = ?)`,
       [roulageId])
     await tx.execute(`DELETE FROM session WHERE roulage_id = ?`, [roulageId])
-    await tx.execute(`DELETE FROM photo WHERE roulage_id = ?`, [roulageId])
+    // Une réparation est un fait de la machine et survit à la suppression de la
+    // journée ; seul son lien vers le crash disparaît.
+    await tx.execute(
+      `UPDATE intervention SET chute_id = NULL WHERE chute_id IN
+         (SELECT id FROM chute WHERE roulage_id = ?)`, [roulageId])
+    await tx.execute(`DELETE FROM chute WHERE roulage_id = ?`, [roulageId])
     await tx.execute(`DELETE FROM geste WHERE roulage_id = ?`, [roulageId])
     await tx.execute(`DELETE FROM checklist_ligne WHERE roulage_id = ?`, [roulageId])
     await tx.execute(
       `DELETE FROM depense WHERE cible = 'roulage' AND roulage_id = ?`, [roulageId])
     await tx.execute(`DELETE FROM roulage WHERE id = ?`, [roulageId])
   })
+  // La journée est déjà retirée : un échec Storage ou SQLite ne doit pas faire
+  // croire le contraire. Le tombstone gardé ci-dessus sera repris au montage.
+  try { await supprimerPhotosEnAttente(db) } catch { /* reprise différée */ }
 }
 
 /**
@@ -449,7 +479,8 @@ export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => 
             (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
                JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur,
-            ((SELECT count(*) FROM photo p WHERE p.roulage_id = r.id)
+            ((SELECT count(*) FROM photo p
+                WHERE p.roulage_id = r.id AND p.etat != 'a_supprimer')
            + (SELECT count(*) FROM geste g WHERE g.roulage_id = r.id)
            + (SELECT count(*) FROM chute c WHERE c.roulage_id = r.id)) AS mesures
        FROM roulage r ${TOUTES_JOURNEES} WHERE r.id = ?`, [roulageId])
@@ -593,7 +624,32 @@ export const poserBudget = async (db: PowerSyncDatabase, annee: number, centimes
 
 export const coutRoulage = async (db: PowerSyncDatabase, roulageId: string) => {
   const r = await db.getAll<{ total: number | null }>(
-    `SELECT sum(montant_centimes) AS total FROM depense WHERE cible = 'roulage' AND roulage_id = ?`, [roulageId])
+    `SELECT
+       (SELECT coalesce(sum(d.montant_centimes), 0)
+          FROM depense d
+         WHERE d.cible = 'roulage' AND d.roulage_id = ?)
+       +
+       -- Une réparation de crash reste une dépense de la MOTO, mais son coût
+       -- appartient aussi au constat de cette journée. EXISTS compte chaque
+       -- dépense une seule fois même si deux gestes la référencent.
+       (SELECT coalesce(sum(d.montant_centimes), 0)
+          FROM depense d
+         WHERE NOT (d.cible = 'roulage' AND d.roulage_id = ?)
+           AND EXISTS (
+             SELECT 1 FROM intervention i
+               JOIN chute c ON c.id = i.chute_id
+              WHERE i.depense_id = d.id AND i.etat = 'faite'
+                AND c.roulage_id = ?))
+       +
+       -- Un geste peut documenter un coût sans dépense (FR-43). Il entre ici
+       -- seulement lorsqu'aucune ligne de budget ne porte déjà cette somme.
+       (SELECT coalesce(sum(i.cout_centimes), 0)
+          FROM intervention i
+          JOIN chute c ON c.id = i.chute_id
+         WHERE c.roulage_id = ? AND i.etat = 'faite'
+           AND i.depense_id IS NULL)
+       AS total`,
+    [roulageId, roulageId, roulageId, roulageId])
   return r[0]?.total ?? 0
 }
 
@@ -623,10 +679,32 @@ export const listerDepenses = (db: PowerSyncDatabase, annee: number) =>
 export const normaliserEtats = async (db: PowerSyncDatabase): Promise<number> => {
   // Une REPRISE de base regarde toutes les lignes déjà écrites : c'est son
   // objet même, et une journée à venir doit être normalisée comme une autre.
+  // Elle qualifie aussi le crash sans jamais inventer « aucun » : une chute
+  // existante est documentée ; tout autre état ancien ou incohérent redevient
+  // explicitement « à renseigner ».
   const r = await db.get<{ n: number }>(
-    `SELECT count(*) AS n FROM roulage ${TOUTES_JOURNEES} WHERE etat IS NULL OR etat = ''`)
+    `SELECT count(*) AS n FROM roulage r ${TOUTES_JOURNEES}
+      WHERE r.etat IS NULL OR r.etat = ''
+         OR r.crash_statut IS NULL
+         OR r.crash_statut NOT IN ('a_renseigner', 'aucun', 'documente')
+         OR (r.crash_statut = 'documente' AND NOT EXISTS
+              (SELECT 1 FROM chute c WHERE c.roulage_id = r.id))
+         OR (r.crash_statut != 'documente' AND EXISTS
+              (SELECT 1 FROM chute c WHERE c.roulage_id = r.id))`)
   if (!r.n) return 0
-  await db.execute(`UPDATE roulage SET etat = 'usage' WHERE etat IS NULL OR etat = ''`)
+  await db.writeTransaction(async (tx) => {
+    await tx.execute(`UPDATE roulage SET etat = 'usage' WHERE etat IS NULL OR etat = ''`)
+    await tx.execute(
+      `UPDATE roulage SET crash_statut = 'a_renseigner'
+        WHERE crash_statut IS NULL
+           OR crash_statut NOT IN ('a_renseigner', 'aucun', 'documente')
+           OR (crash_statut = 'documente' AND NOT EXISTS
+                (SELECT 1 FROM chute c WHERE c.roulage_id = roulage.id))`)
+    await tx.execute(
+      `UPDATE roulage SET crash_statut = 'documente'
+        WHERE crash_statut != 'documente' AND EXISTS
+          (SELECT 1 FROM chute c WHERE c.roulage_id = roulage.id)`)
+  })
   return r.n
 }
 

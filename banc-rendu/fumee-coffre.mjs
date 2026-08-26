@@ -34,6 +34,15 @@ page.on('pageerror', e => erreurs.push('pageerror: ' + e.message))
 await page.addInitScript(() => {
   // Exactement l'état d'un iPhone sous iOS 18 : l'objet existe, la méthode non.
   Reflect.deleteProperty(FileSystemFileHandle.prototype, 'createWritable')
+  // La session est créée plus bas par la vraie bibliothèque contre une route
+  // simulée. Une session résiduelle rendrait cette fixture non déterministe.
+  for (const cle of Object.keys(localStorage))
+    if (cle.startsWith('sb-') && cle.endsWith('-auth-token')) localStorage.removeItem(cle)
+  // Ce banc éprouve le coffre LOCAL et fabrique plus bas un JWT sans signature
+  // uniquement pour atteindre l'effacement du compte. Ne pas laisser cette
+  // fausse session déclencher un upload Storage réel : le réglage produit est
+  // utilisé tel quel, tandis que toute autre erreur console reste bloquante.
+  localStorage.setItem('mypaddock.envoi-cloud', '0')
 })
 
 /* ─── LE COMPTE, SANS SERVEUR ──────────────────────────────────────────────
@@ -81,6 +90,8 @@ const onglet = async (n) => {
   // La SONDE s'atteint depuis le compte : c'est un instrument, pas un lieu.
   await page.click('nav.barre .onglet:has-text("COMPTE")')
   await page.waitForSelector('section.compte', { timeout: 10_000 })
+  if ((await page.getAttribute('details.compte-diagnostic', 'open')) == null)
+    await page.click('summary:has-text("Diagnostic et aide")')
   return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
 
@@ -237,6 +248,14 @@ console.log('   l\'inventaire dit bien IndexedDB :',
    C'est ici que le bloquant se voyait : « Il ne reste rien … 0 fichier de
    photo » pendant que la photo de ① était toujours dans IndexedDB. */
 await onglet('COMPTE')
+const configure = await page.getAttribute('.compte-page', 'data-supabase-configure') === '1'
+if (!configure) {
+  console.log('④–⑤ SKIP effacement serveur — VITE_SUPABASE_URL/KEY absentes du paquet testé')
+  await nav.close()
+  sortir(erreurs)
+}
+if (await page.getAttribute('.compte-page', 'data-session') === '1')
+  throw new Error('La fixture anonyme a conservé une session Supabase.')
 await page.fill('#email', 'julian@exemple.fr')
 await page.fill('#mdp', 'motdepasse')
 await page.click('section.compte .bouton')

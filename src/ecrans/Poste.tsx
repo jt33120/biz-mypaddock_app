@@ -14,6 +14,7 @@ import {
 } from '../db/documents'
 import { Usure } from './Usure'
 import { useGeste } from './geste'
+import { aujourdhui } from '../db/vecu'
 
 /**
  * UN POSTE D'ATELIER, EN PAGE ENTIÈRE — retour de Julian du 19 août 2026.
@@ -40,8 +41,6 @@ import { useGeste } from './geste'
  * poser un bloc « bientôt » serait une promesse que l'écran ne tient pas. C'est
  * porté dans A-FAIRE.md comme une décision qui t'appartient.
  */
-
-const aujourdhui = () => new Date().toISOString().slice(0, 10)
 
 export function Poste({ db, machine, categorie, onFermer, onEcrit }: {
   db: PowerSyncDatabase

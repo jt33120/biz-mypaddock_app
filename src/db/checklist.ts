@@ -219,10 +219,12 @@ export const ajouter = async (
   // de conformité ferait exister une règle sans source — exactement ce que la
   // contrainte serveur interdit, et pour la même raison.
   const c: Categorie = categorie === 'conformite' ? 'machine' : categorie
+  const id = nouvelId()
   await db.execute(
     `INSERT INTO checklist_ligne (id, roulage_id, libelle, categorie, cochee)
-     VALUES (?, ?, ?, ?, 0)`, [nouvelId(), roulageId, libelle.trim(), c])
+     VALUES (?, ?, ?, ?, 0)`, [id, roulageId, libelle.trim(), c])
   await marquerSaisie(db)
+  return id
 }
 
 export const retirer = (db: PowerSyncDatabase, id: string) =>

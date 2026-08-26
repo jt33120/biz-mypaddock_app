@@ -1,10 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
-import {
-  coutAtelier, interventions, NOM_CATEGORIE, SOUS_TITRE,
-  type Categorie, type Intervention,
-} from '../db/atelier'
-import { formaterEuros } from '../db/depot'
+import { NOM_CATEGORIE, type Categorie } from '../db/atelier'
 import { Icone, type Nom } from './Icones'
 
 /**
@@ -55,57 +50,24 @@ const TRACE: Record<Categorie, Nom> = {
 export function Atelier({ db, machineId, onOuvrir }: {
   db: PowerSyncDatabase; machineId: string; onOuvrir: (c: Categorie) => void
 }) {
+  // Le sommaire n'a rien à charger : chiffres et descriptions vivent dans la
+  // page du carnet ouverte. Garder les props rend son contrat stable dans le
+  // Garage, sans payer trois requêtes pour trois raccourcis.
+  void db
+  void machineId
   return (
     <>
       <p className="libelle">atelier</p>
-      {(Object.keys(NOM_CATEGORIE) as Categorie[]).map((c) => (
-        <Apercu key={c} db={db} machineId={machineId} categorie={c}
-                onOuvrir={() => onOuvrir(c)} />
-      ))}
+      <div className="atelier-raccourcis">
+        {(Object.keys(NOM_CATEGORIE) as Categorie[]).map((c) => (
+          <button key={c} type="button"
+                  className={`bloc atelier atelier-raccourci ${c}`}
+                  onClick={() => onOuvrir(c)}>
+            <Icone nom={TRACE[c]} taille={24} className="icone-atelier" />
+            <span className="libelle">{NOM_CATEGORIE[c]}</span>
+          </button>
+        ))}
+      </div>
     </>
-  )
-}
-
-function Apercu({ db, machineId, categorie, onOuvrir }: {
-  db: PowerSyncDatabase; machineId: string; categorie: Categorie; onOuvrir: () => void
-}) {
-  const [liste, setListe] = useState<Intervention[]>([])
-  const [cout, setCout] = useState(0)
-
-  const charger = useCallback(async () => {
-    setListe(await interventions(db, machineId, categorie))
-    setCout(await coutAtelier(db, machineId, categorie))
-  }, [db, machineId, categorie])
-  useEffect(() => { void charger() }, [charger])
-
-  const attendent = liste.filter((i) => i.etat === 'visee').length
-  const faites = liste.filter((i) => i.etat === 'faite').length
-
-  return (
-    <button className={`bloc rang atelier atelier-tete ${categorie}`} onClick={onOuvrir}>
-      {/* Le tracé D'ABORD, puis le mot. L'un se reconnaît de loin, l'autre
-          fait foi : `aria-hidden` sur l'icône, parce que le libellé qui suit dit
-          déjà la même chose et qu'un lecteur d'écran l'annoncerait deux fois. */}
-      <Icone nom={TRACE[categorie]} taille={22} className="icone-atelier" />
-      {/* ⚠ CHAQUE CATÉGORIE PORTE SA DÉFINITION. « Je n'ai pas compris, pas
-          clair ce que fait ce bouton » — et le défaut n'était pas le mot mais
-          l'absence de définition : trois titres nus obligent à deviner, et ce
-          qu'on devine mal on le range mal. FR-46 n'est une clause de sécurité
-          que si le rangement est évident au premier coup d'œil. */}
-      <span className="pile" style={{ gap: 1 }}>
-        <span className="libelle">{NOM_CATEGORIE[categorie]}</span>
-        <span className="sous-titre">{SOUS_TITRE[categorie]}</span>
-      </span>
-      <span className="libelle faible">
-        {/* Le tiret ne dit « rien ici » que lorsqu'il n'y a VRAIMENT rien.
-            « 1 en attente · — » se lisait comme un manque là où il y avait
-            déjà quelque chose. */}
-        {attendent ? `${attendent} en attente` : ''}
-        {attendent && faites ? ' · ' : ''}
-        {faites ? `${faites} consigné${faites > 1 ? 's' : ''}` : ''}
-        {!attendent && !faites ? '—' : ''}
-        {cout ? ` · ${formaterEuros(cout)}` : ''}
-      </span>
-    </button>
   )
 }

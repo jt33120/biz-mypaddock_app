@@ -14,10 +14,11 @@ import { Barres, type Barre } from './Barres'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import {
-  anneeSaison, budgetDeclare, enCentimes, formaterEuros, listerMachines, type Cible,
+  anneeSaison, budgetDeclare, enCentimes, formaterEuros, type Cible,
 } from '../db/depot'
 import { useGeste } from './geste'
 import { Refaire } from './Refaire'
+import { aujourdhui } from '../db/vecu'
 
 /**
  * LE BUDGET ET L'ÉQUIPEMENT — deux modules demandés par Julian, dans le garage.
@@ -40,16 +41,7 @@ import { Refaire } from './Refaire'
  *     un compteur à rebours sur de l'argent produit exactement ce qu'il prétend
  *     éviter : on cesse de saisir pour ne plus le voir descendre.
  */
-/* ⚠ LE JOUR EST CELUI D'UTC, ET C'EST LA CONVENTION DE TOUT LE PRODUIT
-   (`vecu.ts:32`, `Depense.tsx`, `Usure.tsx`, `Poste.tsx` — six endroits, tous
-   pareils). Conséquence, maintenant que le mois compte : une dépense notée à
-   00 h 30 à Paris le 1er septembre porte le 31 août, donc tombe dans le mois
-   précédent. C'est SU et laissé tel quel, pas ignoré — le corriger ici seulement
-   ferait vivre deux horloges dans le produit, et le jour d'une dépense ne se
-   comparerait plus au jour d'un roulage. Le jour où on le corrige, on le corrige
-   partout, en un seul geste, avec sa propre garde. */
-const aujourdhui = () => new Date().toISOString().slice(0, 10)
-const ceMois = () => new Date().toISOString().slice(0, 7)
+const ceMois = () => aujourdhui().slice(0, 7)
 
 export function Budget({ db, annee, machineId, onEcrit }: {
   db: PowerSyncDatabase
@@ -362,86 +354,13 @@ function Ajouter({ db, poste, machineId, annee, onFini, onAnnuler }: {
  * jamais « tu n'as rien saisi ce mois-ci ». Un raccourci qui rappelle son
  * existence est une relance, et le produit n'en fait pas.
  */
-export function NoterUneDepense({ db, onEcrit }: {
-  db: PowerSyncDatabase; onEcrit: () => void
-}) {
-  const [ouvert, setOuvert] = useState(false)
-  const [poste, setPoste] = useState<Poste | null>(null)
-  /** Ce qui vient d'être noté, dit une fois. Ce n'est pas une félicitation ni un
-   *  compteur : c'est l'accusé de réception d'un geste, et il dit OÙ la ligne est
-   *  partie — sinon le pilote la croit perdue et la ressaisit au garage. */
-  const [note, setNote] = useState<string | null>(null)
-  /** La seule moto, s'il n'y en a qu'une : elle rend la cible « sur la moto »
-   *  atteignable depuis l'accueil pour des pneus ou un entretien. À plusieurs
-   *  motos on ne choisit PAS à la place du pilote — la dépense part sur la
-   *  saison, ce qui est une cible pleine et vraie, et le garage reste l'endroit
-   *  où l'on désigne une machine précise. */
-  const [machineSeule, setMachineSeule] = useState<string | null>(null)
-  const [plusieurs, setPlusieurs] = useState(false)
-
-  // Rien n'est lu tant que le raccourci est replié : l'accueil ne paie pas une
-  // requête pour un lien que personne n'a touché.
-  useEffect(() => {
-    if (!ouvert) return
-    void listerMachines(db).then((m) => {
-      setMachineSeule(m.length === 1 ? m[0].id : null)
-      setPlusieurs(m.length > 1)
-    })
-  }, [db, ouvert])
-
-  if (!ouvert) {
-    return (
-      <div className="pile raccourci-depense">
-        {/* Le « + » est le seul signe qu'il porte, et c'est délibéré : il dit
-            qu'on AJOUTE quelque chose, là où un lien nu se lit comme un réglage
-            — celui qui le précède, « changer ces chiffres », en est un. Aucune
-            pastille, aucun compteur : la différence entre une action offerte et
-            une action réclamée tient à ça. */}
-        <button className="lien" onClick={() => { setOuvert(true); setNote(null) }}>
-          + Noter une dépense
-        </button>
-        {note && <p className="note">{note}</p>}
-      </div>
-    )
-  }
-
+export function NoterUneDepense({ onOuvrir }: { onOuvrir: () => void }) {
   return (
-    <div className="bloc pile raccourci-depense">
-      <span className="libelle">Noter une dépense</span>
-      {poste == null ? (
-        <>
-          <span className="sous-titre">de quoi il s'agit</span>
-          <div className="puces">
-            {POSTES.map((p) => (
-              <button key={p} className="puce" data-actif="0"
-                      onClick={() => setPoste(p)}>{NOM_POSTE[p].toUpperCase()}</button>
-            ))}
-          </div>
-          <button className="lien" onClick={() => setOuvert(false)}>Annuler</button>
-        </>
-      ) : (
-        <>
-          <span className="sous-titre">{NOM_POSTE[poste]}</span>
-          {plusieurs && (
-            <p className="note">
-              Elle est notée sur la saison. Pour la rattacher à une moto précise, ça se
-              passe au garage.
-            </p>
-          )}
-          {/* ⚠ LA MÊME ANNÉE QUE LE GARAGE, sinon la phrase de fin ment. Le
-              garage lit toujours `anneeSaison(maintenant)` (Garage.tsx) : si ce
-              raccourci laissait dater une dépense ailleurs, « le détail vit au
-              garage » désignerait un écran qui ne la contient pas. */}
-          <Ajouter db={db} poste={poste} machineId={machineSeule}
-                   annee={anneeSaison(new Date().toISOString())}
-                   onFini={(centimes) => {
-                     setNote(`Noté · ${formaterEuros(centimes)} sur ${NOM_POSTE[poste].toLowerCase()}.`
-                       + ' Le détail vit au garage, dans le budget.')
-                     setPoste(null); setOuvert(false); onEcrit()
-                   }}
-                   onAnnuler={() => setPoste(null)} />
-        </>
-      )}
+    <div className="raccourci-depense">
+      <button type="button" className="bouton secondaire action-depense" onClick={onOuvrir}>
+        <Icone nom="portefeuille" taille={18} />
+        Noter une dépense
+      </button>
     </div>
   )
 }

@@ -101,6 +101,9 @@ const roulage = new Table({
   // qu'on a roulé. usage = confirmé. Un roulage saisi à la main naît en usage,
   // et les quatre mots de la frontière ne remontent JAMAIS à l'écran.
   etat: column.text,
+  /** `a_renseigner` n'est pas un faux négatif : aucune chute consignée ne
+   *  prouve jamais qu'il n'y en a pas eu. Seul le pilote pose `aucun`. */
+  crash_statut: column.text,
 })
 
 // ─── Session et tours ─────────────────────────────────────────────────────

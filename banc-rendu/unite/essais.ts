@@ -11,14 +11,24 @@
  * pas de doublure, pas de transpilation parallèle, pas de module réécrit pour
  * les besoins de l'essai. Ce qui est éprouvé ici est exactement ce qui part.
  */
-import { anneeSaison, enCentimes, formaterChrono, formaterEcart, formaterEuros } from '../../src/db/depot'
+import { UpdateType } from '@powersync/web'
+import {
+  anneeSaison, classerRoulages, coutDuRoulage, creerDepense, enCentimes, formaterChrono,
+  formaterEcart, formaterEuros, supprimerRoulage,
+} from '../../src/db/depot'
 import {
   grouperParMois, jaugeBudget, jourDansLAnnee, moisDuJour, repereMensuel,
 } from '../../src/db/budget'
-import { instantDeLId, SEUIL_H } from '../../src/db/mesures'
+import { accepterMesures, instantDeLId, ouverture, SEUIL_H } from '../../src/db/mesures'
 import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
 import { formaterPoids, TABLES_EMPORTEES } from '../../src/db/emporter'
-import { dimensions } from '../../src/db/photos'
+import {
+  dimensions, nomLocal, oublierPhoto, supprimerPhotosEnAttente, surRetourDeReseau,
+  televerserEnAttente, verserEnSerie,
+} from '../../src/db/photos'
+import {
+  consignerChute, consignerReparationDeChute, declarerAucunCrash, oublierChute,
+} from '../../src/db/chute'
 import {
   capaciteLocale, ecrireLocale, effacerLocale, eprouverLeCoffre, fermerLaConnexionDuCoffre,
   lireLocale, nomsBrutsDuCoffre, nomsDuCoffre, oublierLeMagasin, viderLeCoffre,
@@ -28,6 +38,9 @@ import {
   avecLesDefauts, chargeDe, DEFAUTS_SERVEUR, DEPENDANCES, direCombien, LIEN_DIFFERE, NOM_TABLE,
   ORDRE, PORTE_PROPRIETAIRE,
 } from '../../src/db/sauvegarde'
+import { envoyerTransaction } from '../../src/db/connecteur'
+import { ecrirePuisRelire } from '../../src/ecrans/geste'
+import { ecrireDepenseUneFois } from '../../src/ecrans/ecriture-depense'
 // Toutes les migrations telles qu'elles sont appliquées. Comme le YAML de
 // synchronisation : rien ne les relie au schéma local, et c'est le problème.
 const MIGRATIONS = import.meta.glob('../../supabase/migrations/*.sql',
@@ -39,7 +52,7 @@ import REGLES_DE_SYNCHRO from '../../powersync/sync-config.yaml?raw'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
-import { sePrepare } from '../../src/db/vecu'
+import { dateCivileLocale, sePrepare } from '../../src/db/vecu'
 import { direLaCompletude, memeTache } from '../../src/db/preparation'
 import { chemins, dessins, GRILLE } from '../../src/ecrans/dessins'
 // Ce que le dépôt SERT tel quel.  — bluesky, discord, github,
@@ -298,6 +311,63 @@ const essais = [
     egal(formaterEuros(20000), '200 €')
     vrai(formaterEuros(24550).startsWith('245,50'), `obtenu ${formaterEuros(24550)}`)
     egal(formaterEuros(0), '0 €'); egal(formaterEuros(5), '0,05 €')
+  }),
+  doit('une dépense écrite mais non relue ne peut jamais être saisie deux fois', async () => {
+    const verrou = { enregistree: false, enVol: false }
+    let ecritures = 0
+    const premier = await ecrireDepenseUneFois(
+      verrou,
+      async () => { ecritures++ },
+      async () => { throw new Error('la relecture a refusé') },
+    )
+    egal(premier, 'a_relire', "une écriture durable est présentée comme un échec d'écriture")
+    egal(ecritures, 1, "la première validation n'a pas écrit exactement une fois")
+    const second = await ecrireDepenseUneFois(
+      verrou,
+      async () => { ecritures++ },
+      async () => undefined,
+    )
+    egal(second, 'ignoree', 'le verrou durable a été réarmé après la relecture refusée')
+    egal(ecritures, 1, 'le second tap a dupliqué la dépense')
+
+    const source = sansCommentaires(
+      Object.entries(ECRANS).find(([fichier]) => fichier.endsWith('/Depense.tsx'))?.[1] ?? '')
+    vrai(/data-enregistree="1"/.test(source),
+      "l'écran ne matérialise pas l'état enregistré après une relecture refusée")
+    vrai(/Relire le total/.test(source),
+      "l'écran ne propose aucun geste sûr pour reprendre la relecture")
+
+    // Même preuve sur le véritable écrivain : la ligne métier réussit, puis la
+    // sonde auxiliaire refuse. Ce rejet ne doit ni réarmer ni doubler l'INSERT.
+    const consentement = localStorage.getItem('mypaddock.mesures')
+    let insertsDepense = 0
+    const db = {
+      execute: async (sql: string) => {
+        if (/INSERT INTO depense/.test(sql)) insertsDepense++
+        if (/UPDATE mesure/.test(sql)) throw new Error('sonde refusée')
+        return {}
+      },
+    } as any
+    const verrouReel = { enregistree: false, enVol: false }
+    try {
+      accepterMesures(true)
+      await ouverture(db)
+      const ecrire = () => creerDepense(db, {
+        cible: 'saison', roulageId: null, machineId: null, centimes: 1234,
+        libelle: 'Essence', date: '2026-08-26', poste: 'essence',
+      })
+      egal(await ecrireDepenseUneFois(
+        verrouReel, ecrire, async () => { throw new Error('relecture refusée') }), 'a_relire')
+      egal(await ecrireDepenseUneFois(verrouReel, ecrire, async () => undefined), 'ignoree')
+      egal(insertsDepense, 1,
+        'le rejet de la mesure auxiliaire a fait saisir deux fois la dépense')
+    } finally {
+      // Remet aussi l'état module à « aucune ouverture », sans écrire de ligne.
+      accepterMesures(false)
+      await ouverture(db)
+      if (consentement == null) localStorage.removeItem('mypaddock.mesures')
+      else localStorage.setItem('mypaddock.mesures', consentement)
+    }
   }),
 
   /* ─── L'ARGENT AU MOIS — épique 19 ─────────────────────────────────────
@@ -690,6 +760,29 @@ const essais = [
     }
   }),
 
+  doit('la publication PowerSync porte toutes les tables ajoutées après son origine', () => {
+    const entree = Object.entries(MIGRATIONS)
+      .find(([nom]) => nom.includes('powersync_publie_toutes_les_tables'))
+    vrai(!!entree, 'la reprise de publication PowerSync est introuvable')
+    const sql = entree![1]
+    const bloc = sql.match(/foreach\s+nom_table\s+in\s+array\s+array\[([\s\S]*?)\]/i)
+    vrai(!!bloc, 'la liste idempotente des tables publiées est introuvable')
+    const publiees = [...bloc![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort()
+    const attendues = [
+      'evenement_vise', 'horloge', 'checklist_ligne', 'equipement', 'chute',
+      'document', 'generation', 'virage', 'coefficient_usure', 'regle_organisateur',
+    ].sort()
+    egal(publiees, attendues, 'la reprise ne publie pas la liste convenue')
+    vrai(/from\s+pg_publication_tables/i.test(sql),
+      'la migration ne regarde pas la publication réelle')
+    vrai(/pubname\s*=\s*'powersync'/i.test(sql),
+      'la migration pourrait modifier une autre publication')
+    vrai(/and\s+not\s+exists/i.test(sql),
+      'la migration réajoute des tables déjà publiées et ne peut pas être rejouée')
+    vrai(/execute\s+format\('alter publication powersync add table public\.%I'/i.test(sql),
+      'la migration ne réalise aucun ajout à la publication')
+  }),
+
   // L'inventaire de l'effacement se lit sur le seul écran du produit qui n'a pas
   // de corbeille. Une table sans nom s'y affichait en nom de schéma — et un
   // inventaire qu'on ne comprend pas ne pèse rien dans la décision.
@@ -771,6 +864,641 @@ const essais = [
   // pire qu'un filet troué : on ne va pas chercher ailleurs ce qu'on croit tenir.
   doit("l'emport sort exactement ce que la sauvegarde envoie", () => {
     egal([...TABLES_EMPORTEES], [...ORDRE])
+  }),
+
+  /* ─── LE CRASH — UN ÉTAT EXPLICITE, JAMAIS DÉDUIT DU SILENCE ─────────── */
+  doit('une écriture réussie suivie d’une relecture refusée ne se rejoue pas', async () => {
+    let insertions = 0, relectures = 0
+    const resultat = await ecrirePuisRelire(
+      async () => { insertions++; return 'crash-1' },
+      async () => { relectures++; throw new Error('lecture SQLite refusée') },
+    )
+    egal(resultat, { valeur: 'crash-1', relue: false })
+    egal(insertions, 1, 'le crash a été inséré une seconde fois après l’échec de lecture')
+    egal(relectures, 1, 'la relecture refusée a été masquée')
+  }),
+
+  doit('une nouvelle action crash efface toute erreur contextuelle précédente', () => {
+    const geste = Object.entries(SOURCES)
+      .find(([nom]) => nom.endsWith('/ecrans/geste.ts'))?.[1] ?? ''
+    const chute = Object.entries(ECRANS)
+      .find(([nom]) => nom.endsWith('/ecrans/Chute.tsx'))?.[1] ?? ''
+    const racine = chute.slice(chute.indexOf('export function Chutes'), chute.indexOf('function UneChute'))
+    vrai(/surErreur\?\.\(null\)/.test(geste),
+      'lancer une autre action ne vide pas le canal d’erreur partagé')
+    vrai(/const \[erreur, setErreur\] = useState/.test(racine),
+      'les actions de statut gardent des erreurs indépendantes et périmées')
+    vrai((racine.match(/Réessaie\.', setErreur\)/g) ?? []).length === 3,
+      'documenter, déclarer aucun et remettre à renseigner ne partagent pas le même canal')
+  }),
+
+  doit('consigner un crash qualifie le roulage dans la même transaction', async () => {
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    const tx = {
+      getOptional: async () => ({ id: 'r1' }),
+      execute: async (sql: string, params: unknown[] = []) => {
+        ecrites.push({ sql, params }); return {}
+      },
+    }
+    const db = {
+      writeTransaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+      execute: async () => ({}),
+    } as any
+    await consignerChute(db, { roulageId: 'r1', endroit: 'virage 3' })
+    egal(ecrites.length, 2, 'le crash et sa qualification ne sont pas un seul geste')
+    vrai(/INSERT INTO chute/.test(ecrites[0].sql), 'la chute ne naît pas en premier')
+    vrai(/crash_statut = 'documente'/.test(ecrites[1].sql),
+      'le roulage reste dans un état inconnu après la chute')
+  }),
+
+  doit('« aucun crash » est refusé dès qu\'une chute existe', async () => {
+    let ecrit = false
+    const tx = {
+      getOptional: async () => ({ id: 'r1' }),
+      get: async () => ({ n: 1 }),
+      execute: async () => { ecrit = true; return {} },
+    }
+    const db = {
+      writeTransaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+      execute: async () => ({}),
+    } as any
+    let refuse = false
+    try { await declarerAucunCrash(db, 'r1') } catch { refuse = true }
+    vrai(refuse, 'une journée avec chute a accepté « aucun crash »')
+    vrai(!ecrit, 'le statut a été modifié malgré le refus')
+  }),
+
+  doit('retirer la dernière chute remet le roulage à renseigner, jamais à aucun', async () => {
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    const tx = {
+      getOptional: async () => ({ roulage_id: 'r1' }),
+      get: async () => ({ n: 0 }),
+      execute: async (sql: string, params: unknown[] = []) => {
+        ecrites.push({ sql, params }); return {}
+      },
+    }
+    const db = {
+      writeTransaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+      execute: async () => ({}),
+    } as any
+    await oublierChute(db, 'c1')
+    vrai(ecrites.some((e) => /UPDATE photo SET chute_id = NULL/.test(e.sql)),
+      "retirer le récit a détruit le lien nécessaire à l'album de la journée")
+    vrai(!ecrites.some((e) => /DELETE FROM photo/.test(e.sql)),
+      'retirer le récit a détruit sa photo')
+    const statut = ecrites.find((e) => /UPDATE roulage SET crash_statut/.test(e.sql))
+    vrai(!!statut, 'le roulage ne change pas de qualification')
+    egal(statut!.params, ['a_renseigner', 'r1'])
+  }),
+
+  doit('une réparation de crash crée une dépense et une intervention liées exactement une fois', async () => {
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    const tx = {
+      getOptional: async () => ({ machine_id: 'm1' }),
+      execute: async (sql: string, params: unknown[] = []) => {
+        ecrites.push({ sql, params }); return {}
+      },
+    }
+    const db = {
+      writeTransaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+      execute: async () => ({}),
+    } as any
+    await consignerReparationDeChute(db, {
+      chuteId: 'c1', machineId: 'm1', libelle: 'Levier remplacé',
+      categorie: 'entretien', date: '2026-08-26', centimes: 12750,
+    })
+    egal(ecrites.length, 2, 'une ligne inattendue double le coût')
+    vrai(/INSERT INTO depense/.test(ecrites[0].sql), 'la dépense manque')
+    vrai(/INSERT INTO intervention/.test(ecrites[1].sql), 'la réparation manque')
+    egal(ecrites[0].params[0], ecrites[1].params[7],
+      "l'intervention ne référence pas l'unique dépense créée")
+    egal(ecrites[0].params[3], 12750, 'la dépense a perdu le coût')
+    egal(ecrites[1].params[3], 'entretien', 'la catégorie choisie a été remplacée')
+    egal(ecrites[1].params[6], 12750, 'la réparation a perdu le coût documenté')
+    const depot = Object.entries(SOURCES)
+      .find(([nom]) => nom.endsWith('/db/depot.ts'))?.[1] ?? ''
+    const debut = depot.indexOf('export const coutMachine')
+    const coutMachine = depot.slice(debut, depot.indexOf('\nexport ', debut + 20))
+    vrai(/depense_id IS NULL/i.test(coutMachine),
+      'le coût machine additionne la dépense et son intervention une seconde fois')
+  }),
+
+  doit('une réparation de crash refuse une catégorie inventée avant toute écriture', async () => {
+    let transaction = false
+    const db = {
+      writeTransaction: async () => { transaction = true },
+      execute: async () => ({}),
+    } as any
+    let refusee = false
+    try {
+      await consignerReparationDeChute(db, {
+        chuteId: 'c1', machineId: 'm1', libelle: 'Levier remplacé',
+        categorie: 'cosmetique' as any, date: '2026-08-26', centimes: 12750,
+      })
+    } catch { refusee = true }
+    vrai(refusee, 'une catégorie hors métier a été écrite')
+    vrai(!transaction, 'la validation de catégorie arrive après les écritures')
+  }),
+
+  doit('une réparation de 123,45 € compte une fois dans la journée et la saison', async () => {
+    const db = {
+      getAll: async (sql: string) => {
+        if (/JOIN chute/.test(sql)) return [{ total: 20_000 + 12_345 }]
+        if (/FROM depense WHERE saison_annee/.test(sql)) return [{ total: 50_000 + 12_345 }]
+        throw new Error(`requête inattendue: ${sql}`)
+      },
+      get: async (sql: string) => /FROM tour/.test(sql)
+        ? { n: 2 }
+        : { montant_centimes: 100_000 },
+    } as any
+    const cout = await coutDuRoulage(db, 'r1', 2026)
+    egal(cout.journeeCentimes, 32_345,
+      "la réparation machine n'entre pas exactement une fois dans la journée")
+    egal(cout.consommeCentimes, 62_345,
+      "la réparation n'entre pas exactement une fois dans la saison")
+
+    const depot = sansCommentaires(
+      Object.entries(SOURCES).find(([nom]) => nom.endsWith('/db/depot.ts'))?.[1] ?? '')
+    const debut = depot.indexOf('export const coutRoulage')
+    const requete = depot.slice(debut, depot.indexOf('\nexport ', debut + 20))
+    vrai(/JOIN chute/.test(requete) && /i\.depense_id = d\.id/.test(requete),
+      'le coût journée ne rattache pas la dépense machine à son crash')
+    vrai(/NOT \(d\.cible = 'roulage' AND d\.roulage_id = \?\)/.test(requete),
+      'une dépense déjà ciblée journée est recomptée par la réparation')
+    vrai(/i\.depense_id IS NULL/.test(requete),
+      'un coût de réparation sans dépense a disparu de la journée')
+    const saison = depot.slice(depot.indexOf('export const depenseSaison'), debut)
+    vrai(!/JOIN intervention|JOIN chute/.test(saison),
+      'la saison recompte la réparation en plus de son unique dépense')
+  }),
+
+  doit('une relecture refusée après photo écrite ne fabrique ni échec ni réupload', async () => {
+    let versements = 0, retards = 0
+    const echecs = await verserEnSerie(
+      [{ name: 'crash.webp' }],
+      async () => { versements++; return { id: 'p1' } },
+      async () => { throw new Error('écran indisponible') },
+      async () => { retards++ },
+    )
+    egal(versements, 1, 'le callback de rendu a relancé le versement')
+    egal(echecs, [], 'une photo déjà écrite est annoncée comme ratée')
+    egal(retards, 1, "l'UI ne peut pas dire que seule sa relecture a échoué")
+  }),
+
+  doit('une photo de crash garde sa journée et redescend sur un second appareil', () => {
+    const source = sansCommentaires(
+      Object.entries(SOURCES).find(([nom]) => nom.endsWith('/db/photos.ts'))?.[1] ?? '')
+    const debut = source.indexOf('export const verserPhoto')
+    const fin = source.indexOf('\nexport const', debut + 20)
+    const versement = source.slice(debut, fin)
+    vrai(/chuteId:\s*string/.test(source), 'une chute ne peut pas porter de photo')
+    vrai(/SELECT roulage_id FROM chute/.test(versement),
+      'la photo de crash ne retrouve pas sa journée')
+    vrai(/INSERT INTO photo[\s\S]*roulage_id[\s\S]*chute_id/.test(versement),
+      'la photo ne garde pas les deux liens nécessaires à sa survie')
+    vrai(/export const photosDeLaChute/.test(source), 'aucune lecture ne rend les photos du crash')
+
+    const lecture = source.slice(source.indexOf('export const lirePhoto'))
+    const locale = lecture.indexOf('lireLocale(')
+    const distante = lecture.indexOf("storage.from('photos').download")
+    const cache = lecture.indexOf('ecrireLocale(', distante)
+    vrai(locale >= 0 && distante > locale && cache > distante,
+      'la lecture ne fait pas coffre local → Storage → cache local')
+    const album = sansCommentaires(
+      Object.entries(ECRANS).find(([nom]) => nom.endsWith('/Photos.tsx'))?.[1] ?? '')
+    vrai(/await lirePhoto\(p\)/.test(album),
+      "l'album journée ne redescend pas la photo montée sur l'appareil B")
+    vrai(!/await lireLocale\(nomLocal\(p\)\)/.test(album),
+      "l'album journée lit encore exclusivement le cache de l'appareil A")
+  }),
+
+  doit('une suppression non persistée garde les octets locaux pour réessayer', async () => {
+    const photo = {
+      id: 'photo-rejet', roulage_id: 'r1', machine_id: null,
+      intervention_id: null, chute_id: 'c1', geste_id: null,
+      chemin_objet: 'local/c1/photo-rejet.webp', largeur: 1, hauteur: 1,
+      etat: 'locale' as const, genre: 'photo' as const,
+    }
+    const nom = nomLocal(photo)
+    await ecrireLocale(nom, new Blob([new Uint8Array([7, 8, 9])], { type: 'image/webp' }))
+    try {
+      const db = {
+        getOptional: async () => photo,
+        execute: async () => { throw new Error('sqlite refuse le tombstone') },
+      } as any
+      const resultat = await oublierPhoto(db, photo.id)
+      egal(resultat, {
+        statut: 'en_attente', distante: 'sans_objet', motif: 'base_locale',
+      }, 'le résultat ne permet pas une microcopy de reprise exacte')
+      vrai(!!await lireLocale(nom),
+        'les octets ont été effacés alors que SQLite refusait la suppression')
+    } finally {
+      await effacerLocale(nom)
+    }
+  }),
+
+  doit('un DELETE SQLite refusé garde le tombstone après avoir vidé son blob', async () => {
+    const photo = {
+      id: 'photo-delete-rejet', roulage_id: 'r1', machine_id: null,
+      intervention_id: null, chute_id: 'c1', geste_id: null,
+      chemin_objet: 'local/c1/photo-delete-rejet.webp', largeur: 1, hauteur: 1,
+      etat: 'locale' as const, genre: 'photo' as const,
+    }
+    const nom = nomLocal(photo)
+    await ecrireLocale(nom, new Blob([new Uint8Array([4, 5, 6])], { type: 'image/webp' }))
+    try {
+      const db = {
+        getOptional: async () => photo,
+        execute: async (sql: string) => {
+          if (/DELETE FROM photo/.test(sql)) throw new Error('sqlite refuse le delete')
+          return {}
+        },
+      } as any
+      const resultat = await oublierPhoto(db, photo.id)
+      egal(resultat, {
+        statut: 'en_attente', distante: 'sans_objet', motif: 'finalisation_locale',
+      }, 'le tombstone durable est confondu avec une demande non enregistrée')
+      egal(await lireLocale(nom), null,
+        'le blob local survit alors que son tombstone suffit désormais à reprendre')
+    } finally {
+      await effacerLocale(nom)
+    }
+  }),
+
+  doit('un DELETE réussi ne dépend jamais d’une relecture SQLite tardive', async () => {
+    const photo = {
+      id: 'photo-delete-ok', roulage_id: 'r1', machine_id: null,
+      intervention_id: null, chute_id: 'c1', geste_id: null,
+      chemin_objet: 'local/c1/photo-delete-ok.webp', largeur: 1, hauteur: 1,
+      etat: 'locale' as const, genre: 'photo' as const,
+    }
+    const nom = nomLocal(photo)
+    let lectures = 0
+    await ecrireLocale(nom, new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }))
+    try {
+      const db = {
+        getOptional: async () => {
+          lectures++
+          if (lectures > 1) throw new Error('la relecture SQLite refuse')
+          return photo
+        },
+        execute: async () => ({}),
+      } as any
+      const resultat = await oublierPhoto(db, photo.id)
+      egal(resultat, { statut: 'terminee', distante: 'sans_objet' },
+        'une relecture inutile transforme un DELETE réussi en reprise fantôme')
+      egal(lectures, 1, 'la finalisation relit la ligne après son DELETE')
+      egal(await lireLocale(nom), null,
+        'le blob local reste orphelin après le DELETE réussi')
+    } finally {
+      await effacerLocale(nom)
+    }
+  }),
+
+  doit('supprimer un roulage hors ligne garde le chemin Storage jusqu’à la reprise', async () => {
+    let photo: any = {
+      id: 'photo-roulage-offline', roulage_id: 'r-offline', machine_id: null,
+      intervention_id: null, chute_id: 'c-offline', geste_id: null,
+      chemin_objet: 'pilote/r-offline/photo-roulage-offline.webp', largeur: 2, hauteur: 1,
+      etat: 'montee' as const, genre: 'photo' as const,
+    }
+    let roulagePresent = true
+    const requetes: string[] = []
+    const executer = async (sql: string) => {
+      requetes.push(sql.replace(/\s+/g, ' ').trim())
+      if (/UPDATE photo[\s\S]*a_supprimer/.test(sql) && photo) {
+        photo = { ...photo, etat: 'a_supprimer', roulage_id: null, chute_id: null, geste_id: null }
+      }
+      if (/DELETE FROM roulage/.test(sql)) roulagePresent = false
+      if (/DELETE FROM photo/.test(sql)) photo = null
+      return {}
+    }
+    const db = {
+      writeTransaction: async (agir: (tx: any) => Promise<unknown>) => agir({ execute: executer }),
+      execute: executer,
+      getAll: async (sql: string) =>
+        /FROM photo WHERE etat = 'a_supprimer'/.test(sql) && photo?.etat === 'a_supprimer'
+          ? [photo] : [],
+      getOptional: async () => photo ?? undefined,
+    } as any
+    const nom = nomLocal(photo)
+    const ancienOnLine = Object.getOwnPropertyDescriptor(navigator, 'onLine')
+    await ecrireLocale(nom, new Blob([new Uint8Array([8, 6])], { type: 'image/webp' }))
+    try {
+      Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+      await supprimerRoulage(db, 'r-offline')
+      egal(roulagePresent, false, "la journée n'a pas été retirée hors ligne")
+      vrai(photo?.etat === 'a_supprimer' && photo.chemin_objet.includes('pilote/r-offline/'),
+        'la ligne ou le chemin Storage a disparu avec la journée')
+      egal([photo.roulage_id, photo.chute_id, photo.geste_id], [null, null, null],
+        'le tombstone reste accroché à un porteur voué à la cascade')
+      vrai(!!await lireLocale(nom), 'le cache a été effacé avant la confirmation Storage')
+      const patchPhoto = requetes.findIndex((sql) => sql.startsWith('UPDATE photo'))
+      const deleteRoulage = requetes.findIndex((sql) => sql.startsWith('DELETE FROM roulage'))
+      vrai(patchPhoto >= 0 && deleteRoulage > patchPhoto,
+        'PowerSync verra le DELETE roulage avant le PATCH tombstone')
+
+      const chemins: string[] = []
+      await supprimerPhotosEnAttente(db, async (chemin) => {
+        chemins.push(chemin); return 'supprimee'
+      })
+      egal(chemins, ['pilote/r-offline/photo-roulage-offline.webp'],
+        "la reprise n'a pas retiré l'objet distant exact")
+      egal(photo, null, "la ligne n'a pas été finalisée après Storage")
+      egal(await lireLocale(nom), null, "le cache n'a pas été finalisé après Storage")
+    } finally {
+      if (ancienOnLine) Object.defineProperty(navigator, 'onLine', ancienOnLine)
+      else delete (navigator as any).onLine
+      await effacerLocale(nom)
+    }
+  }),
+
+  doit('un retrait gagné pendant l’upload ne laisse aucun objet sans tombstone', async () => {
+    let photo: any = {
+      id: 'photo-course-upload', roulage_id: 'r-course', machine_id: null,
+      intervention_id: null, chute_id: null, geste_id: null,
+      chemin_objet: 'local/r-course/photo-course-upload.webp', largeur: 2, hauteur: 1,
+      etat: 'locale' as const, genre: 'photo' as const,
+    }
+    const nom = nomLocal(photo)
+    let uploads = 0, retraits = 0
+    const db = {
+      getAll: async (sql: string) => {
+        if (/etat = 'a_supprimer'/.test(sql)) return photo?.etat === 'a_supprimer' ? [photo] : []
+        if (/etat = 'locale'/.test(sql)) return photo?.etat === 'locale' ? [photo] : []
+        return []
+      },
+      getOptional: async (sql: string) => {
+        if (/etat = 'locale'/.test(sql)) return photo?.etat === 'locale' ? photo : undefined
+        return photo ?? undefined
+      },
+      execute: async (sql: string, params: unknown[] = []) => {
+        if (/UPDATE photo SET etat = 'montee'/.test(sql) && photo?.etat === 'locale')
+          photo = { ...photo, etat: 'montee', chemin_objet: params[0] }
+        if (/INSERT INTO photo/.test(sql)) {
+          const [id, roulageId, machineId, interventionId, chuteId, gesteId,
+            chemin, largeur, hauteur, genre] = params
+          if (!photo) photo = {
+            id, roulage_id: roulageId, machine_id: machineId, intervention_id: interventionId,
+            chute_id: chuteId, geste_id: gesteId, chemin_objet: chemin,
+            largeur, hauteur, etat: 'a_supprimer', genre,
+          }
+          else if (photo.etat === 'a_supprimer')
+            photo = { ...photo, chemin_objet: chemin, etat: 'a_supprimer' }
+        }
+        if (/DELETE FROM photo/.test(sql)) photo = null
+        return {}
+      },
+    } as any
+    const ancienReglage = localStorage.getItem('mypaddock.envoi-cloud')
+    await ecrireLocale(nom, new Blob([new Uint8Array([3, 1, 4])], { type: 'image/webp' }))
+    try {
+      localStorage.setItem('mypaddock.envoi-cloud', '1')
+      const stockage = {
+        peutTeleverser: () => true,
+        televerser: async () => {
+          uploads++
+          // Le DELETE utilisateur gagne pendant l'attente HTTP.
+          photo = null
+          return true
+        },
+        supprimer: async () => {
+          retraits++
+          return 'stockage' as const
+        },
+      }
+      egal(await televerserEnAttente(db, 'pilote', stockage), 0,
+        "l'upload perdu par le DELETE a été compté comme monté")
+      egal(uploads, 1, "la course n'a pas réellement traversé un upload")
+      egal(retraits, 1, "l'objet orphelin n'a pas été retiré immédiatement")
+      vrai(photo?.etat === 'a_supprimer'
+        && photo.chemin_objet === 'pilote/r-course/photo-course-upload.webp',
+      'l’échec Storage a perdu le chemin de reprise')
+      egal([
+        photo.roulage_id, photo.machine_id, photo.intervention_id, photo.chute_id, photo.geste_id,
+      ], [null, null, null, null, null],
+      'la ligne recréée conserve une FK vers un parent qui a pu disparaître')
+      await supprimerPhotosEnAttente(db, async () => 'supprimee')
+      egal(photo, null, 'la reprise de la course ne finalise pas la ligne')
+      egal(await lireLocale(nom), null, 'la reprise de la course ne finalise pas le cache')
+    } finally {
+      if (ancienReglage == null) localStorage.removeItem('mypaddock.envoi-cloud')
+      else localStorage.setItem('mypaddock.envoi-cloud', ancienReglage)
+      await effacerLocale(nom)
+    }
+  }),
+
+  doit('une suppression locale reprend au montage visible même sans compte', async () => {
+    const photo = {
+      id: 'photo-anonyme-a-finir', roulage_id: 'r1', machine_id: null,
+      intervention_id: null, chute_id: 'c1', geste_id: null,
+      chemin_objet: 'local/c1/photo-anonyme-a-finir.webp', largeur: 1, hauteur: 1,
+      etat: 'a_supprimer' as const, genre: 'photo' as const,
+    }
+    const nom = nomLocal(photo)
+    let lignePresente = true
+    await ecrireLocale(nom, new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }))
+    try {
+      const db = {
+        getAll: async () => lignePresente ? [photo] : [],
+        execute: async (sql: string) => {
+          if (/DELETE FROM photo/.test(sql)) lignePresente = false
+          return {}
+        },
+        getOptional: async () => lignePresente ? { id: photo.id } : undefined,
+      } as any
+      let appels = 0
+      let reprise: Promise<number> | undefined
+      const detacher = surRetourDeReseau(() => {
+        appels++
+        reprise = televerserEnAttente(db, null)
+      })
+      try {
+        egal(document.visibilityState, 'visible', "le banc ne peut pas éprouver le montage visible")
+        egal(appels, 1, "le montage visible attend encore un futur événement réseau")
+        await reprise
+        egal(lignePresente, false, "le tombstone anonyme n'a pas été finalisé au montage")
+        egal(await lireLocale(nom), null, "le cache local anonyme n'a pas été nettoyé")
+      } finally {
+        detacher()
+      }
+    } finally {
+      await effacerLocale(nom)
+    }
+
+    const app = sansCommentaires(
+      Object.entries(ECRANS).find(([fichier]) => fichier.endsWith('/App.tsx'))?.[1] ?? '')
+    const debut = app.indexOf('return surRetourDeReseau')
+    const effet = app.slice(debut, app.indexOf('\n  }, [db, identite, rafraichir])', debut))
+    vrai(/televerserEnAttente\(db, identite\?\.id \?\? null\)/.test(effet),
+      "l'application conditionne encore toute la reprise photo à l'identité")
+  }),
+
+  doit('les deux albums gardent la photo et expliquent chaque reprise de suppression', () => {
+    for (const suffixe of ['/Photos.tsx', '/Chute.tsx']) {
+      const source = sansCommentaires(
+        Object.entries(ECRANS).find(([nom]) => nom.endsWith(suffixe))?.[1] ?? '')
+      const marqueur = source.indexOf("motif === 'base_locale'")
+      const debut = source.lastIndexOf('const retirer = async', marqueur)
+      const fin = source.indexOf('\n  return (', marqueur)
+      const retirer = source.slice(debut, fin)
+      const base = retirer.indexOf("motif === 'base_locale'")
+      const masque = suffixe === '/Photos.tsx'
+        ? retirer.indexOf('setEnGrand(null)')
+        : retirer.indexOf('setARetirer(null)')
+      vrai(base >= 0 && masque > base && /return/.test(retirer.slice(base, masque)),
+        `${suffixe} ferme la confirmation ou masque la photo malgré le rejet du tombstone`)
+      vrai(/reste dans le carnet/.test(retirer),
+        `${suffixe} ne dit pas que la photo est restée après le rejet local`)
+      vrai(/finalisation_locale/.test(retirer) && /nettoyage local reprendra/.test(retirer),
+        `${suffixe} confond reprise Storage et nettoyage SQLite local`)
+      vrai(/role=["{].*alert|role="alert"/.test(source),
+        `${suffixe} n'annonce pas l'échec contextuel aux technologies d'assistance`)
+      vrai(/Photo enregistrée\. Recharge l’écran pour l’afficher\./.test(source)
+        && /role=\{[^}]*'status'/.test(source),
+      `${suffixe} classe une relecture refusée comme un échec de versement`)
+    }
+  }),
+
+  doit('la suppression Storage est masquée, durable et rejouée avant les envois', () => {
+    const brut = Object.entries(SOURCES)
+      .find(([nom]) => nom.endsWith('/db/photos.ts'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const migration = Object.entries(MIGRATIONS)
+      .find(([nom]) => nom.includes('la_suppression_photo_se_reprend'))?.[1] ?? ''
+    vrai(/alter type etat_photo add value if not exists 'a_supprimer'/i.test(migration),
+      "le serveur refuse le tombstone de suppression")
+    vrai(/foreign key \(roulage_id\)[\s\S]*on delete set null/i.test(migration),
+      'le serveur cascade encore la ligne qui porte le chemin Storage')
+    vrai(/etat::text = 'a_supprimer'[\s\S]*or roulage_id is not null/i.test(migration),
+      'un tombstone détaché de son parent est refusé par le serveur')
+    vrai((source.match(/etat != 'a_supprimer'/g) ?? []).length >= 3,
+      'une lecture rend encore une photo dont la suppression est demandée')
+    const finaliser = source.slice(source.indexOf('const finaliserSuppressionPhoto'),
+      source.indexOf('export const oublierPhoto'))
+    const stockage = finaliser.indexOf('supprimerObjet(p.chemin_objet)')
+    const ligne = finaliser.indexOf('DELETE FROM photo')
+    const coffre = finaliser.indexOf('effacerLocale(')
+    vrai(stockage >= 0 && coffre > stockage && ligne > coffre,
+      'Storage/coffre/SQLite ne sont pas supprimés dans un ordre reprenable')
+    const oublier = source.slice(source.indexOf('export const oublierPhoto'),
+      source.indexOf('export const supprimerPhotosEnAttente'))
+    vrai(/UPDATE photo SET etat = 'a_supprimer'/.test(oublier),
+      'la demande ne laisse aucune reprise durable avant de toucher aux octets')
+    const televerser = source.slice(source.indexOf('export const televerserEnAttente'))
+    vrai(televerser.indexOf('supprimerPhotosEnAttente(db)')
+      < televerser.indexOf('envoiCloudActif()'),
+    "couper l'envoi cloud coupe aussi le droit à l'effacement")
+    const emport = sansCommentaires(
+      Object.entries(SOURCES).find(([nom]) => nom.endsWith('/db/emporter.ts'))?.[1] ?? '')
+    vrai(/FROM photo WHERE etat != 'a_supprimer'/.test(emport),
+      "l'emport immédiat remet dans le zip une photo retirée hors ligne")
+    vrai((emport.match(/filtreEmport\(t\)/g) ?? []).length >= 2
+      && /table === 'photo' \? ` WHERE etat != 'a_supprimer'`/.test(emport),
+    "le JSON ou la pesée compte encore le tombstone et révèle son chemin cloud")
+  }),
+
+  doit('le serveur fait converger crash et déclaration sur deux appareils', () => {
+    const sql = Object.entries(MIGRATIONS)
+      .find(([nom]) => nom.includes('le_crash_converge_au_serveur'))?.[1] ?? ''
+    vrai(!!sql, 'la convergence serveur du crash est absente')
+    vrai(/after insert or delete or update of roulage_id, pilote_id on public\.chute/i.test(sql),
+      'un INSERT ou DELETE venu de l’appareil B ne requalifie pas la journée')
+    vrai(/where id = p_roulage for update/i.test(sql),
+      'deux appareils recalculent la même journée sans se sérialiser')
+    vrai(/when v_documente then 'documente' else 'a_renseigner'/i.test(sql),
+      'la dernière suppression ne revient pas à renseigner')
+    vrai(/before update of crash_statut on public\.roulage/i.test(sql),
+      'un PATCH tardif « aucun » peut encore gagner contre une chute')
+    vrai(/old\.crash_statut = 'documente'[\s\S]*exists \(select 1 from public\.chute/i.test(sql),
+      "la garde ne couvre pas l'instantané ancien de l'appareil A")
+    vrai(/new\.crash_statut = 'documente' and old\.crash_statut <> 'documente'[\s\S]*new\.crash_statut := 'a_renseigner'/i.test(sql),
+      'après DELETE A, le vieux documente de B peut encore ressusciter le crash')
+    vrai(!/new\.crash_statut = 'documente'[\s\S]*not exists \(select 1 from public\.chute/i.test(
+      sql.slice(sql.indexOf('create or replace function public.garder_statut_crash_coherent'))),
+    "un snapshot antérieur à l'INSERT peut encore annuler son statut documenté")
+    vrai(/revoke all on function public\.garder_statut_crash_coherent/i.test(sql),
+      'la fonction de garde est exposée comme RPC publique')
+  }),
+
+  doit("une chute A ne peut ni viser ni requalifier le roulage du pilote B", () => {
+    const sql = Object.entries(MIGRATIONS)
+      .find(([nom]) => nom.includes('le_crash_converge_au_serveur'))?.[1] ?? ''
+    vrai(!!sql, "la frontière de propriété chute/roulage n'est pas migrée")
+    vrai(/unique \(id, pilote_id\)/i.test(sql)
+      && /foreign key \(roulage_id, pilote_id\)[\s\S]*references public\.roulage \(id, pilote_id\)[\s\S]*not valid/i.test(sql),
+    'A peut encore écrire sa chute avec le roulage de B')
+    const politique = sql.slice(sql.indexOf('create policy'))
+    vrai(/with check \([\s\S]*auth\.uid\(\)[\s\S]*r\.id = chute\.roulage_id[\s\S]*r\.pilote_id = chute\.pilote_id/i.test(politique),
+      "la policy INSERT ne vérifie pas l'ascendance du roulage")
+    const garde = sql.indexOf("if tg_op <> 'DELETE' and not exists")
+    const recalcul = sql.indexOf('perform public.recalculer_statut_crash(', garde)
+    vrai(garde >= 0 && recalcul > garde && /raise foreign_key_violation/i.test(sql.slice(garde, recalcul)),
+      'le trigger SECURITY DEFINER touche le statut de B avant de refuser A')
+    vrai(/old\.roulage_id is distinct from new\.roulage_id[\s\S]*old\.pilote_id is distinct from new\.pilote_id/i.test(sql),
+      "un changement de propriétaire ne recalcule pas l'ancienne journée")
+    vrai((sql.match(/c\.pilote_id = r\.pilote_id/g) ?? []).length >= 2
+      && /pilote_id = v_pilote/.test(sql),
+      "un ancien reliquat croisé peut encore documenter le roulage de B")
+    vrai(/revoke all on function public\.recalculer_statut_crash_apres_chute\(\)/i.test(sql),
+      'la garde de propriété reste appelable comme RPC')
+  }),
+
+  doit('le bucket photos est privé et chaque geste reste sous le préfixe du pilote', () => {
+    const sql = Object.entries(MIGRATIONS)
+      .find(([nom]) => nom.includes('le_bucket_photos_est_prive'))?.[1] ?? ''
+    vrai(/insert into storage\.buckets \(id, name, public\)[\s\S]*'photos', 'photos', false/i.test(sql),
+      'le bucket photos privé ne naît pas avec les migrations')
+    vrai(/on conflict \(id\) do update set public = false/i.test(sql),
+      'une configuration manuelle existante rend la migration non rejouable ou publique')
+    for (const geste of ['select', 'insert', 'update', 'delete'])
+      vrai(new RegExp(`on storage\\.objects for ${geste} to authenticated`, 'i').test(sql),
+        `Storage n'accorde pas ${geste} au pilote authentifié`)
+    vrai((sql.match(/bucket_id\s*=\s*'photos'/gi) ?? []).length === 5,
+      'une politique peut agir sur un autre bucket')
+    vrai((sql.match(/\(storage\.foldername\(name\)\)\[1\]\s*=\s*\(select auth\.uid\(\)\)::text/gi)
+      ?? []).length === 5,
+    "une politique Storage peut sortir du préfixe auth.uid()")
+    vrai(!/file_size_limit|allowed_mime_types/i.test(sql),
+      'la migration écrase une limite ou des MIME réglés manuellement')
+  }),
+
+  doit('un 23503 rejoue toute la réparation sans acquitter une dépense orpheline', async () => {
+    const crud = [
+      { table: 'depense', op: UpdateType.PUT, id: 'd1', opData: { montant_centimes: 1200 } },
+      { table: 'intervention', op: UpdateType.PUT, id: 'i1', opData: { depense_id: 'd1' } },
+    ]
+    let completes = 0, tentative = 0
+    const tx = { crud, complete: async () => { completes++ } }
+    const appels: string[] = []
+    const lignes = new Set<string>()
+    const executer = async (op: { table: string; id: string }) => {
+      appels.push(op.table)
+      if (tentative === 0 && op.table === 'intervention') {
+        return { error: { code: '23503', message: 'depense pas encore visible' } }
+      }
+      lignes.add(`${op.table}:${op.id}`)
+      return { error: null }
+    }
+    let levee = false
+    try { await envoyerTransaction('p1', tx, executer) } catch { levee = true }
+    vrai(levee, 'le 23503 a été traité comme une ligne définitivement perdue')
+    egal(completes, 0, 'la transaction incomplète a été acquittée')
+    egal(appels, ['depense', 'intervention'], 'le premier passage ne suit pas la transaction')
+
+    tentative++
+    await envoyerTransaction('p1', tx, executer)
+    egal(appels.slice(2), ['depense', 'intervention'], 'le retry reprend à mi-transaction')
+    egal(completes, 1, "le retry complet n'a pas été acquitté exactement une fois")
+    egal(lignes.size, 2, 'les upserts rejoués ont fabriqué un doublon')
+  }),
+
+  doit("l'emport qualifie l'historique de crash comme auto-déclaré", () => {
+    const source = Object.entries(SOURCES)
+      .find(([nom]) => nom.endsWith('/db/emporter.ts'))?.[1] ?? ''
+    vrai(/historique_crash/.test(source), "l'emport ne porte aucune convention de lecture")
+    vrai(/auto-déclarés par le pilote/.test(source),
+      "l'emport laisse croire que l'historique a été constaté ou vérifié")
   }),
 
   /* ─── LES CORPUS EMBARQUÉS ─────────────────────────────────────────────── */
@@ -1496,12 +2224,12 @@ const essais = [
     // Un sortant se reconnaît à ce qu'il FAIT — refermer la confirmation — et
     // pas seulement à son mot : « Garder » sert aussi à enregistrer une chute,
     // et ce bouton-là n'a rien d'un sortant.
-    // Ils sont QUATRE depuis le récit 18.2 : la journée, la chute, le compte, et
-    // la photo de l'album — un cliché du 12 septembre ne se retape pas.
+    // Ils sont CINQ : la journée, la chute, le compte, la photo de l'album et
+    // la photo liée au crash — un cliché du 12 septembre ne se retape pas.
     const sortants = Object.values(ECRANS).flatMap(boutonsDe)
-      .filter((b) => b.libelles.some((l) => /^Garder( mon compte)?$/.test(l))
-        && /set(Confirme|Ouvert)\(false\)/.test(b.gestionnaire))
-    vrai(sortants.length === 4, `${sortants.length} sortants de confirmation trouvés`)
+      .filter((b) => b.libelles.some((l) => /^Garder(?: mon compte| le crash| la photo)?$/.test(l))
+        && /set(?:Confirme|Ouvert)\(false\)|setARetirer\(null\)/.test(b.gestionnaire))
+    vrai(sortants.length === 5, `${sortants.length} sortants de confirmation trouvés`)
     for (const s of sortants)
       egal(s.className, 'lien', `« ${s.libelles.join(' / ')} » ne sort pas en lien`)
   }),
@@ -1648,6 +2376,30 @@ const essais = [
      Le seul témoin qui voie ça est donc le TEXTE SOURCE. Rien dans le code ne
      relie deux requêtes SQL écrites dans deux fichiers ; elles ne partagent ni
      type, ni appel, ni schéma — le compilateur ne peut rien en dire. */
+  doit('17.1 — le jour civil local ne recule pas à minuit à Paris', () => {
+    const justeApresMinuitParis = new Date('2026-08-26T22:30:00.000Z')
+    egal(dateCivileLocale(justeApresMinuitParis, -120), '2026-08-27',
+      'UTC a gagné sur le jour vécu en UTC+2')
+  }),
+
+  doit('23.5 — aujourd’hui, à venir et passés sont exclusifs et ordonnés', () => {
+    const lignes = [
+      { id: 'p1', date_jour: '2026-08-24' },
+      { id: 'f2', date_jour: '2026-08-29' },
+      { id: 'j2', date_jour: '2026-08-26' },
+      { id: 'p2', date_jour: '2026-08-25' },
+      { id: 'f1', date_jour: '2026-08-27' },
+      { id: 'j1', date_jour: '2026-08-26' },
+    ]
+    const groupes = classerRoulages(lignes, '2026-08-26')
+    egal(groupes.aVenir.map((r) => r.id), ['f1', 'f2'], 'futur non ascendant')
+    egal(groupes.passes.map((r) => r.id), ['p2', 'p1'], 'passé non descendant')
+    egal(groupes.aujourdhui.map((r) => r.id), ['j2', 'j1'], 'ordre du jour instable')
+    const tous = [...groupes.aujourdhui, ...groupes.aVenir, ...groupes.passes].map((r) => r.id)
+    egal([...new Set(tous)].sort(), lignes.map((r) => r.id).sort(),
+      'un roulage manque ou apparaît dans deux sections')
+  }),
+
   doit('17.1 — toute lecture des roulages se prononce sur le temps', () => {
     const fautives = lecturesDeRoulage()
       .filter((q) => !q.sql.includes('A_EU_LIEU') && !q.sql.includes('TOUTES_JOURNEES'))
@@ -2162,8 +2914,9 @@ const essais = [
        pilote, une fois les photos choisies. */
     const brut = Object.entries(SOURCES).find(([c]) => c.endsWith('db/photos.ts'))?.[1] ?? ''
     const source = sansCommentaires(brut)
-    const debut = source.indexOf('export const verserPlusieurs')
-    vrai(debut > 0, '`verserPlusieurs` a disparu : l\'album ne se remplira plus')
+    vrai(source.indexOf('export const verserPlusieurs') > 0,
+      '`verserPlusieurs` a disparu : l\'album ne se remplira plus')
+    const debut = source.indexOf('export const verserEnSerie')
     const corps = source.slice(debut, source.indexOf('export const', debut + 20))
     vrai(/for \(const \w+ of /.test(corps), 'le versement multiple n\'est plus une boucle en série')
     vrai(!/Promise\.all|Promise\.allSettled/.test(corps),
@@ -2196,7 +2949,7 @@ const essais = [
     vrai(!/sur \{|\{[^}]*\} sur \d|\bprogress\b/i.test(source),
       'un compteur de progression est apparu dans le versement')
     // Et ce qui est versé s'affiche AU FUR ET À MESURE : le rappel existe.
-    vrai(/verserPlusieurs\(db, \{ roulageId \}, liste, \(\) => charger\(\)\)/.test(source),
+    vrai(/verserPlusieurs\([\s\S]*?\{ roulageId \}[\s\S]*?\(\) => charger\(\)/.test(source),
       'la grille ne se remplit plus au fur et à mesure : la file paraît bloquée')
   }),
 
@@ -2235,15 +2988,17 @@ const essais = [
     const ecran = Object.entries(ECRANS).find(([c]) => c.endsWith('/Photos.tsx'))?.[1] ?? ''
     const dbs = sansCommentaires(db), es = sansCommentaires(ecran)
     vrai(/export const oublierPhoto/.test(dbs), 'aucun chemin ne retire une photo seule')
-    const corps = dbs.slice(dbs.indexOf('export const oublierPhoto'))
-    vrai(/effacerLocale/.test(corps),
+    const finalisation = dbs.slice(dbs.indexOf('const finaliserSuppressionPhoto'),
+      dbs.indexOf('export const oublierPhoto'))
+    vrai(/effacerLocale/.test(finalisation),
       'la copie locale reste sur le téléphone : des octets que plus rien ne référence')
-    vrai(/DELETE FROM photo WHERE id = \?/.test(corps),
+    vrai(/DELETE FROM photo WHERE id = \?/.test(finalisation),
       'la suppression ne porte plus sur une seule photo')
     // En rouge, avec un second temps : une photo ne se retape pas.
     vrai(/lien destructif/.test(es), 'le retrait d\'une photo a perdu son rouge')
-    vrai(/part définitivement/.test(es), 'le retrait d\'une photo ne dit plus ce qui part')
-    vrai(/Elle part seule/.test(es),
+    vrai(/disparaît du carnet maintenant/.test(es) && /retour du réseau/.test(es),
+      'le retrait ne distingue plus disparition immédiate et suppression distante différée')
+    vrai(/autres\s+photos restent/.test(es),
       'la phrase ne dit plus que les autres photos restent : c\'est ce qui la distingue de la journée')
     /* « La photo MONTRE un état, la facture PROUVE une dépense. » Le filtre est
        dans la REQUÊTE et pas à l'écran — filtrer côté rendu laisserait la porte

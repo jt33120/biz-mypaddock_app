@@ -164,7 +164,7 @@ body {
    Un rouge qui sert à deux choses ne sert plus à rien.
 
    ⚠ ET LA COULEUR N'EST JAMAIS SEULE (UX-DR8). Deux signes la doublent PARTOUT,
-   sur les 15 gestes rouges du produit : le MOT dit ce qui part — retirer,
+   sur les 17 gestes rouges du produit : le MOT dit ce qui part — retirer,
    supprimer, effacer, oublier — et la FORME — filet plein sur tout le tour,
    texte de la même teinte — se distingue du secondaire même pour un œil qui ne
    sépare pas les rouges des gris. Retirer l'un des deux ramène le défaut que
@@ -172,9 +172,9 @@ body {
 
    ⚠ CE COMMENTAIRE AJOUTAIT UN TROISIÈME SIGNE, « la CONFIRMATION en deux temps
    reste entière », ET C'ÉTAIT FAUX POUR LA MOITIÉ D'ENTRE EUX. Les deux temps
-   existent pour 4 gestes — une journée de roulage et tout ce qu'elle emporte,
-   une chute, le compte entier, une photo de l'album — soit 8 boutons rouges sur
-   15, l'ouvrant et le confirmant. Les 7 autres partent au premier tap :
+   existent pour 5 gestes — une journée de roulage et tout ce qu'elle emporte,
+   une chute, le compte entier, une photo de l'album et une photo de crash —
+   soit 10 boutons rouges sur 17, l'ouvrant et le confirmant. Les 7 autres partent au premier tap :
    « Retirer ce que la sonde a écrit », et six « retirer » au bout d'une ligne
    de liste (une horloge, une pièce d'atelier, une pièce d'équipement, une ligne
    de chargement, une tâche d'avant d'y aller, une chose qu'on venait chercher).
@@ -187,7 +187,7 @@ body {
    SEULE, parce que la seule suppression de photo qui existait jusque-là
    emportait la journée entière.
 
-   Ces 15 se répartissent en 5 `.bouton.destructif` et 10 `.lien.destructif`, et
+   Ces 17 se répartissent en 6 `.bouton.destructif` et 11 `.lien.destructif`, et
    un essai unitaire recompte les trois nombres écrits ici. Un commentaire est la
    mémoire du défaut dans ce dépôt : celui-ci décrivait une garde qu'on croyait
    tenue et qui ne tenait qu'à moitié, et c'est pire qu'une garde absente, parce
@@ -287,6 +287,22 @@ body {
 .atelier-tete {
   background: none; border: none; padding: 0; width: 100%; cursor: pointer;
   font-family: var(--face); text-align: left; min-height: 32px;
+}
+.atelier-raccourcis {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+}
+.atelier-raccourci {
+  min-width: 0; min-height: 68px; padding: 9px 3px 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+  color: var(--encre); cursor: pointer; font-family: var(--face); text-align: center;
+  border-left: 3px solid var(--filet);
+}
+.atelier-raccourci.entretien { border-left-color: var(--miami); }
+.atelier-raccourci.amelioration { border-left-color: var(--encre-tenue); }
+.atelier-raccourci.reparation_non_vitale { border-left-color: var(--magenta); }
+.atelier-raccourci .libelle {
+  max-width: 100%; font-size: 11px; line-height: 1.25; letter-spacing: .05em;
+  overflow: hidden; text-overflow: ellipsis;
 }
 .ligne-atelier { align-items: center; gap: 10px; padding: 4px 0; }
 .ligne-atelier .texte { font-size: 15px; }
@@ -489,6 +505,19 @@ body {
    de compte qui ressemble à un formulaire d'inscription ressemble à une
    corvée, et une corvée s'abandonne. */
 .compte { display: flex; flex-direction: column; gap: 14px; }
+.compte-page { display: flex; flex-direction: column; gap: 22px; }
+.compte-entete { display: flex; flex-direction: column; gap: 4px; }
+.compte-groupe {
+  border-top: 1px solid var(--filet); padding-top: 14px;
+}
+.compte-groupe > .titre-section { margin-bottom: 2px; }
+.compte-diagnostic > summary {
+  cursor: pointer; min-height: 44px; display: flex; align-items: center;
+  list-style-position: inside;
+}
+.identite-compte { gap: 5px; }
+.email-compte { overflow-wrap: anywhere; }
+.zone-sensible { margin-top: 2px; }
 .compte .titre { line-height: 1.15; }
 .compte .texte { color: var(--encre-faible); font-size: 15px; }
 .compte .texte b { color: var(--encre); font-weight: 600; }
@@ -569,11 +598,18 @@ body {
   letter-spacing: .04em; padding: 0 12px;
 }
 
-/* LE RACCOURCI DE DÉPENSE DE L'ACCUEIL — replié, ce n'est qu'un lien. Aucune
-   pastille, aucun compteur, aucun fond qui le fasse remarquer : un raccourci qui
-   rappelle son existence est une relance, et le produit n'en fait pas. */
-.raccourci-depense { gap: 8px; }
-.raccourci-depense > .lien { align-self: flex-start; }
+/* La saisie d'argent est un geste quotidien distinct des analyses. Son accès
+   est une vraie cible, puis le formulaire prend une page à lui seul. */
+.raccourci-depense { display: flex; }
+.raccourci-depense .action-depense {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+
+.groupe-roulages { gap: 9px; }
+.titre-section {
+  margin: 0; padding: 4px 0 7px; border-bottom: 1px solid var(--filet);
+  color: var(--encre); font-size: 17px; line-height: 1.2;
+}
 
 .depense { display: flex; flex-direction: column; gap: 14px; }
 .depense .texte { color: var(--encre-faible); font-size: 15px; }
@@ -769,6 +805,38 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 .chute { border-left: 3px solid var(--magenta); }
 .chute .texte { font-size: 15px; }
 .chute textarea.champ { resize: vertical; line-height: 1.45; font-family: var(--face); }
+.dossier-crash {
+  border-top: 1px solid var(--filet); padding-top: 14px;
+}
+.statut-crash { margin-left: auto; text-align: right; }
+.actions-crash { flex-wrap: wrap; justify-content: flex-start; }
+.mini-espace { gap: 5px; }
+.sous-dossier-crash {
+  border-top: 1px solid color-mix(in srgb, var(--filet) 65%, transparent);
+  padding-top: 10px; gap: 8px;
+}
+.ligne-reparation-crash .texte { min-width: 0; overflow-wrap: anywhere; }
+.formulaire-reparation-crash { gap: 10px; }
+.photos-crash { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+.case-photo-crash {
+  min-width: 0; border: 1px solid var(--filet); background: rgba(8,12,28,.6);
+  display: grid; grid-template-rows: minmax(92px, 1fr) auto;
+}
+.case-photo-crash img {
+  width: 100%; height: 100%; min-height: 92px; object-fit: cover; display: block;
+}
+.case-photo-crash > .note { align-self: center; justify-self: center; padding: 8px; }
+.case-photo-crash > .lien { min-height: 44px; }
+.confirmation-photo-crash { padding: 8px; }
+.confirmation-photo-crash .lien,
+.confirmation-photo-crash .bouton { min-height: 44px; }
+.ajout-photo-crash { cursor: pointer; display: inline-flex; align-items: center; min-height: 44px; }
+.ligne-roulage-resultats { margin-left: auto; gap: 12px; }
+.marqueur-crash {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--magenta); font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; white-space: nowrap;
+}
 
 /* ─── LA FICHE D'UN CIRCUIT ────────────────────────────────────────────────
    Le tracé est une image DISTANTE tant que la récolte ne l'a pas déposée dans

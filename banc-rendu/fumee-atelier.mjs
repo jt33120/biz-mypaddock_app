@@ -55,6 +55,22 @@ await page.waitForSelector('.garage .sprite', { timeout: 20_000 })
 const blocs = await page.$$eval('button.atelier', ns => ns.map(n => n.className))
 verifier('① trois sommaires d\'atelier, séparés', blocs.length === 3,
   blocs.map(c => c.split(' ').filter(x => !['bloc','rang','atelier','atelier-tete'].includes(x)).join('')).join(' · '))
+for (const largeur of [375, 390, 430]) {
+  await page.setViewportSize({ width: largeur, height: 844 })
+  const disposition = await page.evaluate(() => {
+    const boutons = [...document.querySelectorAll('.atelier-raccourcis .atelier-raccourci')]
+    const hauts = boutons.map((b) => Math.round(b.getBoundingClientRect().top))
+    return {
+      memeLigne: hauts.length === 3 && hauts.every((y) => Math.abs(y - hauts[0]) <= 1),
+      deborde: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      hauts,
+    }
+  })
+  verifier(`   ${largeur}px · trois raccourcis sur la même ligne`,
+    disposition.memeLigne, disposition.hauts.join(' · '))
+  verifier(`   ${largeur}px · aucun débordement horizontal`, !disposition.deborde)
+}
+await page.setViewportSize({ width: 390, height: 844 })
 
 // ── ② FR-43 : consigné au moment du geste, SANS montant.
 await ouvrirPoste('Entretien')
