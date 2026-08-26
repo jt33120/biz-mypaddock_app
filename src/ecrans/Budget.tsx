@@ -3,7 +3,8 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import {
   CATEGORIES_EQUIPEMENT, coutEquipement, declarerEquipement, depenserSur,
   EXEMPLE_EQUIPEMENT, EXEMPLE_POSTE, listerEquipement, NOM_EQUIPEMENT, NOM_POSTE,
-  nomMois, oublierEquipement, parMois, parPoste, poserSpriteEquipement, POSTES, repereMensuel,
+  jourDansLAnnee, nomMois, oublierEquipement, parMois, parPoste, poserSpriteEquipement,
+  POSTES, repereMensuel,
   type CategorieEquipement, type Equipement as Materiel, type LigneMois, type LignePoste,
   type Poste,
 } from '../db/budget'
@@ -130,7 +131,7 @@ export function Budget({ db, annee, machineId, onEcrit }: {
                   </span>
                 </button>
                 {saisie === p && (
-                  <Ajouter db={db} poste={p} machineId={machineId}
+                  <Ajouter db={db} poste={p} machineId={machineId} annee={annee}
                            onFini={() => { setSaisie(null); void charger().then(onEcrit) }}
                            onAnnuler={() => setSaisie(null)} />
                 )}
@@ -223,8 +224,16 @@ export function Budget({ db, annee, machineId, onEcrit }: {
  * saison — mais il reste modifiable, parce qu'un pilote à deux motos sait mieux
  * que le produit à laquelle appartient ce train de pneus.
  */
-function Ajouter({ db, poste, machineId, onFini, onAnnuler }: {
+function Ajouter({ db, poste, machineId, annee, onFini, onAnnuler }: {
   db: PowerSyncDatabase; poste: Poste; machineId: string | null
+  /** ⚠ L'ANNÉE QUE L'APPELANT MONTRE, et la seule où le jour ait le droit de
+   *  tomber. Ce n'est pas une préférence d'ergonomie : les deux lectures du
+   *  budget (`parPoste`, `parMois`) filtrent `WHERE saison_annee = ?` sur cette
+   *  année-là, et le garage ne montre jamais que l'année en cours. Une facture
+   *  de décembre retrouvée en janvier et datée de décembre partait donc dans une
+   *  saison qu'AUCUN écran du produit n'affiche — pendant que le raccourci de
+   *  l'accueil annonçait « le détail vit au garage, dans le budget ». */
+  annee: number
   /** Le montant écrit, pour que l'appelant puisse ÉNONCER ce qui vient d'être
    *  noté. Le raccourci de l'accueil en a besoin : sans lui, la saisie
    *  disparaîtrait sans qu'aucun écran ne dise ce qu'elle est devenue. */
@@ -252,6 +261,12 @@ function Ajouter({ db, poste, machineId, onFini, onAnnuler }: {
   // que d'écrire une ligne sans jour : les seules dépenses sans mois du produit
   // sont celles d'avant la colonne, et il n'a pas à s'en fabriquer de nouvelles.
   const leJour = /^\d{4}-\d{2}-\d{2}$/.test(jour) ? jour : aujourdhui()
+  /* ⚠ `min`/`max` NE GARDENT RIEN, et c'est pour ça que la borne est aussi ici.
+     Ils habillent le sélecteur du navigateur ; une date tapée au clavier hors
+     bornes ressort telle quelle dans `value`, et le champ n'a ni `min` ni `max`
+     à opposer à `fill()` non plus. La règle vit donc dans une fonction pure
+     qu'un essai peut faire rougir (`jourDansLAnnee`). */
+  const dansLAnnee = jourDansLAnnee(leJour, annee)
   const [poser, occupe] = useGeste(async () => {
     if (centimes == null) return
     await depenserSur(db, {
@@ -269,12 +284,23 @@ function Ajouter({ db, poste, machineId, onFini, onAnnuler }: {
              placeholder="ce que c'était, si tu veux" autoComplete="off" />
       <div className="rang" style={{ gap: 8 }}>
         <input className="champ" type="date" value={jour}
+               min={`${annee}-01-01`} max={`${annee}-12-31`}
                onChange={(e) => setJour(e.target.value)} style={{ flex: 1 }} />
         {/* AD-18 : c'est l'année du jour qui fixe la saison, à la saisie et pour
-            toujours. Une facture de janvier notée en décembre part donc dans la
-            saison suivante — c'est juste, et ça ne se devine pas : on l'écrit. */}
+            toujours. Elle est donc écrite à côté du champ — on ne la devine pas. */}
         <span className="sous-titre">saison {anneeSaison(leJour)}</span>
       </div>
+      {/* ⚠ CE QUI EST REFUSÉ SE DIT, ET NE SE CORRIGE PAS EN DOUCE. Remplacer
+          silencieusement un jour hors bornes par aujourd'hui écrirait une date
+          que personne n'a donnée ; l'écran énonce un fait — où le budget regarde
+          — et laisse le pilote décider. */}
+      {!dansLAnnee && (
+        <p className="note">
+          Ce jour est hors de l'année {annee}, la seule que ce budget montre. Une
+          dépense datée d'une autre année ne s'y rangerait pas, et aucun écran du
+          produit ne la montrerait.
+        </p>
+      )}
       {machineId && (
         <div className="puces">
           <button className="puce" data-actif={cible === 'machine' ? '1' : '0'}
@@ -283,7 +309,7 @@ function Ajouter({ db, poste, machineId, onFini, onAnnuler }: {
                   onClick={() => setCible('saison')}>SUR LA SAISON</button>
         </div>
       )}
-      <button className="bouton secondaire" disabled={centimes == null || occupe}
+      <button className="bouton secondaire" disabled={centimes == null || occupe || !dansLAnnee}
               onClick={() => void poser()}>
         {occupe ? 'enregistrement…' : `Ajouter à ${NOM_POSTE[poste].toLowerCase()}`}
       </button>
@@ -374,7 +400,12 @@ export function NoterUneDepense({ db, onEcrit }: {
               passe au garage.
             </p>
           )}
+          {/* ⚠ LA MÊME ANNÉE QUE LE GARAGE, sinon la phrase de fin ment. Le
+              garage lit toujours `anneeSaison(maintenant)` (Garage.tsx) : si ce
+              raccourci laissait dater une dépense ailleurs, « le détail vit au
+              garage » désignerait un écran qui ne la contient pas. */}
           <Ajouter db={db} poste={poste} machineId={machineSeule}
+                   annee={anneeSaison(new Date().toISOString())}
                    onFini={(centimes) => {
                      setNote(`Noté · ${formaterEuros(centimes)} sur ${NOM_POSTE[poste].toLowerCase()}.`
                        + ' Le détail vit au garage, dans le budget.')

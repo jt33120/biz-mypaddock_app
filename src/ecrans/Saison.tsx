@@ -39,6 +39,13 @@ export function Saison({ db }: { db: PowerSyncDatabase }) {
   if (!annees.length || !b) return null
 
   const jours = b.du && b.au ? ecartJours(b.du, b.au) : 0
+  /* ⚠ LE REPÈRE SE REGARDE AVANT DE S'AFFIRMER. Il était écrit
+     `repereMensuel(b.budgetCentimes)` suivi d'un `!`, sous le seul garde
+     `budgetCentimes != null` — or `repereMensuel` rend aussi `null` sur un
+     plafond à zéro, et le `!` passait alors ce `null` à `formaterEuros`, qui rend
+     « 0 € ». Un repère mensuel de 0 € est un chiffre faux affiché avec aplomb :
+     l'absence se rend, elle ne se calcule pas. */
+  const repereDuMois = repereMensuel(b.budgetCentimes)
 
   return (
     <div className="bloc pile saison">
@@ -99,7 +106,7 @@ export function Saison({ db }: { db: PowerSyncDatabase }) {
       {b.budgetCentimes != null && (
         <p className="note">
           Plafond posé pour l'année {b.annee} : {formaterEuros(b.budgetCentimes)}
-          {' '}· soit un repère de {formaterEuros(repereMensuel(b.budgetCentimes)!)} par mois
+          {repereDuMois != null && <>{' '}· soit un repère de {formaterEuros(repereDuMois)} par mois</>}
           {' '}· dépensé sur l'année {formaterEuros(b.depenseCentimes)}
         </p>
       )}

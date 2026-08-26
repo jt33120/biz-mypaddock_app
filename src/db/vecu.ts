@@ -92,15 +92,42 @@ export const estAVenir = (date: string, jour: string = aujourdhui()): boolean =>
  * — elle « a eu lieu » au sens des compteurs — et pourtant ce qu'on vient
  * chercher est ce qui la PRÉPARE, pas son bilan chronométrique.
  *
- * ⚠ LE BASCULEMENT TIENT À UN FAIT OBSERVABLE : une session existe. Jamais à
+ * ⚠ LE BASCULEMENT TIENT À UN FAIT OBSERVABLE : une MESURE existe. Jamais à
  * une heure, jamais à un réglage, jamais à une case à cocher. Le pilote saisit
  * son premier chrono, et la journée montre son chrono — sans que rien ne le lui
  * ait demandé (FR-61 : « confirmé par le pilote OU par une mesure »).
+ *
+ * ⚠ ET « MESURE » NE VOULAIT DIRE QUE « SESSION », CE QUI ÉTAIT LE DÉFAUT. Une
+ * photo prise au paddock, un geste déclaré, une chute consignée le jour même
+ * laissaient l'écran ouvrir la PRÉPARATION d'une journée où le pilote était
+ * déjà. FR-61 dit « confirmé par le pilote OU PAR UNE MESURE » : une photo EST
+ * une mesure, une chute aussi. La bascule se fait donc sur la première trace,
+ * et `mesures` les compte toutes (`bilanRoulage`, src/db/depot.ts).
+ *
+ * ⚠ MAIS LES DEUX MOITIÉS NE BASCULENT PAS AU MÊME MOMENT, parce qu'elles ne
+ * prouvent pas la même chose :
+ *
+ *   · UNE SESSION bascule quelle que soit la date. Un chrono ne se saisit pas
+ *     par avance, et c'est le comportement d'origine : il ne change pas.
+ *   · UNE PHOTO, UN GESTE, UNE CHUTE ne basculent QUE LE JOUR VENU. Attachés à
+ *     une journée de septembre, ce sont des pièces de PRÉPARATION — le flyer de
+ *     l'organisateur, l'itinéraire — et les compter comme une preuve d'y être
+ *     allé fermerait la préparation de la journée à la première pièce jointe.
+ *
+ * ⚠ ET L'ARGENT NE COMPTE JAMAIS, LUI. « L'engagement » est une ligne
+ * d'« Avant d'y aller » : la liste envoie ELLE-MÊME le pilote payer
+ * (`cequiResteAFaire`, src/db/preparation.ts). Compter cette dépense comme une
+ * trace de vécu ferait disparaître la liste à l'instant où l'on suit sa propre
+ * consigne — une boucle qui se détruit, et exactement la classe de défaut que
+ * la revue vient de relever. Les bancs `fumee-journee` et `fumee-budget`
+ * suivent ce chemin et attendent `.journee-page` APRÈS le paiement : ils
+ * rougissent le jour où l'argent basculera.
  *
  * ⚠ ET LA SYMÉTRIE TIENT DANS LES DEUX SENS : une journée déjà passée ne porte
  * aucune liste de préparation, parce que « ce qui reste à faire sur une journée
  * déjà passée serait un reproche ».
  */
 export const sePrepare = (
-  r: { date: string; sessions: number }, jour: string = aujourdhui(),
-): boolean => r.date >= jour && r.sessions === 0
+  r: { date: string; sessions: number; mesures: number }, jour: string = aujourdhui(),
+): boolean =>
+  r.date >= jour && r.sessions === 0 && (r.date > jour || r.mesures === 0)

@@ -45,11 +45,19 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
   const [taches, setTaches] = useState<Tache[]>([])
   const [siennes, setSiennes] = useState<Ligne[]>([])
   const [saisie, setSaisie] = useState('')
+  /** ⚠ « JE NE SAIS PAS ENCORE » N'EST PAS « IL N'Y A RIEN ». Les deux listes
+   *  partent vides et se remplissent d'une requête : sans ce témoin, le premier
+   *  rendu affirmait « Rien n'attend au garage, et l'engagement est saisi » —
+   *  une phrase FAUSSE une fraction de seconde à chaque ouverture, sur un écran
+   *  dont tout le propos est de n'énoncer que ce qu'il sait. Le second état se
+   *  dit ; le premier ne se dit pas. */
+  const [su, setSu] = useState(false)
 
   const charger = useCallback(async () => {
     setTaches(await cequiResteAFaire(db, roulage))
     const l = await lignes(db, roulage.id)
     setSiennes(l.filter((x) => x.categorie === 'preparation'))
+    setSu(true)
   }, [db, roulage])
   useEffect(() => { void charger() }, [charger])
 
@@ -65,9 +73,27 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
   // fois : voir deux fois « plaquettes » ferait douter des deux.
   const propres = siennes.filter((s) => !taches.some((t) => memeTache(t.libelle, s.libelle)))
 
+  /* ⚠ TANT QU'ON NE SAIT PAS, ON SE TAIT — et on ne se tait qu'ICI. Le bloc
+     porte déjà son nom et son champ d'ajout : ajouter une chose à faire est vrai
+     avant comme après la réponse. Ce qui est retiré est la seule ligne qui
+     AFFIRME quelque chose sur le garage.
+     `data-etat` n'est pas décoratif : c'est ce que `fumee-a-venir` attend pour
+     savoir que la liste a répondu, au lieu d'attendre l'élément — un écran qui
+     réaffirmerait trop tôt rendrait cette attente immédiate, donc muette, et
+     ferait rougir le banc. */
+  if (!su) {
+    return (
+      <div className="bloc pile preparation" data-etat="attente">
+        <p className="libelle">Avant d'y aller</p>
+        <Ajout valeur={saisie} sur={setSaisie} occupe={occupe} poser={poser}
+               primaire={ajoutPrimaire} />
+      </div>
+    )
+  }
+
   if (!taches.length && !propres.length) {
     return (
-      <div className="bloc pile preparation">
+      <div className="bloc pile preparation" data-etat="su">
         <p className="libelle">Avant d'y aller</p>
         {/* Une liste vide est un ÉTAT JUSTE, pas un écran raté. Elle dit ce
             qu'elle sait — rien n'attend — et propose d'en ajouter, sans jamais
@@ -80,7 +106,7 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
   }
 
   return (
-    <div className="bloc pile preparation">
+    <div className="bloc pile preparation" data-etat="su">
       <p className="libelle">Avant d'y aller</p>
 
       {taches.map((t, i) => (

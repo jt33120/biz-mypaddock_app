@@ -37,20 +37,46 @@ import type { Tache } from '../db/preparation'
  * première session saisie, cet écran s'efface de lui-même au profit du bilan
  * (`sePrepare`, src/db/vecu.ts).
  *
+ * ⚠ CETTE PROMESSE ÉTAIT TENUE POUR LE CHRONO SEUL, ET FAUSSE POUR SIX AUTRES
+ * PORTES — la revue de l'épique 17 l'a relevé, et c'est le défaut le plus cher
+ * de l'écran. Sur une journée datée du JOUR MÊME, `sePrepare` est vrai : c'est
+ * cet écran-ci que le pilote ouvre au paddock, et il venait de perdre en
+ * silence les photos, « Déclarer un geste », « J'ai chuté ce jour-là », ce que
+ * la journée a coûté, « Ajouter une dépense », le récapitulatif et
+ * l'interrupteur de visibilité. Ce sont EXACTEMENT les gestes du jour même : on
+ * photographie, on chute, on paie le jour où l'on y est.
+ *
+ * Elles sont donc toutes ici, EN SECOND RANG — après ce qui prépare, jamais
+ * avant : ce qui est proposé en premier reste « Avant d'y aller » et le
+ * chargement. Et elles arrivent par INJECTION plutôt que par montage : ce sont
+ * les nœuds mêmes du bilan, composés une seule fois dans src/App.tsx. Un second
+ * `<Photos>` écrit ici aurait divergé du premier à la première correction —
+ * c'est la même règle que la checklist, qui se DÉPLACE et ne se duplique pas.
+ *
  * ⚠ AUCUN COMPTEUR, AUCUNE CERTIFICATION. Ni « 4 sur 7 », ni pourcentage, ni
  * barre qui se remplit, ni « prêt ». Et rien ne dit combien de jours il
  * « reste » pour préparer : « dans 23 jours » est un fait, « il te reste
  * 23 jours » est une échéance déguisée.
  */
-export function Journee({ db, r, onAller, onSession, onCircuit, onAccueil }: {
+export function Journee({
+  db, r, photos, chutes, cout, visibilite, onAller, onSession, onCircuit, onAccueil, onRecap,
+}: {
   db: PowerSyncDatabase
   r: { id: string; circuit: string; date: string; machine_id: string | null }
+  /** LES QUATRE BLOCS DU BILAN QUI VALENT AUSSI LE JOUR MÊME. Ce sont les mêmes
+   *  nœuds que ceux du bilan, composés dans src/App.tsx et passés aux deux
+   *  écrans : deux compositions séparées auraient divergé. */
+  photos: React.ReactNode
+  chutes: React.ReactNode
+  cout: React.ReactNode
+  visibilite: React.ReactNode
   /** Chaque ligne dérivée MÈNE QUELQUE PART — c'est la même promesse que sur
    *  l'accueil, et elle est portée par le même composant. */
   onAller: (vers: Tache['vers']) => void
   onSession: () => void
   onCircuit: () => void
   onAccueil: () => void
+  onRecap: () => void
 }) {
   const jours = ecartJours(aujourdhui(), r.date)
 
@@ -84,6 +110,28 @@ export function Journee({ db, r, onAller, onSession, onCircuit, onAccueil }: {
           c'est celui du bilan, monté ici. Une seconde checklist écrite à part
           aurait pris du retard sur la première dès la semaine suivante. */}
       <Checklist db={db} roulageId={r.id} jour={r.date} />
+
+      {/* ─── ③ LE SECOND RANG — LES GESTES DU JOUR MÊME ───────────────────
+          Le pilote est au paddock : il photographie, il déclare un geste, il
+          chute, il paie. Aucun de ces gestes n'appartient au bilan plutôt qu'à
+          la préparation — ils appartiennent à la JOURNÉE, et l'écran qui la
+          porte doit les porter tous. Ils sont en second rang, pas en premier :
+          ce qu'on propose d'abord reste ce qui prépare. */}
+      {photos}
+
+      {chutes}
+
+      {cout}
+
+      {/* Le récapitulatif se compose de ce qui existe : sur une journée sans
+          chrono il montre ses photos et ses gestes, et c'est un état juste. Il
+          n'a pas à disparaître parce que la journée n'a pas de meilleur tour. */}
+      <button className="bouton secondaire" onClick={onRecap}>Voir le récapitulatif</button>
+
+      {/* FR-19 — l'interrupteur du cercle, roulage par roulage. Il se règle le
+          jour même aussi bien que le soir : le retirer d'ici obligeait à
+          attendre la première session pour pouvoir décider. */}
+      {visibilite}
 
       {/* ⚠ IL EST DISCRET, ET C'EST TOUTE LA DÉCISION. En bouton primaire
           pleine largeur, il redemanderait le chrono d'une journée qui n'a pas

@@ -12,7 +12,9 @@
  * les besoins de l'essai. Ce qui est éprouvé ici est exactement ce qui part.
  */
 import { anneeSaison, enCentimes, formaterChrono, formaterEcart, formaterEuros } from '../../src/db/depot'
-import { grouperParMois, jaugeBudget, moisDuJour, repereMensuel } from '../../src/db/budget'
+import {
+  grouperParMois, jaugeBudget, jourDansLAnnee, moisDuJour, repereMensuel,
+} from '../../src/db/budget'
 import { instantDeLId, SEUIL_H } from '../../src/db/mesures'
 import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
 import { formaterPoids, TABLES_EMPORTEES } from '../../src/db/emporter'
@@ -37,6 +39,7 @@ import REGLES_DE_SYNCHRO from '../../powersync/sync-config.yaml?raw'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
+import { sePrepare } from '../../src/db/vecu'
 import {
   CHARGEMENT, CHARGEMENT_EMBARQUE, direLAge, direPublication, MOIS_AVANT_DOUTE, moisDepuis,
   NOM_CATEGORIE,
@@ -101,6 +104,29 @@ const vrai = (c: boolean, quoi: string) => { if (!c) throw new Error(quoi) }
 const DESTRUCTIVES = gestesDestructifs(SOURCES)
 
 /**
+ * LE DESSIN PRIMAIRE, LU SANS SUPPOSER SA FORME.
+ *
+ * Un bouton est PRIMAIRE quand sa classe porte `bouton` sans `secondaire` :
+ * c'est le dégradé plein, pleine largeur, celui qui dit « fais ça maintenant ».
+ *
+ * ⚠ ET UNE CLASSE QU'ON NE SAIT PAS LIRE COMPTE POUR PRIMAIRE. `boutonsDe` rend
+ * `''` dès que le `className` est calculé — un ternaire, une concaténation — et
+ * un garde qui traiterait ce vide comme « pas primaire » se tairait exactement
+ * là où le dessin devient invisible à la relecture. On refuse ce qu'on ne peut
+ * pas prouver, plutôt que de l'absoudre.
+ */
+const estPrimaire = (className: string): boolean =>
+  !className || (/\bbouton\b/.test(className) && !/\bsecondaire\b/.test(className))
+
+/** CE QUE L'ÉCRAN REND VRAIMENT, sans ce qu'il raconte à côté. Un commentaire
+ *  de ce dépôt CITE le défaut qu'il empêche — « un second `<Photos>` monté
+ *  ici », « Rien n'attend au garage » — et un témoin qui lit le fichier brut
+ *  accuse alors la mémoire du défaut au lieu du défaut. Le `[^:]` protège les
+ *  `https://` : sans lui, la moitié d'une URL passe pour un commentaire. */
+const sansCommentaires = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+
+/**
  * ─── LES REQUÊTES DU DÉPÔT, LUES COMME DU TEXTE — récit 17.1 ────────────────
  *
  * Une requête SQL est une chaîne : elle ne porte aucun type, aucun appel,
@@ -109,21 +135,62 @@ const DESTRUCTIVES = gestesDestructifs(SOURCES)
  * précisément comme ça que « cette journée a-t-elle eu lieu ? » a fini écrite
  * quatre fois et demie, avec une moitié différente dans chaque fichier.
  *
- * Le seul témoin possible est donc le texte source. On en extrait les gabarits
- * — tout ce qui vit entre deux accents inverses — parce qu'aucun d'eux ne
- * contient d'accent inverse imbriqué : `${A_EU_LIEU('r')}` porte des
- * apostrophes, jamais des accents.
+ * Le seul témoin possible est donc le texte source.
+ *
+ * ⚠ ET IL NE LISAIT QUE LES ACCENTS INVERSES, CE QUI ÉTAIT UN TROU PROUVÉ. La
+ * première version extrayait les seuls gabarits — `` `…` `` — au motif
+ * qu'aucun d'eux ne contient d'accent imbriqué. Vrai, et hors sujet : une
+ * requête tient très bien entre APOSTROPHES ou entre GUILLEMETS, et
+ * `'SELECT … FROM roulage'` traversait les deux gardes sans être lue une seule
+ * fois. Une garde qu'on croit tenue et qui ne tient pas est pire qu'une garde
+ * absente, parce qu'on cesse de regarder.
+ *
+ * On découpe donc le source en trois : les COMMENTAIRES, qu'on jette ; les
+ * LITTÉRAUX des trois formes, qu'on lit ; et le RESTE, le code nu. Le reste
+ * n'est pas jeté non plus — il sert de preuve que la lecture a tout vu (voir
+ * l'essai « la lecture des requêtes ne laisse rien dehors »), parce qu'un
+ * découpage qui déraperait sur une apostrophe de JSX perdrait des requêtes en
+ * silence.
  *
  * ⚠ `src/db/vecu.ts` EST EXCLU, ET IL DOIT L'ÊTRE : c'est le seul fichier qui a
  * le droit d'écrire le prédicat, puisque c'est lui qui le définit.
  */
+const decouper = (source: string): { litteraux: string[]; reste: string } => {
+  const litteraux: string[] = []
+  let reste = ''
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i]
+    if (c === '/' && source[i + 1] === '/') {
+      while (i < source.length && source[i] !== '\n') i++
+      reste += '\n'; continue
+    }
+    if (c === '/' && source[i + 1] === '*') {
+      i += 2
+      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i++
+      i++; reste += ' '; continue
+    }
+    if (c === '`' || c === '"' || c === '\'') {
+      let j = i + 1
+      for (; j < source.length && source[j] !== c; j++) {
+        if (source[j] === '\\') j++
+        // Une chaîne simple ou double ne franchit pas la ligne : ce qui en
+        // franchit une n'était pas une chaîne — c'est une apostrophe de prose.
+        else if (c !== '`' && source[j] === '\n') break
+      }
+      if (source[j] === c) { litteraux.push(source.slice(i + 1, j)); i = j; continue }
+    }
+    reste += c
+  }
+  return { litteraux, reste }
+}
+
 const gabaritsSql = (): { fichier: string; sql: string }[] => {
   const sortie: { fichier: string; sql: string }[] = []
   for (const [chemin, texte] of Object.entries(SOURCES)) {
     if (chemin.endsWith('/db/vecu.ts')) continue
-    for (const m of texte.matchAll(/`([^`]*)`/g)) {
-      if (!/\bSELECT\b/i.test(m[1])) continue
-      sortie.push({ fichier: chemin.replace(/^.*\/src\//, 'src/'), sql: m[1] })
+    for (const l of decouper(texte).litteraux) {
+      if (!/\bSELECT\b/i.test(l)) continue
+      sortie.push({ fichier: chemin.replace(/^.*\/src\//, 'src/'), sql: l })
     }
   }
   return sortie
@@ -271,12 +338,110 @@ const essais = [
   doit('les mois se rangent dans l\'ordre du calendrier, jamais par montant', () => {
     // Trier par montant ferait du mois le plus cher une tête de liste, donc un
     // palmarès, donc un verdict — sur un mois où l'on a simplement roulé.
+    //
+    // ⚠ CET ESSAI NE GARDAIT RIEN, et la revue l'a prouvé en posant un tri par
+    // montant dans `grouperParMois` : 84/84 restaient verts. Son jeu d'essai
+    // était 09 à 1 €, 03 à 900 €, 06 à 50 € — et le montant DÉCROISSANT rend
+    // mars, juin, septembre, c'est-à-dire exactement l'ordre du calendrier. Un
+    // essai dont les deux règles rivales donnent la même réponse ne départage
+    // rien ; il rassure, ce qui est pire que se taire.
+    //
+    // Les trois montants CONTREDISENT donc le calendrier, dans les deux sens :
+    //   · par montant décroissant → juin, mars, septembre ;
+    //   · par montant croissant   → septembre, mars, juin ;
+    //   · dans l'ordre d'arrivée  → juin, septembre, mars.
+    // Aucun des trois n'est mars, juin, septembre. Seul le calendrier l'est.
     const m = grouperParMois([
+      { date_jour: '2026-06-02', poste: 'pneus', montant_centimes: 90000 },
       { date_jour: '2026-09-02', poste: 'pneus', montant_centimes: 100 },
-      { date_jour: '2026-03-02', poste: 'pneus', montant_centimes: 90000 },
-      { date_jour: '2026-06-02', poste: 'pneus', montant_centimes: 5000 },
+      { date_jour: '2026-03-02', poste: 'pneus', montant_centimes: 5000 },
     ])
     egal(m.map((x) => x.mois), ['2026-03', '2026-06', '2026-09'])
+    // Et chaque mois garde SON total : un tri qui déplacerait les lignes sans
+    // toucher aux montants se verrait ici, et pas seulement dans l'ordre des clés.
+    egal(m.map((x) => x.total), [5000, 90000, 100], 'un mois a changé de total')
+  }),
+
+  doit('un mois se lit dans le CALENDRIER, pas dans la forme de la date', () => {
+    // ⚠ LA GARDE D'À CÔTÉ NE TESTAIT QUE L'ALLURE. `2026-13-45` a la bonne
+    // forme : il passait, `slice(0, 7)` en tirait le mois « 2026-13 », et
+    // `nomMois` — qui ne connaît que douze noms — rendait « 2026 » tout court à
+    // l'écran. Une ligne intitulée « 2026 » au milieu des mois se lit comme un
+    // total d'année : le mauvais chiffre au bon endroit, ce qui est pire qu'une
+    // absence. C'est le calendrier qui tranche, pas le gabarit.
+    egal(moisDuJour('2026-13-45'), null, 'un treizième mois de quarante-cinq jours')
+    egal(moisDuJour('2026-00-10'), null, 'un mois zéro')
+    egal(moisDuJour('2026-01-00'), null, 'un jour zéro')
+    egal(moisDuJour('2026-02-30'), null, 'le 30 février')
+    egal(moisDuJour('2026-02-29'), null, 'le 29 février d\'une année qui ne l\'est pas')
+    egal(moisDuJour('2026-04-31'), null, 'le 31 avril')
+    // Et ce qui existe passe, y compris les bords qui n'ont l'air de rien.
+    egal(moisDuJour('2028-02-29'), '2028-02', 'le 29 février d\'une bissextile')
+    egal(moisDuJour('2026-01-01'), '2026-01')
+    egal(moisDuJour('2026-12-31'), '2026-12')
+  }),
+
+  doit('le jour d\'une dépense ne sort pas de l\'année que le budget montre', () => {
+    // ⚠ LE DÉFAUT ÉTAIT COMPLET, ET IL FAISAIT DISPARAÎTRE DE L'ARGENT. Le champ
+    // jour n'avait ni `min` ni `max` ; `saison_annee` se dérive du jour (AD-18) ;
+    // et les DEUX lectures du budget filtrent `WHERE saison_annee = ?` sur
+    // l'année en cours, la seule que le garage affiche. Une facture de décembre
+    // retrouvée en janvier — le cas MÊME pour lequel le champ existe — s'écrivait
+    // parfaitement, partait parfaitement, et n'apparaissait plus nulle part,
+    // pendant que le raccourci de l'accueil annonçait « le détail vit au garage,
+    // dans le budget ». Le produit annonçait donc quelque chose de faux.
+    vrai(jourDansLAnnee('2026-01-01', 2026), 'le premier jour de l\'année')
+    vrai(jourDansLAnnee('2026-12-31', 2026), 'le dernier')
+    vrai(!jourDansLAnnee('2025-12-30', 2026), 'la facture de décembre dernier')
+    vrai(!jourDansLAnnee('2027-01-01', 2026), 'le lendemain de la saison')
+    // Un jour qui n'existe pas n'est dans aucune année : la borne s'appuie sur le
+    // même calendrier que le mois, pas sur un `slice` de quatre caractères — sans
+    // quoi `2026-13-45` serait « dans l'année 2026 » et ressortirait « sans mois »
+    // au garage, deux verdicts contraires sur la même ligne.
+    vrai(!jourDansLAnnee('2026-13-45', 2026), 'un mois treize dans la bonne année')
+    vrai(!jourDansLAnnee('', 2026), 'un champ vidé à la main')
+  }),
+
+  doit('le jour d\'une dépense est celui du PAIEMENT, pas de la journée visée', () => {
+    // ⚠ CONSTATÉ À L'ÉCRAN AVANT D'ÊTRE ÉCRIT ICI : journée annoncée au
+    // 2026-10-04, engagement de 230 € noté en août, et le garage affichait
+    // « Par mois · octobre 2026 · 230 € ». L'argent était sorti en août.
+    // Trois choses cassaient ensemble :
+    //   ① la migration déclare `date_jour` = « le jour où la dépense a été
+    //     payée » — le produit écrivait autre chose sous ce nom ;
+    //   ② une liste « Par mois » qui contient un mois À VENIR se lit comme une
+    //     prévision, ce que les deux clauses d'argent refusent ligne à ligne ;
+    //   ③ depuis l'épique 17 les journées à venir sont de premier rang : c'était
+    //     LE chemin de l'engagement, pas un bord.
+    // La journée n'est pas perdue — elle reste la CIBLE, `cible` et `roulage_id`
+    // sont là pour ça. Ce qu'elle ne donne plus, c'est le jour.
+    const saisies = Object.entries(SOURCES)
+      .filter(([c]) => /\/ecrans\/(Depense|Budget)\.tsx$/.test(c))
+    egal(saisies.length, 2, 'les deux écrans qui saisissent une dépense')
+    for (const [chemin, texte] of saisies) {
+      const f = chemin.replace(/^.*\/src\//, 'src/')
+      for (const m of texte.matchAll(/\bdate:\s*([^\n]*)/g))
+        vrai(!/roulage/i.test(m[1]),
+          `${f} date une dépense sur la journée visée : « ${m[1].trim()} »`)
+      // Et le jour se SAISIT. Sans champ, « aujourd'hui » est la seule valeur
+      // possible : la facture retrouvée trois semaines plus tard repart au
+      // mauvais mois, c'est-à-dire exactement le défaut que 19.2 prétend régler.
+      vrai(/type="date"/.test(texte), `${f} n'offre aucun champ jour`)
+    }
+  }),
+
+  doit('aucun écran n\'affirme un repère mensuel sans l\'avoir regardé', () => {
+    // ⚠ `repereMensuel` REND `null` SUR UN PLAFOND À ZÉRO autant que sur un
+    // plafond absent, et `formaterEuros(null!)` ne se plaint de rien : il divise
+    // `null` par cent et rend « 0 € ». Un repère mensuel de 0 € est un chiffre
+    // faux affiché avec aplomb, et le pilote n'a aucun moyen de le savoir.
+    // Trois écrans posaient ce `!` ; un seul le gardait vraiment, et rien dans le
+    // code ne disait lequel. La règle est donc devenue : personne ne le pose.
+    const fautifs: string[] = []
+    for (const [chemin, texte] of Object.entries(ECRANS))
+      if (/repereMensuel\([^()]*\)\s*!(?!=)/.test(texte))
+        fautifs.push(chemin.replace(/^.*\/src\//, 'src/'))
+    egal(fautifs, [], 'un repère mensuel affirmé sans l\'avoir lu')
   }),
   doit('un mois ne porte AUCUN champ où loger une comparaison', () => {
     // ⚠ L'ESSAI NÉGATIF DE L'ÉPIQUE 19, et il ne se remplace pas par un
@@ -898,6 +1063,26 @@ const essais = [
     for (const i of inserts)
       vrai(/\bdate_jour\b/.test(i.colonnes),
         `${i.fichier} écrit une dépense sans son jour : ce mois-là est perdu pour toujours`)
+    // ⚠ ET SON POSTE. `creerDepense` ne l'écrivait pas du tout, et le défaut ne
+    // se voyait pas au budget (« Sans poste » est un état prévu) mais dans
+    // « Avant d'y aller » : sa ligne « L'engagement » se dérive d'un
+    // `WHERE poste = 'engagement'`, et restait donc affichée APRÈS le paiement.
+    // Une liste dérivée dont les lignes ne partent jamais est une liste morte.
+    for (const i of inserts)
+      vrai(/\bposte\b/.test(i.colonnes),
+        `${i.fichier} écrit une dépense sans poste : la tâche qui l'attend ne partira jamais`)
+  }),
+  doit('la ligne « L\'engagement » peut réellement disparaître', () => {
+    // Le bout de chaîne que personne ne regardait : ce que la tâche CHERCHE doit
+    // être ce que l'écran vers lequel elle mène ÉCRIT. Les deux vivaient dans
+    // deux fichiers et ne se sont jamais rencontrés.
+    const prep = SOURCES[Object.keys(SOURCES).find((k) => k.endsWith('/db/preparation.ts'))!]
+    const ecran = SOURCES[Object.keys(SOURCES).find((k) => k.endsWith('/ecrans/Depense.tsx'))!]
+    const cherche = prep.match(/poste\s*=\s*'(\w+)'/)
+    vrai(!!cherche, "la tâche « L'engagement » ne cherche plus aucun poste")
+    vrai(new RegExp(`'${cherche![1]}'`).test(ecran),
+      `la tâche cherche le poste « ${cherche![1]} » et l'écran de dépense ne sait pas l'écrire`)
+    vrai(/setPoste|poste,/.test(ecran), "l'écran de dépense n'envoie aucun poste")
   }),
 
   doit('aucune colonne à défaut serveur ne peut apparaître sans écrivain', () => {
@@ -1444,6 +1629,37 @@ const essais = [
     egal(copies, [], 'fichiers qui réécrivent le prédicat au lieu de l\'appeler')
   }),
 
+  doit('17.1 — la lecture des requêtes ne laisse rien dehors', () => {
+    /* ⚠ LA GARDE QUI GARDE LES DEUX AUTRES, et elle arrive parce que la revue a
+       PROUVÉ le trou : les deux essais ci-dessus ne lisaient que les gabarits
+       entre accents inverses, si bien qu'une requête écrite entre apostrophes
+       traversait tout sans être lue. Le découpage lit maintenant les trois
+       formes — mais un découpage peut DÉRAPER : une apostrophe de prose JSX
+       (« Rien n'attend au garage, et l'engagement… ») ressemble à une chaîne,
+       et le scanner qui l'avale peut manquer la requête d'après. Il perdrait
+       alors des lectures EN SILENCE, ce qui est exactement le défaut qu'on
+       corrige, déplacé d'un cran.
+
+       On mesure donc la lecture elle-même : tout `FROM roulage` du code nu
+       doit se trouver DANS un littéral lu. Le reste — le code hors
+       commentaires et hors chaînes — ne doit plus en contenir un seul. */
+    const dehors: string[] = []
+    for (const [chemin, texte] of Object.entries(SOURCES)) {
+      const { reste } = decouper(texte)
+      const n = (reste.match(/\b(?:FROM|JOIN)\s+roulage\b/gi) ?? []).length
+      if (n) dehors.push(`${chemin.replace(/^.*\/src\//, 'src/')} — ${n} lecture(s)`)
+    }
+    egal(dehors, [], 'lectures de `roulage` que le découpage n\'a pas vues')
+
+    // Et l'autre borne : une lecture qui rendrait ZÉRO requête passerait les
+    // trois essais sans rien dire. Un témoin muet ressemble à un témoin
+    // satisfait — le même piège que le recensement des gestes destructifs.
+    vrai(lecturesDeRoulage().length >= 20,
+      `seulement ${lecturesDeRoulage().length} lectures de roulage trouvées`)
+    vrai(gabaritsSql().length >= 60,
+      `seulement ${gabaritsSql().length} requêtes lues dans les sources`)
+  }),
+
   /* ─── RÉCIT 17.2 — LE TAP N'OUVRE PAS UN POST-MORTEM ──────────────────────
      L'écran d'une journée à venir se définit par ce qu'il NE porte pas, et une
      absence ne se vérifie que par la négative. Les mots visés sont ceux que le
@@ -1464,8 +1680,15 @@ const essais = [
     const saisir = boutonsDe(source).filter((b) =>
       b.libelles.some((l) => /saisir une session/i.test(l)))
     egal(saisir.length, 1, 'le chemin vers la saisie d\'une session a disparu')
-    vrai(!/className="bouton"[^>]*>\s*Saisir une session/.test(affiche),
-      '« Saisir une session » est redevenu le bouton primaire')
+    /* ⚠ LE GARDE NE RECONNAISSAIT LE PRIMAIRE QUE SOUS SA FORME LITTÉRALE.
+       `className="bouton"` collé au libellé : une classe CALCULÉE —
+       `className={x ? 'bouton' : 'lien'}` — ou seulement un attribut glissé
+       entre les deux, et l'expression régulière ne voyait plus rien. On lit
+       maintenant la classe telle que `boutonsDe` l'extrait, et une classe
+       qu'on ne sait PAS lire compte comme primaire : un garde qui se tait sur
+       ce qu'il ignore ne garde rien. */
+    vrai(!estPrimaire(saisir[0].className),
+      `« Saisir une session » est redevenu le bouton primaire (className « ${saisir[0].className} »)`)
 
     // Aucun compteur de progression, aucune certification : ni « 4 sur 7 », ni
     // pourcentage, ni « prêt ». C'est la même clause que FR-50, et elle vaut
@@ -1473,6 +1696,131 @@ const essais = [
     vrai(!/\d+\s*(sur|\/)\s*\d+/.test(affiche), 'un compteur de progression est apparu')
     for (const mot of ['il te reste', 'plus que', 'prêt à partir'])
       vrai(!affiche.toLowerCase().includes(mot), `« ${mot} » fabrique une échéance`)
+  }),
+
+  doit('17.2 — l\'écran de préparation ne ferme AUCUNE porte du bilan', () => {
+    /* ⚠ LA MOITIÉ QUE L'ESSAI D'AU-DESSUS NE VOYAIT PAS, et la plus chère.
+       « On change ce qui est PROPOSÉ EN PREMIER, on ne ferme aucune porte » :
+       la première moitié se vérifiait par la négative, la seconde ne se
+       vérifiait pas du tout. Sur une journée datée du JOUR MÊME, `sePrepare`
+       est vrai — c'est cet écran-ci qui s'ouvre au paddock — et il retirait en
+       silence les photos, « Déclarer un geste », « J'ai chuté ce jour-là », ce
+       que la journée a coûté, « Ajouter une dépense », le récapitulatif et
+       l'interrupteur de visibilité. Ce sont les gestes du jour même.
+
+       Le témoin porte sur les DEUX bouts : l'écran rend bien chaque bloc, et
+       App.tsx les lui donne bien.
+
+       ⚠ ET IL NE DOUBLE PAS LE COMPILATEUR, ÉPROUVÉ DANS LES DEUX SENS. Retirer
+       la propriété de `<Journee>` fait bien une TS2741, et retirer `{cout}` du
+       rendu une TS6133 : de ce côté-là, `tsc -b` suffisait. Ce qu'aucun type ne
+       voit, c'est `photos={null}` — `React.ReactNode` l'accepte, la
+       construction passe, et les six portes se referment en silence. C'est
+       exactement la forme du défaut d'origine, et c'est le banc de fumée qui
+       l'attrape : les sept vérifications « la porte est ouverte » de
+       `fumee-a-venir` rougissent toutes les six sur ce cas-là (la septième, le
+       récapitulatif, est un bouton de l'écran et tient toute seule). Cet
+       essai-ci garde l'autre moitié : que le CÂBLAGE existe encore. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Journee.tsx'))?.[1] ?? ''
+    vrai(brut.length > 0, 'Journee.tsx introuvable')
+    // Ce que l'écran REND, pas ce qu'il raconte : le commentaire de ce fichier
+    // cite `<Photos>` pour dire qu'il ne le monte pas.
+    const source = sansCommentaires(brut)
+    const app = sansCommentaires(
+      Object.entries(ECRANS).find(([c]) => c.endsWith('/App.tsx'))?.[1] ?? '')
+    const balise = app.slice(app.indexOf('<Journee'), app.indexOf('/>', app.indexOf('<Journee')))
+    vrai(balise.length > 0, '<Journee> introuvable dans App.tsx')
+
+    for (const porte of ['photos', 'chutes', 'cout', 'visibilite']) {
+      vrai(new RegExp(`\\{\\s*${porte}\\s*\\}`).test(source),
+        `la porte « ${porte} » n'est plus rendue sur l'écran de préparation`)
+      vrai(new RegExp(`\\b${porte}=`).test(balise),
+        `la porte « ${porte} » n'est plus donnée à <Journee> par App.tsx`)
+    }
+
+    const recap = boutonsDe(source)
+      .filter((b) => b.libelles.some((l) => /voir le récapitulatif/i.test(l)))
+    egal(recap.length, 1, 'le chemin vers le récapitulatif a disparu de la préparation')
+    vrai(/\bonRecap=/.test(balise), '<Journee> ne reçoit plus onRecap')
+
+    // ⚠ ET LES MÊMES NŒUDS QUE LE BILAN, PAS DES JUMEAUX. Un second `<Photos>`
+    // monté ici aurait divergé du premier à la première correction — c'est la
+    // règle que la checklist tient déjà en se DÉPLAÇANT plutôt qu'en se
+    // dupliquant. L'écran reçoit donc des nœuds, il n'en compose aucun.
+    for (const monte of ['<Photos', '<Chutes', '<BlocCout', '<Visibilite'])
+      vrai(!source.includes(monte),
+        `${monte} est monté une seconde fois dans Journee.tsx au lieu d'être reçu`)
+  }),
+
+  doit('17.2 — la première trace fait basculer la journée, l\'argent jamais', () => {
+    /* ⚠ `sePrepare` NE REGARDAIT QUE LES SESSIONS, et son propre commentaire
+       citait pourtant FR-61 : « confirmé par le pilote OU PAR UNE MESURE ».
+       Une photo prise au paddock, un geste déclaré, une chute consignée le jour
+       même laissaient l'écran ouvrir la PRÉPARATION d'une journée où le pilote
+       était déjà.
+
+       Les trois cas du bas sont les BORDS, et ce sont eux qui tiennent le
+       récit :
+         · une mesure sur une journée À VENIR ne bascule rien — une photo
+           attachée à la journée de septembre est le flyer de l'organisateur,
+           pas une preuve d'y être allé ;
+         · une session bascule quelle que soit la date — un chrono ne se saisit
+           pas par avance, et c'est le comportement d'origine ;
+         · l'argent ne bascule JAMAIS, et c'est la clause la plus facile à
+           casser : « L'engagement » est une ligne d'« Avant d'y aller », donc
+           la liste envoie elle-même payer. La compter détruirait la liste à
+           l'instant où l'on suit sa consigne. `mesures` ne compte donc aucune
+           dépense (`bilanRoulage`, src/db/depot.ts), et les bancs
+           `fumee-journee` et `fumee-budget` suivent ce chemin en entier. */
+    const jour = '2026-08-26'
+    const av = (d: string, s = 0, m = 0) => sePrepare({ date: d, sessions: s, mesures: m }, jour)
+
+    vrai(av('2026-09-12'), 'une journée de septembre ne se prépare plus')
+    vrai(av(jour), 'la journée du jour, vierge, ne se prépare plus')
+    vrai(!av('2026-08-25'), 'une journée passée porte une liste de préparation')
+
+    vrai(!av(jour, 1, 0), 'une session ne fait plus basculer la journée du jour')
+    vrai(!av(jour, 0, 1), 'une photo, un geste ou une chute ne fait pas basculer le jour même')
+    vrai(!av('2026-09-12', 1, 0), 'un chrono saisi ne fait pas basculer une journée à venir')
+    vrai(av('2026-09-12', 0, 3), 'une pièce jointe ferme la préparation d\'une journée à venir')
+
+    // Et la lecture qui l'alimente ne compte QUE ces trois tables — pas la
+    // dépense. Le compte se lit dans la requête, seul endroit qui fasse foi.
+    const bilanSql = gabaritsSql()
+      .find((q) => q.fichier.endsWith('db/depot.ts') && /AS mesures/.test(q.sql))?.sql ?? ''
+    vrai(bilanSql.length > 0, '`mesures` a disparu de bilanRoulage')
+    for (const table of ['photo', 'geste', 'chute'])
+      vrai(new RegExp(`FROM ${table}\\b`).test(bilanSql), `\`mesures\` ne compte plus les ${table}s`)
+    vrai(!/FROM depense\b/.test(bilanSql),
+      '`mesures` compte une dépense : « L\'engagement » refermerait sa propre liste')
+  }),
+
+  doit('17.2 — la préparation ne dit pas « rien » avant de savoir', () => {
+    /* ⚠ L'ÉCRAN AFFIRMAIT UN FAIT FAUX À CHAQUE OUVERTURE. Les deux listes
+       partent vides et se remplissent d'une requête : le premier rendu
+       annonçait « Rien n'attend au garage, et l'engagement est saisi » — une
+       phrase fausse une fraction de seconde, à chaque fois, sur l'écran dont
+       tout le propos est de n'énoncer que ce qu'il sait. « Je ne sais pas
+       encore » et « il n'y a rien » sont deux états : le second se dit, le
+       premier ne se dit pas.
+
+       Le témoin est un ORDRE dans le fichier : la sortie qui se tait doit
+       précéder la phrase. `data-etat` porte la même distinction jusque dans le
+       DOM, et `fumee-a-venir` s'en sert comme condition d'attente — un écran
+       qui réaffirmerait trop tôt y ferait rougir le banc. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Preparation.tsx'))?.[1] ?? ''
+    vrai(brut.length > 0, 'Preparation.tsx introuvable')
+    // Le commentaire du fichier CITE la phrase fautive pour dire pourquoi elle
+    // attend : lire le fichier brut ferait accuser la mémoire du défaut.
+    const source = sansCommentaires(brut)
+    const tait = source.indexOf('data-etat="attente"')
+    const phrase = source.indexOf('Rien n\'attend au garage')
+    vrai(tait > 0, 'l\'état « je ne sais pas encore » a disparu de la préparation')
+    vrai(phrase > tait, 'la phrase du vide se rend avant que la liste ait répondu')
+    vrai(/setSu\(true\)/.test(source), 'plus rien ne marque le moment où la liste a répondu')
+    // Et le vide reste DISABLE : quand la liste a répondu et qu'elle est vide,
+    // le produit le dit. Une absence se dit ; c'est l'ignorance qui se tait.
+    vrai(source.includes('data-etat="su"'), 'l\'état « je sais » a disparu du DOM')
   }),
 ]
 

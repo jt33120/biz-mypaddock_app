@@ -4,6 +4,7 @@ import { marquerSaisie } from './mesures'
 import { CIRCUITS_EMBARQUES } from './corpus'
 import { effacerLocale, nomLocal } from './photos'
 import { A_EU_LIEU, aujourdhui, TOUTES_JOURNEES } from './vecu'
+import type { Poste } from './budget'
 
 /** Toutes les lectures et écritures passent ici. Aucun écran n'écrit de SQL. */
 
@@ -382,11 +383,24 @@ export const bilanRoulage = async (db: PowerSyncDatabase, roulageId: string) => 
      Une lecture PAR IDENTIFIANT ne se prononce pas sur le temps : elle rend la
      journée qu'on lui demande, vécue ou non — c'est l'appelant qui décide quoi
      en faire (`sePrepare`, src/db/vecu.ts). */
-  const l = await db.getAll<{ id: string; circuit: string; date: string; machine_id: string | null; sessions: number; meilleur: number | null }>(
+  /* ⚠ `mesures` DESCEND AVEC LE RESTE, ET C'EST CE QUI MANQUAIT À `sePrepare`.
+     Il ne regardait que `sessions` : une photo prise au paddock, un geste
+     déclaré ou une chute consignée le jour même ne faisaient PAS basculer la
+     journée en vécue, et l'écran continuait d'ouvrir sa préparation alors que
+     le pilote y était. FR-61 dit « confirmé par le pilote OU PAR UNE MESURE » —
+     une photo en est une.
+     L'ARGENT N'EN EST PAS UNE, et son absence ici est délibérée : « L'engagement »
+     est une ligne d'« Avant d'y aller », donc une dépense comptée comme trace
+     ferait disparaître la liste à l'instant où l'on suit sa consigne. Le motif
+     complet est sur `sePrepare` (src/db/vecu.ts). */
+  const l = await db.getAll<{ id: string; circuit: string; date: string; machine_id: string | null; sessions: number; meilleur: number | null; mesures: number }>(
     `SELECT r.id, r.circuit_nom AS circuit, r.date_jour AS date, r.machine_id,
             (SELECT count(*) FROM session s WHERE s.roulage_id = r.id) AS sessions,
             (SELECT min(t.temps_ms) FROM tour t
-               JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur
+               JOIN session s2 ON s2.id = t.session_id WHERE s2.roulage_id = r.id) AS meilleur,
+            ((SELECT count(*) FROM photo p WHERE p.roulage_id = r.id)
+           + (SELECT count(*) FROM geste g WHERE g.roulage_id = r.id)
+           + (SELECT count(*) FROM chute c WHERE c.roulage_id = r.id)) AS mesures
        FROM roulage r ${TOUTES_JOURNEES} WHERE r.id = ?`, [roulageId])
   const cur = l[0]
   if (!cur) return null
@@ -440,7 +454,8 @@ export const anneeSaison = (dateIso: string) => Number(dateIso.slice(0, 4))
 
 export const creerDepense = async (
   db: PowerSyncDatabase,
-  d: { cible: Cible; roulageId: string | null; machineId: string | null; centimes: number; libelle: string; date: string },
+  d: { cible: Cible; roulageId: string | null; machineId: string | null; centimes: number
+       libelle: string; date: string; poste: Poste | null },
 ) => {
   const id = nouvelId()
   // ⚠ `date_jour` PART AVEC LA LIGNE, ET C'EST TOUT LE RÉCIT 19.2. Cette
@@ -450,11 +465,20 @@ export const creerDepense = async (
   // rattraper après coup. Un essai unitaire lit désormais les deux INSERT et
   // exige la colonne : un troisième chemin d'écriture qui l'oublierait ferait
   // rougir le banc au lieu de perdre les mois d'une saison entière.
+  // ⚠ `poste` AUSSI, ET POUR UN DÉFAUT QUI SE VOYAIT À L'ÉCRAN. Cette fonction
+  // ne l'écrivait pas du tout. Conséquence sur le seul chemin qui compte : la
+  // liste « Avant d'y aller » dérive sa ligne « L'engagement » d'une requête
+  // `WHERE cible = 'roulage' AND poste = 'engagement'` (src/db/preparation.ts).
+  // Le pilote payait son engagement DEPUIS CETTE LIGNE, la dépense partait sans
+  // poste — et la ligne restait affichée, pour toujours. La promesse de cette
+  // liste est que chaque ligne mène quelque part ET disparaît quand c'est réglé ;
+  // la moitié qui disparaît ne pouvait pas fonctionner.
   await db.execute(
-    `INSERT INTO depense (id, cible, roulage_id, machine_id, saison_annee, montant_centimes, libelle, date_jour)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO depense
+       (id, cible, roulage_id, machine_id, saison_annee, montant_centimes, libelle, date_jour, poste)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, d.cible, d.roulageId, d.machineId, anneeSaison(d.date), d.centimes, d.libelle || null,
-      d.date],
+      d.date, d.poste],
   )
   await marquerSaisie(db)
   return id

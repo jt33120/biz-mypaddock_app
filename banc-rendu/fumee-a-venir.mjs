@@ -91,12 +91,45 @@ const prepare = await page.isVisible('.journee-page')
 verifier('① la validation n\'ouvre PAS les molettes du chrono',
   prepare && !await page.isVisible('.molettes'),
   prepare ? '' : 'elle a ouvert « Meilleur tour de la session »')
+
+// ⚠ ON ATTEND LE CONTENU, PAS L'ÉLÉMENT — même classe de défaut que la course
+// de `fumee-coffre`, corrigée hier. `.journee-page` PARAÎT avant que ses deux
+// listes aient répondu : la capture qui suivait immédiatement l'apparition du
+// sélecteur ne tenait que l'état d'attente de la préparation, à chaque
+// exécution, et toutes les vérifications par la négative écrites plus bas
+// portaient donc sur une page encore vide. Elles ne pouvaient plus rougir — et
+// une garde qu'on croit tenue et qui ne tient pas est pire qu'une garde absente.
+//
+// La condition n'est pas « l'élément existe » mais « la liste a répondu » :
+// `data-etat` porte, dans le DOM, la distinction que l'écran fait entre « je ne
+// sais pas encore » et « il n'y a rien » (src/ecrans/Preparation.tsx).
+//
+// ⚠ ET CE N'EST PAS CETTE ATTENTE QUI GARDE `data-etat`, ÉPROUVÉ : en remettant
+// l'affirmation trop tôt — les deux sorties marquées « su » — le banc est resté
+// VERT trois fois sur trois, parce que la seconde moitié de la condition, le
+// bloc du chargement, laisse à la requête le temps de répondre. Ce qui garde
+// cette moitié-là est l'essai unitaire « la préparation ne dit pas “rien” avant
+// de savoir ». Ce que l'attente garde, elle, est éprouvé plus bas.
+if (prepare) await page.waitForFunction(() => {
+  const p = document.querySelector('.journee-page .preparation')
+  const c = document.querySelector('.journee-page .checklist, .journee-page .chargement-vide')
+  return !!p && p.getAttribute('data-etat') === 'su' && !!c
+}, null, { timeout: 30_000 })
+
 const fiche = await texte(prepare ? '.journee-page' : '.ecran')
 verifier('   ni « Meilleur tour de la session »',
   !fiche.includes('Meilleur tour de la session'), fiche.slice(0, 120))
 verifier('   l\'écran nomme la journée', fiche.includes('Pau-Arnos'), fiche.slice(0, 120))
 verifier('   et il dit QUAND, sans échéance',
   /dans \d+ jours/.test(fiche) && !/reste|plus que|encore/i.test(fiche), fiche.slice(0, 160))
+// ⚠ CELLE-CI DONNE DES DENTS À L'ATTENTE CI-DESSUS, et c'est sa seule raison
+// d'être. « L'engagement » est dérivé d'une requête : sur une journée neuve
+// aucune dépense d'engagement n'est saisie, donc la ligne EXISTE toujours — et
+// elle n'arrive qu'après la réponse. ÉPROUVÉ : en remettant la capture juste
+// après l'apparition du sélecteur, elle rougit trois fois sur trois. Sans elle,
+// les quatre vérifications qui lisent `fiche` ne prouvaient plus rien.
+verifier('   la préparation a RÉPONDU avant qu\'on lise la page',
+  fiche.includes("L'engagement"), fiche.slice(0, 200))
 
 // ── ② IL PORTE CE QUI PRÉPARE — les deux listes, réunies et non mélangées.
 verifier('② « Avant d\'y aller » est là', await page.isVisible('.journee-page .preparation'))
@@ -106,18 +139,40 @@ verifier('   et le chargement aussi',
 verifier('   son bouton primaire ajoute une chose à faire',
   await page.isVisible('.journee-page .ajout-tache .bouton:not(.secondaire)'))
 
-// ── ③ AUCUN POST-MORTEM. C'est une absence : elle se vérifie par la négative.
-for (const mot of ['Meilleur tour du jour', 'Sessions', 'Déclarer une chute',
-                   'Voir le récapitulatif']) {
+// ── ③ AUCUN POST-MORTEM CHRONOMÉTRIQUE. C'est une absence : elle se vérifie
+//    par la négative. Ce qui est visé, ce sont les mots du BILAN — le meilleur
+//    tour, le compte de sessions, la chute réclamée — jamais les gestes du jour.
+for (const mot of ['Meilleur tour du jour', 'Sessions', 'Déclarer une chute']) {
   verifier(`③ aucun « ${mot} »`, !fiche.includes(mot))
 }
 verifier('   aucun compteur de progression',
   !/\d+\s*(sur|\/)\s*\d+/.test(fiche), fiche.slice(0, 160))
 
-// ── ④ RIEN N'EST FERMÉ. Le chemin vers la saisie existe, il n'est simplement
-//    plus ce qu'on propose en premier.
+// ── ④ RIEN N'EST FERMÉ — ET C'EST LA MOITIÉ QUI MANQUAIT.
+//
+// « On change ce qui est PROPOSÉ EN PREMIER, on ne ferme aucune porte » : le
+// banc ne vérifiait que la première moitié. Sur une journée datée du JOUR MÊME
+// c'est cet écran-ci qui s'ouvre — le pilote est au paddock — et il retirait en
+// silence six chemins que le bilan portait. Ce sont exactement les gestes du
+// jour même : on photographie, on déclare, on chute, on paie.
+//
+// ⚠ « Voir le récapitulatif » VIENT DE SORTIR DE LA LISTE DES ABSENCES
+// CI-DESSUS. Il y figurait, et c'était une erreur de conception recopiée dans
+// le banc : un récapitulatif se compose de ce qui existe, et une journée sans
+// chrono a ses photos et ses gestes à montrer.
 verifier('④ « Saisir une session » reste atteignable',
   await page.isVisible('.journee-page .lien:has-text("Saisir une session")'))
+for (const [quoi, ou] of [
+  ['les photos', '.journee-page .bande, .journee-page label.bouton:has-text("Ajouter une photo")'],
+  ['« Déclarer un geste »', '.journee-page .lien:has-text("Déclarer un geste")'],
+  ['« J\'ai chuté ce jour-là »', '.journee-page .lien:has-text("chuté ce jour-là")'],
+  ['ce que la journée a coûté', '.journee-page .libelle:has-text("Ce que la journée a coûté")'],
+  ['« Ajouter une dépense »', '.journee-page :has-text("Ajouter une dépense")'],
+  ['« Voir le récapitulatif »', '.journee-page .bouton:has-text("Voir le récapitulatif")'],
+  ['l\'interrupteur de visibilité', '.journee-page .lien:has-text("ton chrono de ce jour")'],
+]) {
+  verifier(`   ${quoi} · la porte est ouverte`, await page.isVisible(ou))
+}
 
 // ── ⑤ ELLE EST À L'ACCUEIL, ET LE TAP OUVRE CE QUI LA PRÉPARE.
 await onglet('ACCUEIL')
@@ -137,11 +192,18 @@ await onglet('ROULAGES')
 await page.waitForSelector('.pile > .bloc', { timeout: 20_000 })
 const liste = await texte('.ecran')
 verifier('⑥ la journée à venir RESTE dans la liste — elle est saisie, elle compte',
-  liste.includes('Pau-Arnos'))
-await page.click('.pile > .bloc >> nth=0')
-await page.waitForTimeout(900)
-verifier('   et le tap y ouvre le même écran',
-  await page.isVisible('.journee-page'))
+  liste.includes(jour(18)), liste.slice(0, 200))
+// ⚠ ON VISE LA JOURNÉE QU'ON VIENT DE SAISIR, PAS LE PREMIER BLOC. `nth=0`
+// tapait sur le roulage semé par la démonstration — septembre, Pau-Arnos lui
+// aussi — et la vérification passait donc quel que soit le résultat : elle
+// ouvrait une autre journée à venir, qui ouvre le même écran pour d'autres
+// raisons. La date est le seul trait qui sépare les deux, et c'est elle qu'on
+// vise ; la vérification lit ensuite l'écart, qui n'appartient qu'à celle-ci.
+await page.click(`.pile > .bloc:has-text("${jour(18)}") >> nth=0`)
+await page.waitForSelector('.journee-page', { timeout: 20_000 })
+const ouverte = await texte('.journee-page')
+verifier('   et le tap y ouvre le même écran, sur LA journée tapée',
+  /dans 18 jours/.test(ouverte) && ouverte.includes('Pau-Arnos'), ouverte.slice(0, 160))
 
 // ── ⑦ AUCUN COMPTEUR DE JOURNÉES VÉCUES NE L'INCLUT.
 await onglet('GARAGE')

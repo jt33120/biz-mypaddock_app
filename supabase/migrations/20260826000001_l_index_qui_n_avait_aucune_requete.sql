@@ -1,0 +1,35 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- UN INDEX POSÉ POUR UNE LECTURE QUI N'EXISTE PAS
+--
+-- La migration du 25 août a créé `depense_par_jour on depense (pilote_id,
+-- date_jour)` en écrivant : « la lecture par mois passe par le pilote et la
+-- date ». C'est faux, et ça l'était déjà en l'écrivant.
+--
+-- LA LECTURE PAR MOIS EST LOCALE. Le produit est local-first : `parMois`
+-- (src/db/budget.ts) lit le SQLite embarqué du navigateur, pas Postgres —
+-- `SELECT date_jour, poste, montant_centimes FROM depense WHERE saison_annee = ?`
+-- — et le groupement lui-même se fait en mémoire, dans `grouperParMois`. Aucun
+-- index Postgres ne sert cette requête-là : elle ne touche jamais le serveur.
+--
+-- ET CE QUE LE SERVEUR LIT VRAIMENT, il le lit déjà bien. La seule lecture de
+-- `depense` côté serveur est la règle de synchronisation
+-- (powersync/sync-config.yaml) : `SELECT * FROM depense WHERE pilote_id =
+-- auth.user_id()`. Elle est servie par l'index du premier schéma,
+-- `depense (pilote_id, saison_annee)`, dont `pilote_id` est la colonne de tête.
+-- `depense_par_jour` n'a donc jamais eu une seule requête à servir.
+--
+-- ⚠ UN INDEX QUI NE SERT AUCUNE LECTURE N'EST PAS NEUTRE : il se met à jour à
+-- chaque insertion, à chaque modification et à chaque suppression de dépense,
+-- et il occupe de la place. Le coût est réel et le bénéfice est nul.
+--
+-- ⚠ ET SON COMMENTAIRE ÉTAIT PIRE QUE L'INDEX. Il décrivait une lecture
+-- serveur qui n'existe pas. Le prochain à passer par là aurait cru qu'elle
+-- existe, et aurait raisonné sur une architecture imaginaire — c'est ça qu'on
+-- retire, autant que l'index lui-même.
+--
+-- Ce qui reste vrai et n'est pas touché : la contrainte
+-- `depense_jour_dans_sa_saison`, qui empêche `date_jour` et `saison_annee` de
+-- diverger. Elle, elle garde quelque chose.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+drop index if exists depense_par_jour;

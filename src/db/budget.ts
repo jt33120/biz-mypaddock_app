@@ -135,9 +135,43 @@ export const oublierDepense = (db: PowerSyncDatabase, id: string) =>
 
 /** `2026-07-12` → `2026-07`. Une date qu'on ne reconnaît pas rend `null` et
  *  tombe dans « sans mois » : mieux vaut une dépense qui dit qu'elle n'a pas de
- *  mois qu'une dépense rangée dans un mois inventé. */
-export const moisDuJour = (jour: string | null | undefined): string | null =>
-  jour && /^\d{4}-\d{2}-\d{2}$/.test(jour) ? jour.slice(0, 7) : null
+ *  mois qu'une dépense rangée dans un mois inventé.
+ *
+ *  ⚠ LA FORME NE SUFFIT PAS, IL FAUT LA VALEUR. La première version ne testait
+ *  que l'allure : `2026-13-45` la passait, `slice(0, 7)` en tirait le mois
+ *  « 2026-13 », et `nomMois` — qui ne connaît que douze noms — rendait « 2026 »
+ *  tout court à l'écran. Une ligne de budget intitulée « 2026 » au milieu des
+ *  mois se lit comme un total d'année : le mauvais chiffre au bon endroit, ce
+ *  qui est pire qu'une absence. Le calendrier tranche donc, pas le gabarit. */
+export const moisDuJour = (jour: string | null | undefined): string | null => {
+  if (!jour || !/^\d{4}-\d{2}-\d{2}$/.test(jour)) return null
+  const [a, m, j] = jour.split('-').map(Number)
+  // On reconstruit la date et on exige qu'elle rende les trois mêmes nombres :
+  // `Date.UTC` REPORTE silencieusement ce qui déborde — le 30 février devient le
+  // 2 mars, le mois 13 devient janvier suivant — et c'est ce report qui trahit
+  // les jours qui n'existent pas. UTC et pas local : un fuseau à l'ouest de
+  // Greenwich ferait basculer le 1er du mois la veille au soir.
+  const d = new Date(Date.UTC(a, m - 1, j))
+  if (d.getUTCFullYear() !== a || d.getUTCMonth() !== m - 1 || d.getUTCDate() !== j) return null
+  return jour.slice(0, 7)
+}
+
+/**
+ * ⚠ LE JOUR D'UNE DÉPENSE NE SORT PAS DE L'ANNÉE QUE LE BUDGET MONTRE.
+ *
+ * `saison_annee` se dérive du jour à la saisie et ne bouge plus (AD-18), et les
+ * DEUX lectures du budget — `parPoste`, `parMois` — filtrent sur une seule
+ * année : celle que le garage affiche, l'année en cours. Un jour corrigé vers
+ * décembre dernier fabriquait donc une ligne parfaitement écrite, parfaitement
+ * envoyée, et VISIBLE NULLE PART — pendant que le raccourci de l'accueil
+ * annonçait « le détail vit au garage, dans le budget ».
+ *
+ * La borne est ici, en fonction pure, plutôt que dans un `min`/`max` de champ :
+ * `min` et `max` colorent le sélecteur du navigateur et n'empêchent RIEN — une
+ * valeur tapée à la main hors bornes ressort telle quelle dans `value`.
+ */
+export const jourDansLAnnee = (jour: string, annee: number): boolean =>
+  moisDuJour(jour) != null && jour.slice(0, 4) === String(annee)
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']

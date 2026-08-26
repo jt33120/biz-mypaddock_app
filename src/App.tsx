@@ -349,15 +349,48 @@ export default function App() {
    * qui n'a pas eu lieu.
    *
    * Le prédicat vit dans `src/db/vecu.ts` et il tient à un FAIT OBSERVABLE — la
-   * date, et l'existence d'une session — jamais à une heure ni à un réglage.
-   * Il est le même depuis l'accueil et depuis la liste des roulages : deux
-   * chemins vers la même journée ne peuvent pas ouvrir deux écrans différents.
+   * date, et la première MESURE saisie sur la journée — jamais à une heure ni à
+   * un réglage. Il est le même depuis l'accueil et depuis la liste des
+   * roulages : deux chemins vers la même journée ne peuvent pas ouvrir deux
+   * écrans différents.
    */
   const ouvrirRoulage = async (id: string) => {
     const b = await chargerRoulage(id)
     setEcran(b && sePrepare(b) ? 'journee' : 'bilan')
     return b
   }
+
+  /**
+   * LES GESTES DE LA JOURNÉE — COMPOSÉS UNE FOIS, RENDUS SUR LES DEUX ÉCRANS.
+   *
+   * ⚠ CE BLOC EST LA CORRECTION D'UNE PORTE FERMÉE EN SILENCE. Le bilan portait
+   * les photos, les gestes, la chute, le coût, le récapitulatif et
+   * l'interrupteur de visibilité ; l'écran de préparation, non. Or sur une
+   * journée datée du JOUR MÊME c'est LUI qui s'ouvre — le pilote est au
+   * paddock, et il venait de perdre les six chemins sans qu'une ligne le lui
+   * dise. « On change ce qui est PROPOSÉ EN PREMIER, on ne ferme aucune porte » :
+   * la première moitié était tenue, la seconde ne l'était pas.
+   *
+   * ⚠ ET ILS SONT COMPOSÉS ICI, PAS DANS CHAQUE ÉCRAN. Deux compositions du
+   * même bloc divergent à la première correction — c'est exactement ce que la
+   * checklist s'interdit en se DÉPLAÇANT plutôt qu'en se dupliquant. Un seul
+   * `<Photos>`, un seul `<Chutes>`, un seul `<BlocCout>`, un seul
+   * `<Visibilite>` : les deux écrans reçoivent le même nœud.
+   */
+  const gestesDeLaJournee = bilan && courant ? {
+    photos: <Photos db={db} roulageId={courant} />,
+    chutes: <Chutes db={db} roulageId={courant} onEcrit={() => void rafraichir(db)} />,
+    cout: cout && (
+      <BlocCout c={cout} annee={anneeSaison(bilan.date)}
+                onDepense={() => setEcran('depense')}
+                onBudget={async (centimes: number) => {
+                  await poserBudget(db, anneeSaison(bilan.date), centimes)
+                  setCout(await coutDuRoulage(db, courant, anneeSaison(bilan.date)))
+                }} />
+    ),
+    visibilite: <Visibilite db={db} roulageId={courant} />,
+    onRecap: () => void rassembler(courant).then((m) => { setMatiere(m); setEcran('recap') }),
+  } : null
 
   return (
     <>
@@ -420,20 +453,17 @@ export default function App() {
             setEcran('recap')
           }} onAnnuler={() => void ouvrirRoulage(courant)} />
         )}
-        {ecran === 'bilan' && bilan && courant && (
+        {ecran === 'bilan' && bilan && courant && gestesDeLaJournee && (
           <BilanEcran
-            db={db} b={bilan} cout={cout} courbe={courbe} identite={identite}
+            db={db} b={bilan} courbe={courbe} identite={identite}
             onSession={() => setEcran('session')}
             onAccueil={() => setEcran('accueil')}
-            onDepense={() => setEcran('depense')}
-            onRecap={() => void rassembler(courant).then((m) => { setMatiere(m); setEcran('recap') })}
-            photos={<Photos db={db} roulageId={courant} />}
-            chutes={<Chutes db={db} roulageId={courant} onEcrit={() => void rafraichir(db)} />}
+            onRecap={gestesDeLaJournee.onRecap}
+            photos={gestesDeLaJournee.photos}
+            chutes={gestesDeLaJournee.chutes}
+            cout={gestesDeLaJournee.cout}
+            visibilite={gestesDeLaJournee.visibilite}
             onCircuit={() => { setCircuitVu(bilan.circuit); setEcran('circuit') }}
-            onBudget={async (centimes) => {
-              await poserBudget(db, anneeSaison(bilan.date), centimes)
-              if (courant) setCout(await coutDuRoulage(db, courant, anneeSaison(bilan.date)))
-            }}
           />
         )}
         {/* ⚠ LE MÊME ROULAGE, L'AUTRE MOITIÉ DU CHEMIN — récit 17.2. Ce n'est
@@ -441,11 +471,18 @@ export default function App() {
             bilan raconte ce qu'elle a été. Aucun des deux n'est atteignable
             depuis l'autre par erreur — `sePrepare` tranche, et il tranche sur
             un fait observable. */}
-        {ecran === 'journee' && bilan && courant && (
+        {ecran === 'journee' && bilan && courant && gestesDeLaJournee && (
           <Journee
             db={db}
             r={{ id: bilan.id, circuit: bilan.circuit, date: bilan.date,
                  machine_id: bilan.machine_id }}
+            /* ⚠ LES MÊMES NŒUDS QUE LE BILAN, ET C'EST TOUTE LA CORRECTION. Ces
+               six chemins se fermaient en silence sur une journée du jour même. */
+            photos={gestesDeLaJournee.photos}
+            chutes={gestesDeLaJournee.chutes}
+            cout={gestesDeLaJournee.cout}
+            visibilite={gestesDeLaJournee.visibilite}
+            onRecap={gestesDeLaJournee.onRecap}
             onAller={(vers) => {
               if (vers === 'budget') setEcran('depense')
               else setEcran('garage')
@@ -1206,9 +1243,16 @@ function Session({ onValider, onAnnuler }: {
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, onCircuit, onSession, onAccueil, onDepense, onRecap, onBudget }: {
-  db: Db; b: NonNullable<Bilan>; cout: CoutRoulage | null; courbe: DonneesCourbe | null
+function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, visibilite, onCircuit, onSession, onAccueil, onRecap }: {
+  db: Db; b: NonNullable<Bilan>; courbe: DonneesCourbe | null
   identite: Identite | null
+  /** ⚠ LE COÛT ET LA VISIBILITÉ ARRIVENT MONTÉS, ILS NE SE COMPOSENT PLUS ICI —
+   *  et ce n'est pas un goût d'architecture. L'écran de la journée à venir doit
+   *  porter EXACTEMENT les mêmes : deux compositions séparées auraient divergé,
+   *  et c'est déjà par une divergence de ce genre que les six chemins du bilan
+   *  se sont fermés sur l'écran de préparation sans que rien ne le dise. */
+  cout: React.ReactNode
+  visibilite: React.ReactNode
   photos: React.ReactNode
   /** La chute de cette journée. Elle vit EN BAS du bilan, après les photos et
    *  les gestes, et sa place est une décision : en tête elle ferait de chaque
@@ -1219,8 +1263,7 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, onCircuit, 
    *  une fiche de circuit se consulte quand on pense à ce circuit-là, et c'est
    *  en regardant sa journée qu'on y pense. */
   onCircuit: () => void
-  onSession: () => void; onAccueil: () => void; onDepense: () => void; onRecap: () => void
-  onBudget: (centimes: number) => Promise<void>
+  onSession: () => void; onAccueil: () => void; onRecap: () => void
 }) {
   const record = b.ecart != null && b.ecart < 0
   return (
@@ -1279,14 +1322,14 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, onCircuit, 
           ROULAGE, masqué par défaut. Il vit à côté du cercle parce que c'est le
           seul endroit où il a une conséquence : ailleurs, le chrono est à toi
           et personne ne le regarde. */}
-      <Visibilite db={db} roulageId={b.id} />
+      {visibilite}
       <Cercle identite={identite} circuit={b.circuit} />
 
       {photos}
 
       {chutes}
 
-      {cout && <BlocCout c={cout} annee={anneeSaison(b.date)} onDepense={onDepense} onBudget={onBudget} />}
+      {cout}
 
       <button className="bouton secondaire" onClick={onRecap}>Voir le récapitulatif</button>
       <button className="bouton" onClick={onSession}>Saisir une session</button>
@@ -1382,12 +1425,20 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
               « un plafond annuel ET un repère mensuel ». Dit, jamais dessiné :
               une seconde jauge vers un plafond du mois ferait du repère un
               compteur à rebours, ce que les deux clauses d'argent refusent. */}
-          {repereMensuel(c.auTour.budgetCentimes) != null && (
-            <p className="note">
-              Soit un repère de {formaterEuros(repereMensuel(c.auTour.budgetCentimes)!)} par mois.
-              Le détail mois par mois vit au garage, dans le budget.
-            </p>
-          )}
+          {(() => {
+            /* ⚠ ON REGARDE, PUIS ON AFFIRME. Deux appels et un `!` faisaient dire
+               au second ce que le premier venait de vérifier — un garde qui tient
+               par ressemblance, pas par construction. Une seule lecture, nommée,
+               et le `!` n'a plus lieu d'être : `repereMensuel` rend `null` aussi
+               sur un plafond à zéro, et `formaterEuros(null!)` afficherait « 0 € ». */
+            const repere = repereMensuel(c.auTour.budgetCentimes)
+            return repere == null ? null : (
+              <p className="note">
+                Soit un repère de {formaterEuros(repere)} par mois.
+                Le détail mois par mois vit au garage, dans le budget.
+              </p>
+            )
+          })()}
         </>
       ) : (
         /* ⚠ LE CHAMP DIT SA PÉRIODE À CÔTÉ DE LA VALEUR — récit 19.1, et c'est
@@ -1419,12 +1470,16 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
               « soit 41,67 € par mois » : celui qui pensait 500 par mois le voit
               immédiatement, avant de valider. Ce n'est ni un avertissement ni un
               refus — le produit ne dit pas que c'est faux, il dit ce que c'est. */}
-          {centimes != null && centimes > 0 && (
-            <p className="note">
-              {formaterEuros(centimes)} pour l'année {annee} entière, soit un repère
-              de {formaterEuros(repereMensuel(centimes)!)} par mois.
-            </p>
-          )}
+          {(() => {
+            // Même règle : le repère se lit une fois et se rend s'il existe.
+            const repere = centimes == null ? null : repereMensuel(centimes)
+            return repere == null || centimes == null ? null : (
+              <p className="note">
+                {formaterEuros(centimes)} pour l'année {annee} entière, soit un repère
+                de {formaterEuros(repere)} par mois.
+              </p>
+            )
+          })()}
           <button className="bouton secondaire" disabled={!centimes}
                   onClick={() => centimes && void onBudget(centimes)}>
             Poser le budget
