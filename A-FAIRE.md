@@ -99,10 +99,24 @@ première publicité.
 
 **Ce que je n'ai pas tranché, et pourquoi :** les conditions d'utilisation de chaque site.
 Lire une page publique n'est pas la même chose que la réextraire par IA et en republier le
-contenu. C'est pour ça qu'**aucune source de barème constructeur n'est proposée** : une
-documentation d'atelier est de la propriété intellectuelle protégée, et proposer de l'extraire
-serait proposer de recopier un manuel. Les trois sources de règles sont des circuits qui
-publient leurs propres règles — la source primaire, celle qui pose le moins de question.
+contenu. C'est pour ça qu'**aucune source de barème constructeur n'est proposée à la
+RÉCOLTE** : une documentation d'atelier est de la propriété intellectuelle protégée, et une
+récolte mutualisée qui l'extrairait la republierait pour tout le monde. Les trois sources de
+règles sont des circuits qui publient leurs propres règles — la source primaire, celle qui
+pose le moins de question.
+
+> ⚠ **Et c'est exactement pour ça que le manuel prend l'autre chemin** — le seul qui tienne,
+> et il est en place depuis le 26 août 2026. La fonction `manuel` cherche le PDF, le rapatrie
+> **dans l'espace privé du pilote qui le demande**, et le LIT pour en tirer les postes
+> d'entretien de SA moto. Rien n'est mutualisé, rien n'est indexé, rien n'est servi à un
+> second pilote : ce n'est pas une bibliothèque, c'est une copie privée faite pour son
+> détenteur.
+>
+> Ce qu'elle en tire est **transcrit et jamais converti** : « tous les 6 000 km ou 12 mois »
+> s'affiche tel quel, à côté d'un compteur qui compte des roulages, et les deux ne se parlent
+> pas. Une journée de piste vaut 200 à 300 km selon le circuit, le groupe et la météo —
+> traduire l'un dans l'autre serait une interprétation portant sur la sécurité d'une machine,
+> et FR-44 l'interdit nommément.
 
 **Le jeton de déclenchement** (`RECOLTE_JETON`) est posé et lisible dans les variables Railway.
 Je l'ai généré, donc je l'ai vu : si tu préfères un secret que je n'aie jamais eu sous les yeux,

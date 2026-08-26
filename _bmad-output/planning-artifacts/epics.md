@@ -4026,6 +4026,97 @@ En tant que pilote, je veux un signe que ce que je viens de saisir est gardé, a
 > *Touche :* src/App.tsx, src/ecrans/Compte.tsx, src/db/sauvegarde.ts, src/styles/systeme.css, _bmad-output/planning-artifacts/ux-designs/ux-MyPaddock-2026-08-18/EXPERIENCE.md
 
 
+## Où en est chaque récit — 26 août 2026
+
+Julian : *« oui fais tout dans cet ordre, push commit et dis-moi quand je peux aller
+sur l'app à nouveau ».* L'ordre d'attaque ci-dessous a été suivi de bout en bout.
+Ce qui suit est ce que le code fait, pas ce qui était prévu.
+
+### Épique 17 — le roulage à venir
+
+| Récit | État | Ce qui a réellement changé |
+|---|---|---|
+| 17.1 | **fait** | Le prédicat partagé (`src/db/vecu.ts`). Une journée annoncée cesse d'être comptée comme vécue. |
+| 17.2 | **fait** | Le tap ouvre `Journee.tsx`, pas le bilan. Les six portes du jour même y sont, en second rang. |
+| 17.3 | **fait** | Le socle de huit postes, posé sur SA moto, **tous sans intervalle**. Et les deux erreurs qui se compensaient exactement — `count(*)` brut contre coefficients pondérés, `n > i` contre `pondérés >= i` — partent ensemble : il n'y a plus de second calcul du tout. FR-40 entre avec elles, par le type. |
+| 17.4 | **fait** | Les règles publiées qui redescendent APRÈS la composition ne sont plus perdues, et aucune coche ne bouge. Deux absences, deux phrases. Le rapprochement des tâches tombe l'article de tête. |
+| 17.5 | **fait** | Cinquième catégorie `objectif`. Trois règles écrites levées, contrepartie tenue en pied d'application. Rien ne se coche, rien ne remonte sur la courbe. |
+
+**Le chaînon du manuel — fait.** C'est ce que Julian avait nommé, et il manquait
+entièrement : le PDF était rapatrié et personne ne le LISAIT. La fonction `manuel`
+(v4) le lit maintenant par URL signée et en tire les postes d'entretien de SA moto,
+avec leur périodicité **transcrite, jamais convertie** — `intervalle_roulages` reste
+nul, l'horloge compte sans jamais échoir, et l'écran dit lui-même que les kilomètres
+du manuel et les roulages du compteur ne se parlent pas (FR-44).
+
+### Épique 18 — les photos
+
+| Récit | État | Ce qui a réellement changé |
+|---|---|---|
+| 18.1 | **fait** | `src/db/coffre.ts`, deux magasins. `createWritable` n'existe pas avant Safari 26. |
+| 18.2 | **fait** | L'album est une grille, le plein écran existe, une photo part SEULE. La décision d'origine — « une grille à trous fait vide » — est retournée par écrit, là où elle était écrite. |
+| 18.3 | **fait** | `multiple`, versement EN SÉRIE, échec par échec nommé. La bande était la bonne forme pour un défaut. |
+| 18.4 | **fait** | L'envoi se coupe, et couper ne casse rien. La page légale dit la vignette. Le volume est chiffré : mille photos font ~300 Mo. |
+
+### Épique 19 — l'argent
+
+| Récit | État | Ce qui a réellement changé |
+|---|---|---|
+| 19.1 | **fait** | La période voyage avec le chiffre, à la saisie comme à la lecture. |
+| 19.2 | **fait** | La dépense porte son JOUR. Le jour est celui du PAIEMENT ; la journée reste sa cible. |
+| 19.3 | **fait** | Les deux chemins d'écriture écrivent les mêmes colonnes — un essai les compare INSERT contre INSERT. |
+| 19.4 | **fait** | Par poste et par mois, en longueurs. L'échelle est le plus gros poste, **jamais le plafond** : c'est ce qui sépare un tracé d'une jauge. |
+
+### Épique 20 — la figure
+
+| Récit | État | Ce qui a réellement changé |
+|---|---|---|
+| 20.1 | **fait** | L'écran de chargement, peint avant React, durée minimale garantie. |
+| 20.2 | **fait** | Onze tracés en aplats sur 12 × 12, dessinés en ASCII dans la source. Rien n'est emprunté, donc rien n'est à créditer. Le trophée quitte son trait fin et les rejoint. `public/icons.svg` est parti. |
+| 20.3 | **fait** | La clé, la courbe, la caisse. Un repère, jamais un regroupement : le mur de FR-46 tient, et un essai refuse que deux catégories partagent une forme. |
+| 20.4 | **fait** | Le casque, en QUATRIÈME état : le sprite gagne toujours. La combinaison a été tentée et abandonnée — à 12 × 12 elle ne se distingue pas d'un bonhomme. |
+
+### Épique 21 — les mots, le rouge, le doublon · **entièrement faite**
+
+### Épique 22 — le geste sur une journée
+
+| Récit | État | Ce qui a réellement changé |
+|---|---|---|
+| 22.1 | **fait** | L'écran de modification existe. Il ne touche rien de ce que la journée porte, et il le DIT. `circuit_id` repart à nul quand le nom change. |
+| 22.2 | **fait** | Le glissement RÉVÈLE. La règle du 18 août est levée par écrit, et l'objection qui la fondait est respectée : rien au relâchement du doigt, la confirmation reste le dernier mot, et les languettes sont atteignables au clavier. |
+| 22.3 | **fait** | Un LISERÉ sur la carte concernée — la forme était déjà décidée par l'épine (216), et elle répond à la demande sans qu'il faille lever la 212. Il s'allume APRÈS l'écriture. |
+
+### Ce qui reste ouvert
+
+- **Épique 14** : pas de plafond de membres d'un cercle, pas de renouvellement de
+  code, pas de moyen d'en retirer un. `anon` garde ses droits DML par défaut sur
+  les tables de pilote.
+- **`sePrepare` ne bascule jamais sur l'argent**, et c'est une déviation
+  DÉCLARÉE : la liste envoie elle-même payer, et compter cette dépense comme une
+  trace de vécu ferait disparaître la liste à l'instant où l'on suit sa propre
+  consigne.
+- **Les analytiques au-delà de « par poste » et « par mois »** attendent la liste
+  de Julian : sans liste, il n'y a rien à mettre en échec.
+
+### Trois collisions de sélecteurs CSS, trouvées en deux jours
+
+Aucune ne produisait d'erreur de type ni d'écran cassé — elles produisaient un
+écran *presque* juste, et on cherchait ailleurs.
+
+- **`.vignette`** — déclarée pour les photos du roulage (96 px de haut) ET pour
+  les pièces d'atelier (84 × 84, rognées). La seconde gagnait par cascade : les
+  photos n'avaient pas la taille que leur commentaire annonçait.
+- **`.barre`** — c'est la barre de NAVIGATION du bas, en `position: fixed;
+  bottom: 0`. Le tracé de l'argent allait la reprendre et plaquer chacune de ses
+  barres par-dessus la navigation. Trouvée par une garde qui cherchait autre
+  chose et lisait la mauvaise règle.
+- **`.garage-tete`** — la correction `align-items: center` vivait quatre cents
+  lignes sous une déclaration `baseline` qui restait à lire et à croire.
+
+Un essai unitaire refuse désormais tout sélecteur de classe nu déclaré deux fois
+au premier niveau de la feuille — y compris accentué : `\w` est ASCII en
+JavaScript, et une classe `.tracé-argent` traversait la garde sans être lue.
+
 ## L'ordre d'attaque
 
 1. ① Récit 18.1 — LE VERSEMENT D'IMAGE, D'ABORD ET AVANT TOUT. `createWritable` n'existe pas avant Safari 26 : si l'iPhone de Julian n'est pas à jour, aucune photo, aucun portrait, aucun manuel, aucune facture ne se garde — et rien de ce qui suit ne se vérifie chez lui.
