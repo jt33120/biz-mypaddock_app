@@ -920,3 +920,68 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 /* Le rouge du destructif porte aussi son tracé : le mot reste, l'icône aide à
    le trouver vite, et ni l'un ni l'autre n'est seul (UX-DR8). */
 .plein-ecran .lien.destructif { display: flex; align-items: center; gap: 6px; }
+
+/* ─── LE GLISSEMENT QUI RÉVÈLE — récit 22.2 ────────────────────────────────
+   ⚠ UNE RÈGLE ÉCRITE SE LÈVE ICI, ET ELLE VISAIT NOMMÉMENT CET ÉLÉMENT.
+   EXPERIENCE.md, 18 août : « Aucun balayage n'y supprime quoi que ce soit —
+   avec des gants, un balayage destructeur se déclenche seul. » Julian demande
+   l'inverse le 25 août. La règle ne se contourne pas en silence : elle se lève,
+   datée, et la forme qui respecte MALGRÉ TOUT l'objection d'origine est
+   celle-ci — le glissement RÉVÈLE, il ne détruit pas. Rien n'est fait au
+   relâchement du doigt : deux languettes apparaissent, et il faut les viser.
+
+   ⚠ `touch-action: pan-y` EST LE CŒUR DE LA CHOSE, pas un détail. Il dit au
+   navigateur qu'il garde le défilement VERTICAL pour lui et nous laisse
+   l'horizontal. Sans lui, une liste qu'on fait défiler s'entrouvre sous le
+   pouce — le défaut qui rend ces listes détestables. */
+.ligne-glissante { touch-action: pan-y; overflow: hidden; }
+.glissable { cursor: pointer; }
+
+/* ⚠ LES LANGUETTES SONT TOUJOURS DANS LE DOM, ET SEULEMENT REPLIÉES. Rendues
+   à la condition du glissement, elles seraient introuvables au clavier et
+   muettes pour un lecteur d'écran : EXPERIENCE.md:46 interdit tout geste caché
+   comme SEUL chemin. `max-height: 0` replie sans retirer de l'ordre de
+   tabulation — contrairement à `display: none` — et `:focus-within` les ouvre
+   dès que la tabulation y arrive. */
+.languettes {
+  display: flex; gap: 0; max-height: 0; opacity: 0;
+  transition: max-height .16s steps(4), opacity .16s steps(2);
+}
+.ligne-glissante[data-ouvert="1"] .languettes,
+.languettes:focus-within { max-height: 72px; opacity: 1; }
+
+/* NFR-8 — 56 px de cible, et la largeur se partage : gants aux mains, une
+   languette étroite au bord de l'écran ne se vise pas. La classe reste `lien`
+   et `lien destructif` : le rouge du produit est COMPTÉ, et une troisième forme
+   de bouton rouge sortirait du compte sans que rien ne le dise. */
+.languettes .lien {
+  flex: 1; min-height: 56px; display: flex; align-items: center;
+  justify-content: center; gap: 6px;
+  border-top: 1px solid var(--filet); text-decoration: none;
+}
+
+/* ─── LE TÉMOIN DE SAUVEGARDE — récit 22.3 ─────────────────────────────────
+   ⚠ UN LISERÉ, PAS UN ROND QUI TOURNE, et la forme était DÉJÀ décidée.
+   EXPERIENCE.md porte les deux lignes : 212 — « Chargement : il n'y en a pas au
+   noyau ; un indicateur de chargement au paddock est un aveu » — et 216 —
+   « Synchronisation en attente : un liseré discret sur la carte concernée,
+   jamais une modale, jamais un blocage ». Le liseré répond exactement à la
+   demande de Julian ; le rond demanderait de lever la 212, et c'est à lui de le
+   dire.
+
+   ⚠ IL EST SUR LA CARTE CONCERNÉE, PAS EN HAUT DE L'ÉCRAN. Un témoin global dit
+   « l'application travaille » ; un liseré dit « CETTE chose-là est gardée ».
+   Il ne devient jamais une alarme : il ne dit rien du réseau, rien de l'envoi,
+   rien de ce qui reste en file — ce qui n'est pas parti n'est pas perdu. */
+.bloc[data-garde="1"] {
+  box-shadow: inset 3px 0 0 var(--miami);
+  transition: box-shadow .2s steps(2);
+}
+.bloc[data-garde="0"] { transition: box-shadow .5s steps(3); }
+
+/* UX-DR11 — rien ne tourne, et rien ne glisse non plus. Le liseré RESTE : il
+   énonce un fait, et un fait n'a pas besoin d'être animé pour être vrai. */
+@media (prefers-reduced-motion: reduce) {
+  .languettes { transition: none; }
+  .bloc[data-garde="1"], .bloc[data-garde="0"] { transition: none; }
+}

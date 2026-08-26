@@ -6,7 +6,7 @@ import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, formaterChrono,
   listerMachines, type Machine,
   circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
-  normaliserEtats, poserBudget, supprimerRoulage,
+  modifierRoulage, normaliserEtats, poserBudget, supprimerRoulage,
   type ContenuDuRoulage, type Propose,
   type CoutRoulage,
 } from './db/depot'
@@ -15,11 +15,13 @@ import { jaugeBudget, repereMensuel } from './db/budget'
 import { NoterUneDepense } from './ecrans/Budget'
 import { surCompte, type Identite } from './db/compte'
 import { creerConnecteur, powersyncConfigure } from './db/connecteur'
-import { adopter, estAdopte } from './db/sauvegarde'
+import { adopter, estAdopte, marquerPremiereSauvegardeDite, premiereSauvegardeDite } from './db/sauvegarde'
 import { supabaseConfigure } from './db/supabase'
 import { ouverture } from './db/mesures'
 import { surRetourDeReseau, televerserEnAttente } from './db/photos'
 import { Photos } from './ecrans/Photos'
+import { Icone } from './ecrans/Icones'
+import { useGlissement } from './ecrans/glissement'
 import { Recap } from './ecrans/Recap'
 import { lireLocale, nomLocal, photosDuRoulage } from './db/photos'
 import { gestesDuRoulage, listerCaps } from './db/gestes'
@@ -64,7 +66,7 @@ export type Adoption =
   | { etat: 'faite' }
   | { etat: 'partielle'; refus: number; motif: string }
   | { etat: 'echec'; motif: string }
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'session' | 'bilan' | 'journee' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'modifier' | 'session' | 'bilan' | 'journee' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -87,6 +89,12 @@ export default function App() {
   // est caché dessous.
   useEffect(() => { if (db || panne) retirerLEcranDeChargement() }, [db, panne])
   const [ecran, setEcran] = useState<Ecran>('accueil')
+  /** La journée que le récit 22.1 va corriger. Un identifiant et non la ligne :
+   *  la liste se rafraîchit après l'enregistrement, et une copie figée
+   *  afficherait l'ancien circuit sur l'écran qu'on vient de quitter. */
+  const [aModifier, setAModifier] = useState<string | null>(null)
+  /** Récit 22.3 — la toute première sauvegarde se dit UNE fois. */
+  const [premiereSauvegarde, setPremiereSauvegarde] = useState(false)
   const [liste, setListe] = useState<Liste>([])
   const [courant, setCourant] = useState<string | null>(null)
   const [bilan, setBilan] = useState<Bilan>(null)
@@ -239,6 +247,19 @@ export default function App() {
     void adopter(db, identite.id)
       .then(({ refus }) => {
         if (!vivant) return
+        /* ⚠ ELLE SE DIT UNE FOIS, EN CLAIR, ET NE SE REDIT PLUS — récit 22.3.
+           C'est le seul moment du produit où le pilote a besoin d'entendre ce
+           qui vient de se passer : jusque-là tout vivait sur son téléphone, et
+           depuis cet instant tout est aussi ailleurs. Le redire à chaque
+           ouverture en ferait un décor qu'on cesse de lire, et l'effet
+           rassurant se paierait en attention perdue — le drapeau est posé au
+           moment où on le montre, jamais rejoué.
+           Il n'est PAS posé quand `estAdopte` a court-circuité plus haut : ce
+           chemin-là est celui des ouvertures suivantes, où il n'y a rien à
+           annoncer. */
+        if (!refus.length && !premiereSauvegardeDite()) {
+          setPremiereSauvegarde(true); marquerPremiereSauvegardeDite()
+        }
         setAdoption(refus.length
           ? { etat: 'partielle', refus: refus.length, motif: refus[0].motif }
           : { etat: 'faite' })
@@ -406,6 +427,17 @@ export default function App() {
       )}
       <div className="ecran" data-environnement={ENVIRONNEMENT}
            data-abri={abri ? (abri.menace ? 'menace' : 'persistant') : 'inconnu'}>
+        {/* ⚠ ELLE SE DIT UNE FOIS ET NE SE REDIT PLUS — récit 22.3. Elle porte
+            la seule chose que le pilote ne peut pas déduire de l'écran : ce qui
+            vivait sur son téléphone est maintenant aussi ailleurs. Elle ne
+            réclame rien, elle ne se referme par aucun tap obligatoire, et elle
+            disparaît au changement d'écran comme un fait qu'on a lu. */}
+        {premiereSauvegarde && (
+          <p className="note premiere-sauvegarde">
+            C'est gardé. Ta saison est maintenant sur ton compte en plus de ce téléphone —
+            elle redescendra sur tes autres appareils, et tu n'auras plus rien à faire pour ça.
+          </p>
+        )}
         {ecran === 'accueil' && (
           <Accueil db={db} src={src} conseil={conseil} abri={abri}
                    onNouveau={() => setEcran('nouveau')} onOuvrir={ouvrirRoulage}
@@ -424,8 +456,20 @@ export default function App() {
                    }} />
         )}
         {ecran === 'roulages' && <Roulages db={db} liste={liste} onOuvrir={ouvrirRoulage}
+                                            onModifier={(id) => { setAModifier(id); setEcran('modifier') }}
                                             onNouveau={() => setEcran('nouveau')}
                                             onEcrit={() => void rafraichir(db)} />}
+        {/* ⚠ LA LIGNE VIENT DE `liste`, ET C'EST VOULU : elle porte déjà le
+            circuit, la date, le groupe et la machine, lus dans la même requête
+            que la liste. Une seconde lecture par identifiant ferait un second
+            chemin vers les mêmes colonnes, et c'est toujours celui-là qui prend
+            du retard. Si la journée n'y est plus — elle vient d'être retirée
+            depuis un autre onglet — l'écran ne se monte simplement pas. */}
+        {ecran === 'modifier' && aModifier && liste.some((r) => r.id === aModifier) && (
+          <Modifier db={db} r={liste.find((r) => r.id === aModifier)!}
+                    onFini={() => { setAModifier(null); setEcran('roulages'); void rafraichir(db) }}
+                    onAnnuler={() => { setAModifier(null); setEcran('roulages') }} />
+        )}
         {ecran === 'nouveau' && (
           <Nouveau db={db} onValider={async (r) => {
             const id = await creerRoulage(db, r)
@@ -970,8 +1014,9 @@ function ZoneChiffres({ db }: { db: Db }) {
   )
 }
 
-function Roulages({ db, liste, onOuvrir, onNouveau, onEcrit }: {
-  db: Db; liste: Liste; onOuvrir: (id: string) => void; onNouveau: () => void; onEcrit: () => void
+function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
+  db: Db; liste: Liste; onOuvrir: (id: string) => void; onModifier: (id: string) => void
+  onNouveau: () => void; onEcrit: () => void
 }) {
   return (
     <>
@@ -986,7 +1031,8 @@ function Roulages({ db, liste, onOuvrir, onNouveau, onEcrit }: {
       <div className="libelle">Roulages · {liste.length} journée{liste.length > 1 ? 's' : ''}</div>
       <div className="pile">
         {liste.map((r) => (
-          <LigneRoulage key={r.id} db={db} r={r} onOuvrir={onOuvrir} onEcrit={onEcrit} />
+          <LigneRoulage key={r.id} db={db} r={r} onOuvrir={onOuvrir}
+                        onModifier={onModifier} onEcrit={onEcrit} />
         ))}
       </div>
       <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
@@ -1012,10 +1058,12 @@ function Roulages({ db, liste, onOuvrir, onNouveau, onEcrit }: {
  * il y a une question avant. Le mot « définitivement » y est parce qu'il est
  * vrai.
  */
-function LigneRoulage({ db, r, onOuvrir, onEcrit }: {
-  db: Db; r: Liste[number]; onOuvrir: (id: string) => void; onEcrit: () => void
+function LigneRoulage({ db, r, onOuvrir, onModifier, onEcrit }: {
+  db: Db; r: Liste[number]; onOuvrir: (id: string) => void
+  onModifier: (id: string) => void; onEcrit: () => void
 }) {
   const [confirme, setConfirme] = useState(false)
+  const glisse = useGlissement()
   const [retirer, occupe] = useGeste(async () => {
     await supprimerRoulage(db, r.id)
     onEcrit()
@@ -1039,8 +1087,12 @@ function LigneRoulage({ db, r, onOuvrir, onEcrit }: {
   }
 
   return (
-    <div className="bloc pile">
-      <div className="pile" onClick={() => onOuvrir(r.id)}>
+    <div className="bloc pile ligne-glissante" data-ouvert={glisse.ouvert ? '1' : '0'}>
+      {/* ⚠ `touch-action: pan-y` VIT DANS LA FEUILLE, SUR CETTE CLASSE. Sans lui
+          le navigateur ne sait pas qu'il garde le défilement vertical pour lui,
+          et une liste qu'on fait défiler s'entrouvre sous le pouce. */}
+      <div className="pile glissable" {...glisse.liaisons}
+           onClick={() => { if (!glisse.ouvert) onOuvrir(r.id) }}>
         <div className="rang">
           <span className="titre" style={{ fontSize: 20 }}>{r.circuit_nom}</span>
           <span className="libelle">{r.date_jour}</span>
@@ -1075,9 +1127,33 @@ function LigneRoulage({ db, r, onOuvrir, onEcrit }: {
           </div>
         </div>
       ) : (
-        <button className="lien destructif" onClick={() => setConfirme(true)}>
-          Retirer cette journée
-        </button>
+        /* ─── LES DEUX LANGUETTES — récit 22.2 ──────────────────────────────
+           ⚠ ELLES SONT DANS LE DOM EN PERMANENCE, et c'est délibéré. Rendues
+           seulement quand le glissement a eu lieu, elles seraient introuvables
+           au clavier et muettes pour un lecteur d'écran : EXPERIENCE.md:46
+           interdit tout geste caché comme SEUL chemin. Le glissement les rend
+           VISIBLES ; il ne les fait pas exister.
+
+           ⚠ ET RIEN N'EST DÉTRUIT PAR LE GESTE. « Supprimer » ouvre la même
+           confirmation qu'avant : le glissement remplace le premier tap, jamais
+           le second. La phrase qui nomme ce qui part reste le dernier mot. */
+        <div className="languettes">
+          {/* ⚠ ELLES PORTENT `lien` ET `lien destructif`, PAS UNE FORME À ELLES.
+              Le rouge du produit est compté — un essai unitaire recompte les
+              `.bouton.destructif` et les `.lien.destructif` contre le nombre
+              écrit dans systeme.css — et une troisième forme de bouton rouge
+              sortirait de ce compte sans que rien ne le dise. C'est le conteneur
+              `.languettes` qui leur donne leur taille de cible (NFR-8, 56 px) et
+              leur partage de largeur, pas leur classe. */}
+          <button className="lien" onClick={() => { glisse.fermer(); onModifier(r.id) }}>
+            <Icone nom="crayon" taille={14} /> Modifier cette journée
+          </button>
+          <button className="lien destructif"
+                  onClick={() => { glisse.fermer(); setConfirme(true) }}
+                  aria-label={`retirer la journée du ${r.date_jour} à ${r.circuit_nom}`}>
+            <Icone nom="poubelle" taille={14} /> Retirer cette journée
+          </button>
+        </div>
       )}
     </div>
   )
@@ -1212,6 +1288,112 @@ function Nouveau({ db, onValider, onAnnuler }: {
                 rang, total: rang ? GROUPES.length : null, machineId,
               })}>
         {occupe ? 'enregistrement…' : 'Continuer'}
+      </button>
+      <button className="bouton secondaire" onClick={onAnnuler}>Annuler</button>
+    </>
+  )
+}
+
+/**
+ * MODIFIER UN ROULAGE — récit 22.1, et c'est un écran qui n'existait PAS.
+ *
+ * ⚠ IL FALLAIT SUPPRIMER LA JOURNÉE POUR CORRIGER SA DATE. La seule écriture
+ * sur `roulage` hors création était `chrono_visible` et deux normalisations
+ * d'ouverture : une journée saisie au mauvais circuit se corrigeait en la
+ * retirant — avec ses sessions, ses tours, ses photos, ses gestes et ses
+ * dépenses — puis en tout ressaisissant. C'est la même classe de défaut que les
+ * vingt-cinq roulages qu'on ne pouvait pas effacer : une donnée qu'on ne peut
+ * pas corriger cesse d'être saisie.
+ *
+ * ⚠ ET IL DOIT EXISTER AVANT LA LANGUETTE. Le récit 22.2 pose un « modifier »
+ * au bout d'un glissement ; sans cet écran, cette languette ouvrirait le vide.
+ * C'est pour ça que 22.1 précède 22.2 et pas l'inverse.
+ *
+ * ⚠ ENTRER PAR ERREUR ET RESSORTIR NE CHANGE RIEN. Le formulaire part de ce qui
+ * est en base, et rien ne s'écrit avant le tap sur « Enregistrer ». C'est une
+ * clause du récit, pas une évidence : un écran qui enregistre au fil de la
+ * frappe transformerait une ouverture accidentelle en modification.
+ */
+function Modifier({ db, r, onFini, onAnnuler }: {
+  db: Db; r: Liste[number]; onFini: () => void; onAnnuler: () => void
+}) {
+  const [circuit, setCircuit] = useState(r.circuit_nom ?? '')
+  const [date, setDate] = useState(r.date_jour)
+  const [rang, setRang] = useState<number | null>(r.groupe_rang ?? null)
+  const [machines, setMachines] = useState<Machine[]>([])
+  const [machineId, setMachineId] = useState<string | null>(r.machine_id ?? null)
+  useEffect(() => { void listerMachines(db).then(setMachines) }, [db])
+
+  /* ⚠ LE MÊME VERROU QUE PARTOUT. « Une seule écriture part » est une clause du
+     récit, et c'est exactement le défaut qui a produit 25 roulages pour 5
+     saisies : le bouton reste vivant pendant l'écriture — worker OPFS, marquage
+     de saisie, puis le recalcul de la liste — et rien ne bouge à l'écran.
+     Ici le second tap n'écrirait pas une journée de plus mais rejouerait le même
+     UPDATE ; il remettrait surtout `circuit_id` à nul une seconde fois, donc
+     relancerait la résolution serveur pour rien. */
+  const [enregistrer, occupe] = useGeste(async () => {
+    await modifierRoulage(db, r.id, {
+      circuit: circuit.trim(), date,
+      groupeNom: rang ? GROUPES[rang - 1] : null,
+      rang, total: rang ? GROUPES.length : null, machineId,
+    })
+    onFini()
+  })
+
+  return (
+    <>
+      <div className="libelle">Modifier ce roulage</div>
+
+      <div className="pile">
+        <div className="libelle">Circuit</div>
+        <ChoixCircuit db={db} valeur={circuit} sur={setCircuit} />
+      </div>
+
+      {machines.length > 1 && (
+        <div className="pile">
+          <div className="libelle">Moto</div>
+          <div className="puces">
+            {machines.map((m) => (
+              <button key={m.id} className="puce" data-actif={machineId === m.id ? '1' : '0'}
+                      onClick={() => setMachineId(machineId === m.id ? null : m.id)}>
+                {m.modele.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="pile">
+        <div className="libelle">Date</div>
+        <input className="champ" type="date" value={date}
+               onChange={(e) => setDate(e.target.value)} />
+      </div>
+
+      <div className="pile">
+        <div className="libelle">Groupe · échelle de l'organisateur</div>
+        <div className="puces">
+          {GROUPES.map((g, i) => (
+            <button key={g} className="puce" data-actif={rang === i + 1 ? '1' : '0'}
+                    onClick={() => setRang(rang === i + 1 ? null : i + 1)}>
+              {g.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ⚠ CE QUI NE BOUGE PAS SE DIT. Une journée porte ses sessions, ses
+          photos, ses gestes et ses dépenses : sans cette phrase, corriger une
+          date ressemble à une opération risquée, et on préfère supprimer et
+          ressaisir — c'est-à-dire exactement ce que cet écran existe pour
+          éviter. */}
+      <p className="note">
+        Ce que cette journée porte ne bouge pas : ses sessions, ses tours, ses photos, ses
+        gestes, ses dépenses et son chargement restent tels quels.
+      </p>
+
+      <button className="bouton" disabled={!circuit.trim() || occupe}
+              onClick={() => void enregistrer()}>
+        {occupe ? 'enregistrement…' : 'Enregistrer'}
       </button>
       <button className="bouton secondaire" onClick={onAnnuler}>Annuler</button>
     </>

@@ -2248,6 +2248,169 @@ const essais = [
     for (const mot of ['meilleure', 'préférée', 'favori', 'étoile', 'classement', 'à la une'])
       vrai(!new RegExp(`\\b${mot}`, 'i').test(source), `l'album porte « ${mot} » : il classe`)
   }),
+
+  doit('22.1 — modifier une journée ne touche RIEN de ce qu\'elle porte', () => {
+    /* ⚠ IL FALLAIT SUPPRIMER LA JOURNÉE POUR CORRIGER SA DATE. La seule écriture
+       sur `roulage` hors création était `chrono_visible` : une journée saisie au
+       mauvais circuit se corrigeait en la retirant — avec ses sessions, ses
+       tours, ses photos, ses gestes et ses dépenses — puis en tout ressaisissant.
+       Même classe de défaut que les vingt-cinq roulages qu'on ne pouvait pas
+       effacer : une donnée qu'on ne peut pas corriger cesse d'être saisie. */
+    const brut = Object.entries(SOURCES).find(([c]) => c.endsWith('db/depot.ts'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const debut = source.indexOf('export const modifierRoulage')
+    vrai(debut > 0, '`modifierRoulage` a disparu : la languette « modifier » ouvre le vide')
+    const corps = source.slice(debut, source.indexOf('\nexport ', debut + 20))
+    // Elle n'écrit QUE sur `roulage`. Un DELETE ou un UPDATE sur une table fille
+    // ferait exactement ce que le récit interdit.
+    vrai(!/\bDELETE\b/i.test(corps), 'la modification détruit quelque chose')
+    for (const table of ['session', 'tour', 'photo', 'geste', 'depense', 'checklist_ligne'])
+      vrai(!new RegExp(`\\b${table}\\b`).test(corps),
+        `la modification touche \`${table}\` : ce que la journée porte doit rester intact`)
+    /* ⚠ ET `circuit_id` REPART À NULL QUAND LE NOM CHANGE. Le rattachement au
+       référentiel se fait CÔTÉ SERVEUR, et le déclencheur ne remplit qu'un
+       `circuit_id` NUL (migration 20260825000003) : sans cette remise à zéro,
+       une journée corrigée de « Nogaro » vers « Pau-Arnos » resterait attachée à
+       Nogaro pour toujours. Le nom à l'écran et le rattachement en base diraient
+       deux choses différentes, et c'est le rattachement qui décide des règles
+       publiées au chargement. */
+    vrai(/circuit_id = NULL/.test(corps),
+      'le rattachement au référentiel ne se refait plus : le nom et la base divergent')
+    vrai(/changeDeCircuit \?/.test(corps),
+      'le rattachement repart à zéro à chaque enregistrement, même sans changement')
+  }),
+
+  doit('22.1 — entrer par erreur et ressortir ne change rien', () => {
+    /* Une clause du récit, pas une évidence : un écran qui enregistrerait au fil
+       de la frappe transformerait une ouverture accidentelle en modification.
+       Et le même verrou que partout — « une seule écriture part » — parce que
+       c'est ce défaut-là qui a produit 25 roulages pour 5 saisies. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/App.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const debut = source.indexOf('function Modifier(')
+    vrai(debut > 0, 'l\'écran de modification a disparu')
+    const corps = source.slice(debut, source.indexOf('\nfunction ', debut + 20))
+    vrai(/useGeste\(/.test(corps), 'la modification n\'est plus sous verrou : deux taps, deux écritures')
+    // Aucun appel d'écriture hors du geste : la seule occurrence de
+    // `modifierRoulage` doit être DANS le corps du `useGeste`.
+    const appels = (corps.match(/modifierRoulage\(/g) ?? []).length
+    egal(appels, 1, 'la modification s\'écrit à plusieurs endroits de l\'écran')
+    vrai(corps.indexOf('modifierRoulage(') > corps.indexOf('useGeste('),
+      'la modification s\'écrit hors du verrou')
+    // Et l'écran DIT ce qui ne bouge pas — sans ça, on préfère supprimer et
+    // ressaisir, c'est-à-dire exactement ce qu'il existe pour éviter.
+    vrai(/ne bouge pas/.test(corps), 'l\'écran ne dit plus ce que la journée garde')
+  }),
+
+  doit('22.2 — le glissement révèle, il ne détruit pas', () => {
+    /* ⚠ UNE RÈGLE ÉCRITE SE LÈVE ICI, ET ELLE VISAIT NOMMÉMENT CET ÉLÉMENT.
+       EXPERIENCE.md, 18 août : « Aucun balayage n'y supprime quoi que ce soit —
+       avec des gants, un balayage destructeur se déclenche seul. » L'objection
+       reste VRAIE, et c'est pour ça que le geste ne fait qu'ouvrir : la
+       confirmation qui nomme ce qui part est toujours le dernier mot. Le
+       glissement remplace le PREMIER tap, jamais le second. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/App.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const debut = source.indexOf('function LigneRoulage(')
+    const corps = source.slice(debut, source.indexOf('\nfunction ', debut + 20))
+    vrai(debut > 0 && /useGlissement\(/.test(corps), 'la ligne de roulage ne glisse plus')
+    vrai(/setConfirme\(true\)/.test(corps),
+      'la languette rouge n\'ouvre plus la confirmation : elle détruirait au premier tap')
+    vrai(!/supprimerRoulage\(/.test(corps.slice(corps.indexOf('languettes'))),
+      'la languette appelle la suppression directement')
+    vrai(/part définitivement/.test(corps), 'la phrase qui nomme ce qui part a disparu')
+    /* ⚠ ET LES DEUX ACTIONS SONT ATTEIGNABLES SANS GLISSER. EXPERIENCE.md:46
+       interdit tout geste caché comme SEUL chemin : les languettes sont dans le
+       DOM en permanence et seulement REPLIÉES, et `:focus-within` les ouvre dès
+       que la tabulation y arrive. `display: none` les retirerait de l'ordre de
+       tabulation, et ce serait le geste caché. */
+    vrai(/\.languettes:focus-within/.test(FEUILLE),
+      'les languettes ne s\'ouvrent plus au clavier : le glissement devient le seul chemin')
+    vrai(!/\.languettes\s*\{[^}]*display:\s*none/.test(FEUILLE),
+      'les languettes sortent de l\'ordre de tabulation')
+    // NFR-8 — 56 px de cible, gants aux mains.
+    const regle = FEUILLE.slice(FEUILLE.indexOf('.languettes .lien'))
+    vrai(/min-height:\s*56px/.test(regle.slice(0, 300)), 'les languettes sont sous la cible de 56 px')
+  }),
+
+  doit('22.2 — faire défiler la liste n\'ouvre aucune languette', () => {
+    /* C'est le défaut qui rend ces listes détestables : on fait défiler, une
+       ligne s'entrouvre, on tape au hasard. Trois remèdes, et il faut les trois. */
+    const brut = Object.entries(SOURCES).find(([c]) => c.endsWith('ecrans/glissement.ts'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(source.length > 0, 'le glissement a disparu')
+    // ① `touch-action: pan-y` : le navigateur garde le défilement vertical.
+    vrai(/touch-action:\s*pan-y/.test(FEUILLE),
+      'le navigateur ne garde plus le défilement vertical : la liste s\'entrouvre sous le pouce')
+    // ② La direction se DÉCIDE une fois et ne rechange plus.
+    vrai(/direction\.current = 'vertical'/.test(source),
+      'la direction n\'est plus verrouillée : un pouce qui dérive fait basculer la ligne')
+    vrai(/useRef/.test(source),
+      'la direction est passée par un état : elle serait redécidée à chaque image de rendu')
+    // ③ Un SEUIL de distance, jamais une vitesse — un seuil de vitesse punit le
+    //    geste appliqué, c'est-à-dire le geste ganté.
+    vrai(/SEUIL_PX/.test(source), 'le seuil de distance a disparu')
+    vrai(!/velocit|vitesse|\bdt\b|timeStamp/i.test(source),
+      'le seuil est devenu une vitesse : il punit le geste ganté')
+    // Et rien ne se fait au RELÂCHEMENT : `onPointerUp` ne fait que ranger.
+    const finir = source.slice(source.indexOf('const finir'), source.indexOf('return {'))
+    vrai(!/setOuvert|supprim|retir/i.test(finir),
+      'quelque chose se déclenche au relâchement du doigt : c\'est le balayage destructeur')
+  }),
+
+  doit('22.3 — le témoin est un liseré, sur la carte, et jamais une alarme', () => {
+    /* ⚠ L'ÉPINE UX PORTE DEUX LIGNES, ET ELLES NE DISENT PAS LA MÊME CHOSE.
+       EXPERIENCE.md:212 — « Chargement : il n'y en a pas au noyau ; un
+       indicateur de chargement au paddock est un aveu » — et 216 —
+       « Synchronisation en attente : un liseré discret sur la carte concernée,
+       jamais une modale, jamais un blocage ». La forme était DÉJÀ décidée, et
+       elle répond exactement à la demande de Julian. Un rond qui tourne
+       demanderait de lever la 212, et c'est à lui de le dire. */
+    vrai(/\.bloc\[data-garde="1"\]/.test(FEUILLE), 'le témoin de sauvegarde a disparu')
+    vrai(/inset 3px 0 0/.test(FEUILLE), 'le témoin n\'est plus un liseré sur le bord de la carte')
+    // Pas de rond qui tourne : aucune rotation nulle part dans la feuille.
+    vrai(!/animation:[^;]*(rotation|spin|tourne)/i.test(FEUILLE),
+      'un rond qui tourne est apparu : ça demande de lever EXPERIENCE.md:212')
+    // UX-DR11 — rien ne tourne sous `prefers-reduced-motion`.
+    const reduit = FEUILLE.slice(FEUILLE.lastIndexOf('prefers-reduced-motion'))
+    vrai(/data-garde/.test(reduit), 'le témoin ignore `prefers-reduced-motion`')
+    /* ⚠ ET IL S'ALLUME APRÈS L'ÉCRITURE, PAS AVANT. Le seul service que ce
+       témoin rend est d'être VRAI : allumé avant le `await`, il dirait « c'est
+       gardé » d'une chose qui ne l'est pas encore, et une exception le laisserait
+       allumé sur un échec. */
+    const g = Object.entries(SOURCES).find(([c]) => c.endsWith('ecrans/geste.ts'))?.[1] ?? ''
+    const gs = sansCommentaires(g)
+    vrai(/setGarde\(true\)/.test(gs), 'le témoin ne s\'allume plus')
+    vrai(gs.indexOf('setGarde(true)') > gs.indexOf('await faire('),
+      'le témoin s\'allume avant l\'écriture : il annonce gardé ce qui ne l\'est pas')
+    vrai(!/finally[\s\S]{0,120}setGarde\(true\)/.test(gs),
+      'le témoin s\'allume même quand l\'écriture a échoué')
+    /* ⚠ ET IL NE DIT RIEN DU RÉSEAU. Le paddock sans réseau ne doit voir aucune
+       dégradation (NFR-7, EXPERIENCE.md:214) : pas de bandeau, pas d'icône
+       barrée, pas de « hors ligne ». */
+    for (const mot of ['hors ligne', 'pas de réseau', 'déconnecté', 'échec de synchronisation'])
+      vrai(!new RegExp(mot, 'i').test(gs), `le témoin annonce « ${mot} »`)
+  }),
+
+  doit('22.3 — la première sauvegarde se dit UNE fois', () => {
+    /* C'est le seul moment du produit où le pilote a besoin d'entendre ce qui
+       vient de se passer : jusque-là tout vivait sur son téléphone, et depuis cet
+       instant tout est aussi ailleurs. Le redire à chaque ouverture en ferait un
+       décor qu'on cesse de lire — et un décor qu'on cesse de lire rend invisible
+       le message suivant, celui qui compte. */
+    const sv = Object.entries(SOURCES).find(([c]) => c.endsWith('db/sauvegarde.ts'))?.[1] ?? ''
+    vrai(/premiereSauvegardeDite/.test(sansCommentaires(sv)), 'le drapeau de la première fois a disparu')
+    // Il porte le PRÉFIXE du produit, donc il part avec « effacer mon téléphone ».
+    vrai(/'mypaddock\.premiere-sauvegarde-dite'/.test(sv),
+      'le drapeau sort du préfixe : il survivrait à un effacement annoncé complet')
+    const app = Object.entries(ECRANS).find(([c]) => c.endsWith('/App.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(app)
+    vrai(/!premiereSauvegardeDite\(\)/.test(source), 'la phrase se redirait à chaque adoption')
+    vrai(/marquerPremiereSauvegardeDite\(\)/.test(source), 'le drapeau n\'est plus posé : la phrase revient')
+    // Et elle ne se dit QUE sur un succès complet.
+    vrai(/!refus\.length && !premiereSauvegardeDite\(\)/.test(source),
+      'la phrase « c\'est gardé » se dit sur une adoption partielle')
+  }),
 ]
 
 for (const e of essais) await e()

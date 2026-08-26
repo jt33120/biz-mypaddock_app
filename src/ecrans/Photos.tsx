@@ -6,6 +6,7 @@ import {
 } from '../db/photos'
 import { declarerGeste, gestesDuRoulage, listerCaps, type Cap, type Geste } from '../db/gestes'
 import { Icone } from './Icones'
+import { useGeste } from './geste'
 
 /**
  * L'ALBUM ET LE GESTE — récits 3.1, 3.2, 18.2 et 18.3.
@@ -55,7 +56,6 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
   const [gestes, setGestes] = useState<Geste[]>([])
   const [caps, setCaps] = useState<Cap[]>([])
   const [ouvert, setOuvert] = useState(false)
-  const [occupe, setOccupe] = useState(false)
   const [echecs, setEchecs] = useState<Echec[]>([])
   /** L'index de la photo ouverte en grand, ou `null`. Un index et non un
    *  identifiant : la navigation d'une photo à l'autre est un déplacement dans
@@ -111,15 +111,14 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
    * ⚠ AUCUN COMPTEUR. Pas de « 4 sur 10 ». Ce qui est versé apparaît ; ce qui
    * reste ne se compte pas.
    */
-  const verser = async (fichiers: FileList | null) => {
+  const [verser, occupe, garde] = useGeste(async (fichiers: FileList | null) => {
     const liste = fichiers ? Array.from(fichiers) : []
     if (!liste.length) return
-    setOccupe(true); setEchecs([])
+    setEchecs([])
     const rates = await verserPlusieurs(db, { roulageId }, liste, () => charger())
     setEchecs(rates)
     await charger()
-    setOccupe(false)
-  }
+  })
 
   const retirer = async (p: Photo) => {
     await oublierPhoto(db, p.id)
@@ -128,7 +127,7 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
   }
 
   return (
-    <div className="bloc pile album">
+    <div className="bloc pile album" data-garde={garde ? '1' : '0'}>
       <div className="rang">
         <span className="rang" style={{ gap: 8 }}>
           <Icone nom="photo" taille={16} />

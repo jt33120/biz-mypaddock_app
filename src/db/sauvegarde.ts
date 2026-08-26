@@ -372,6 +372,30 @@ export const estAdopte = (piloteId: string): boolean => {
 const marquerAdopte = (piloteId: string) => {
   try { localStorage.setItem(CLE_ADOPTE + piloteId, '1') } catch { /* rien à faire */ }
 }
+/**
+ * LA TOUTE PREMIÈRE SAUVEGARDE SE DIT UNE FOIS — récit 22.3.
+ *
+ * ⚠ ET UNE SEULE, C'EST LA CLAUSE ENTIÈRE. C'est le seul moment du produit où
+ * le pilote a besoin d'entendre ce qui vient de se passer : jusque-là tout
+ * vivait sur son téléphone, et depuis cet instant tout est aussi ailleurs. Le
+ * redire à chaque ouverture en ferait un décor qu'on cesse de lire — et un
+ * décor qu'on cesse de lire est exactement ce qui rend le message suivant,
+ * celui qui compte, invisible.
+ *
+ * Le drapeau porte le PRÉFIXE du produit : il part avec « effacer mon
+ * téléphone » comme les autres réglages, ce qui est juste — un pilote qui
+ * repart de zéro reverra la phrase, parce que c'est de nouveau la première fois.
+ */
+const CLE_PREMIERE = 'mypaddock.premiere-sauvegarde-dite'
+
+export const premiereSauvegardeDite = (): boolean => {
+  try { return localStorage.getItem(CLE_PREMIERE) === '1' } catch { return false }
+}
+
+export const marquerPremiereSauvegardeDite = (): void => {
+  try { localStorage.setItem(CLE_PREMIERE, '1') } catch { /* rien à faire */ }
+}
+
 
 /**
  * L'adoption complète : poser l'état, écarter le journal d'avant, ouvrir la voie

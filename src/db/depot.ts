@@ -356,6 +356,57 @@ export const supprimerRoulage = async (db: PowerSyncDatabase, roulageId: string)
   })
 }
 
+/**
+ * MODIFIER UN ROULAGE — récit 22.1, et c'est un écran qui n'existait PAS.
+ *
+ * ⚠ IL N'Y AVAIT AUCUN CHEMIN. La seule écriture sur `roulage` hors création
+ * était `chrono_visible` (cercle.ts) et deux normalisations d'ouverture. Une
+ * journée saisie au mauvais circuit ou à la mauvaise date ne se corrigeait pas :
+ * il fallait la SUPPRIMER — avec ses sessions, ses tours, ses photos, ses gestes
+ * et ses dépenses — et tout ressaisir. C'est la même classe de défaut que les
+ * vingt-cinq roulages qu'on ne pouvait pas effacer : une donnée qu'on ne peut
+ * pas corriger cesse d'être saisie.
+ *
+ * ⚠ CE QU'ELLE NE TOUCHE PAS, ET C'EST L'ESSENTIEL. Sessions, tours, photos,
+ * gestes, dépenses, checklist : rien ne bouge. La journée change d'étiquette,
+ * pas de contenu. En particulier, LES LIGNES DE CONFORMITÉ DÉJÀ RECOPIÉES
+ * RESTENT : ce sont des TRACES — ce que l'organisateur avait publié au moment où
+ * le camion a été chargé — et les réécrire parce qu'on corrige une faute de
+ * frappe sur le nom du circuit effacerait ce qui avait été lu ce jour-là.
+ *
+ * ⚠ ET `circuit_id` REPART À NULL QUAND LE NOM CHANGE. Le rattachement au
+ * référentiel se fait CÔTÉ SERVEUR, et le déclencheur ne remplit qu'un
+ * `circuit_id` NUL (migration 20260825000003) : sans cette remise à zéro, une
+ * journée corrigée de « Nogaro » vers « Pau-Arnos » resterait attachée à Nogaro
+ * pour toujours — le nom à l'écran et le rattachement en base diraient deux
+ * choses différentes, et c'est le rattachement qui décide des règles publiées.
+ * On ne le remet à nul QUE si le nom a réellement changé : le remettre à chaque
+ * enregistrement referait tourner la résolution pour rien.
+ */
+export const modifierRoulage = async (
+  db: PowerSyncDatabase,
+  id: string,
+  r: { circuit: string; date: string; groupeNom: string | null; rang: number | null
+       total: number | null; machineId: string | null },
+): Promise<void> => {
+  const avant = await db.get<{ circuit_nom: string }>(
+    // Lecture par identifiant : elle voit une journée à venir, qui est le cas
+    // le plus fréquent d'une correction — on se trompe en saisissant, pas après.
+    `SELECT circuit_nom FROM roulage ${TOUTES_JOURNEES} WHERE id = ?`, [id])
+  if (!avant) return
+
+  const changeDeCircuit = aplati(avant.circuit_nom ?? '') !== aplati(r.circuit)
+
+  await db.execute(
+    `UPDATE roulage
+        SET circuit_nom = ?, date_jour = ?, groupe_nom = ?, groupe_rang = ?,
+            groupe_total = ?, machine_id = ?
+            ${changeDeCircuit ? ', circuit_id = NULL, organisateur_id = NULL' : ''}
+      WHERE id = ?`,
+    [r.circuit, r.date, r.groupeNom, r.rang, r.total, r.machineId, id])
+  await marquerSaisie(db)
+}
+
 /** AD-3 : une session porte une COLLECTION de tours, même quand la v1 n'en
  *  écrit qu'un. Et tout chrono porte sa provenance — il n'y a pas de GPS. */
 export const ajouterSession = async (db: PowerSyncDatabase, roulageId: string, tempsMs: number) => {

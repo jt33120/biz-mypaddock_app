@@ -74,7 +74,7 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
   }, [db, roulage])
   useEffect(() => { void charger() }, [charger])
 
-  const [poser, occupe] = useGeste(async () => {
+  const [poser, occupe, garde] = useGeste(async () => {
     const t = saisie.trim()
     if (!t) return
     /* ⚠ ON NE MONTRE PAS DEUX FOIS LA MÊME CHOSE, ET ON NE L'AVALE PAS NON PLUS
@@ -136,7 +136,7 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
      ferait rougir le banc. */
   if (!su) {
     return (
-      <div className="bloc pile preparation" data-etat="attente">
+      <div className="bloc pile preparation" data-etat="attente" data-garde={garde ? '1' : '0'}>
         <p className="libelle">Avant d'y aller</p>
         <Ajout valeur={saisie} sur={setSaisie} occupe={occupe} poser={poser}
                primaire={ajoutPrimaire} doublon={doublon} />
@@ -146,7 +146,7 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
 
   if (!taches.length && !propres.length) {
     return (
-      <div className="bloc pile preparation" data-etat="su">
+      <div className="bloc pile preparation" data-etat="su" data-garde={garde ? '1' : '0'}>
         <p className="libelle">Avant d'y aller</p>
         {/* Une liste vide est un ÉTAT JUSTE, pas un écran raté. Elle dit ce
             qu'elle sait — rien n'attend — et propose d'en ajouter, sans jamais
@@ -160,7 +160,7 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
   }
 
   return (
-    <div className="bloc pile preparation" data-etat="su">
+    <div className="bloc pile preparation" data-etat="su" data-garde={garde ? '1' : '0'}>
       <p className="libelle">Avant d'y aller</p>
 
       {taches.map((t, i) => (
