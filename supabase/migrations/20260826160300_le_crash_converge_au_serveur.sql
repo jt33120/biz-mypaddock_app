@@ -8,9 +8,9 @@
 
 -- `pilote_id = auth.uid()` sur chute ne suffit pas : sans ascendance, le pilote
 -- A peut donner l'UUID d'un roulage B au trigger SECURITY DEFINER. La paire est
--- donc garantie AVANT la création du trigger. `NOT VALID` protège toutes les
--- nouvelles lignes sans rendre le déploiement destructif si un ancien reliquat
--- incohérent doit d'abord être audité.
+-- donc garantie AVANT la création du trigger. `NOT VALID` ferme d'abord la
+-- porte aux nouvelles lignes ; la validation explicite juste après audite et
+-- ferme aussi l'historique avant d'installer le corps privilégié.
 do $$
 begin
   if not exists (
@@ -39,6 +39,9 @@ begin
   end if;
 end
 $$;
+
+alter table public.chute
+  validate constraint chute_roulage_du_meme_pilote_fk;
 
 drop policy if exists "un pilote ne voit que ses chutes" on public.chute;
 create policy "un pilote ne voit que ses chutes" on public.chute
