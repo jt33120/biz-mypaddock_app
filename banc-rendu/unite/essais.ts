@@ -2411,6 +2411,165 @@ const essais = [
     vrai(/!refus\.length && !premiereSauvegardeDite\(\)/.test(source),
       'la phrase « c\'est gardé » se dit sur une adoption partielle')
   }),
+
+  doit('19.3 — les deux chemins d\'écriture écrivent la MÊME chose', () => {
+    /* ⚠ IL Y EN A DEUX, ET C'EST ASSUMÉ : `Depense.tsx` est le seul à proposer la
+       cible `roulage` (on paie SA journée), `Budget.tsx` est le seul à proposer
+       les huit postes. Ce qui n'est pas assumé, c'est qu'ils écrivent des lignes
+       de formes différentes — et c'est ce qui s'est produit : `creerDepense`
+       n'écrivait AUCUN poste, donc la tâche dérivée « L'engagement », qui cherche
+       `poste = 'engagement'`, ne disparaissait jamais.
+
+       La garde ne compare pas les écrans : elle compare les COLONNES des deux
+       INSERT, seule chose qui fasse foi. */
+    const colonnes = (fichier: string, fonction: string) => {
+      const brut = Object.entries(SOURCES).find(([c]) => c.endsWith(fichier))?.[1] ?? ''
+      const s = sansCommentaires(brut)
+      const d = s.indexOf(fonction)
+      vrai(d > 0, `${fonction} introuvable dans ${fichier}`)
+      const insert = s.slice(d).match(/INSERT INTO depense\s*\(([^)]*)\)/)
+      vrai(!!insert, `${fonction} n'écrit plus dans depense`)
+      return new Set(insert![1].split(',').map((c) => c.trim()).filter(Boolean))
+    }
+    const a = colonnes('db/depot.ts', 'export const creerDepense')
+    const b = colonnes('db/budget.ts', 'export const depenserSur')
+    egal([...a].sort(), [...b].sort(),
+      'les deux chemins d\'écriture d\'une dépense n\'écrivent plus les mêmes colonnes')
+    // Et les trois qui font vivre les écrans en aval sont là dans les deux.
+    for (const c of ['poste', 'date_jour', 'cible']) {
+      vrai(a.has(c), `creerDepense n'écrit plus \`${c}\``)
+      vrai(b.has(c), `depenserSur n'écrit plus \`${c}\``)
+    }
+  }),
+
+  doit('19.3 — le raccourci de l\'accueil n\'exige ni journée ni machine', () => {
+    /* L'écran `depense` n'était monté que si `courant && bilan` : le seul chemin
+       depuis l'accueil passait par un roulage à venir SANS engagement saisi.
+       Payer ses pneus en février demandait donc d'avoir une journée ouverte. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/App.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const d = source.indexOf('<NoterUneDepense')
+    vrai(d > 0, 'le raccourci de dépense a disparu de l\'accueil')
+    // Il est monté SANS condition : pas de `&&` collé devant lui sur sa ligne.
+    const ligne = source.slice(source.lastIndexOf('\n', d), d)
+    vrai(!/&&\s*$/.test(ligne),
+      'le raccourci est redevenu conditionnel : il exige de nouveau une journée ouverte')
+    /* ⚠ ET IL NE RÉCLAME RIEN. Aucun « tu n'as rien saisi ce mois-ci », aucune
+       pastille, aucun rappel — c'est la contre-mesure C1, et un raccourci
+       d'argent est exactement l'endroit où on serait tenté de la trahir. */
+    const bud = Object.entries(ECRANS).find(([c]) => c.endsWith('/Budget.tsx'))?.[1] ?? ''
+    const bs = sansCommentaires(bud)
+    // ⚠ BORNÉ À LA FONCTION, PAS « JUSQU'À LA FIN DU FICHIER ». La première
+    //   version prenait tout ce qui suit, donc l'équipement et son
+    //   `oublierEquipement` — et accusait le raccourci de « réclamer : oubli ».
+    //   Un témoin qui lit trop large accuse au hasard, ce qui revient à ne pas
+    //   témoigner du tout.
+    const dNote = bs.indexOf('export function NoterUneDepense')
+    vrai(dNote > 0, '`NoterUneDepense` a disparu')
+    const finNote = bs.indexOf('\nfunction ', dNote)
+    const r = bs.slice(dNote, finNote > 0 ? finNote : undefined)
+    for (const mot of ['pense à', 'n\'as rien saisi', 'oubli', 'rappel', 'pastille'])
+      vrai(!new RegExp(mot, 'i').test(r), `le raccourci réclame : « ${mot} »`)
+  }),
+
+  doit('19.4 — le tracé de l\'argent n\'est pas une jauge', () => {
+    /* ⚠ LA DIFFÉRENCE TIENT DANS UNE SEULE LIGNE : l'échelle est le PLUS GROS
+       de ce qu'on montre, jamais le plafond de la saison. Mesurée contre un
+       plafond, une barre devient un compteur à rebours — elle dirait « il te
+       reste » — et « dépasser son budget n'est pas une faute ». Mesurée contre
+       le plus gros poste, elle dit une COMPOSITION. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Barres.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(source.length > 0, 'le tracé de l\'argent a disparu')
+    vrai(/Math\.max\(\.\.\.barres\.map\(\(b\) => b\.centimes\)/.test(source),
+      'l\'échelle du tracé n\'est plus le plus gros de ce qu\'il montre')
+    for (const mot of ['plafond', 'budget', 'reste', 'objectif', 'cible'])
+      vrai(!new RegExp(`\\b${mot}\\b`, 'i').test(source),
+        `le tracé connaît « ${mot} » : il est en train de devenir une jauge`)
+    // Il ne porte pas la classe de la jauge non plus — la cascade suffirait.
+    vrai(!/\bjauge\b/.test(source), 'le tracé emprunte le dessin de la jauge')
+  }),
+
+  doit('19.4 — aucun mois n\'est jugé, comparé ni coloré', () => {
+    /* « Un graphe de coût qui monte est très près d'un verdict. » La règle du
+       chrono — aucune tendance, aucune droite, aucun « à ce rythme » — s'applique
+       à l'argent telle quelle. Et l'ordre du calendrier est ce qui empêche le
+       classement : trier par montant ferait « le mois le plus cher ». */
+    const b = Object.entries(ECRANS).find(([c]) => c.endsWith('/Barres.tsx'))?.[1] ?? ''
+    const bud = Object.entries(ECRANS).find(([c]) => c.endsWith('/Budget.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(b) + sansCommentaires(bud)
+    for (const mot of ['tendance', 'projection', 'à ce rythme', 'prévision', 'moyenne mobile',
+      'plus cher', 'record de dépense'])
+      vrai(!new RegExp(mot, 'i').test(source), `l'argent porte « ${mot} »`)
+    /* ⚠ ET AUCUNE COULEUR NE DISTINGUE LES POSTES. La palette a quatre teintes
+       utiles, et `--alerte` ne sert QU'À CE QUI DÉTRUIT : colorier huit postes
+       obligerait à l'emprunter, et un poste « Pneus » en rouge se lirait comme
+       un avertissement sur un montant qui n'en est pas un. */
+    const regle = FEUILLE.slice(FEUILLE.indexOf('.barre-argent {'),
+      FEUILLE.indexOf('.barre-argent {') + 400)
+    vrai(regle.length > 0, 'la barre de l\'argent a disparu de la feuille')
+    vrai(!/--alerte|--plus-lent/.test(regle),
+      'une barre d\'argent porte le rouge de l\'alerte ou le jaune du dépassement')
+    /* ⚠ ET LES MOIS GARDENT L'ORDRE DU CALENDRIER. Les trier par montant ferait
+       « le mois le plus cher », et un classement de dépenses est un verdict.
+       La garde cherche le TRI, pas un gabarit d'appel : sa première version
+       s'ancrait sur le texte `barres={mois.map`, que la mutation qui ajoutait le
+       tri effaçait — elle passait donc au vert sur le défaut même qu'elle
+       gardait. Un témoin ancré sur ce que le défaut détruit ne témoigne pas. */
+    const bs = sansCommentaires(bud)
+    vrai(!/\bmois\b[^;\n]{0,40}\.sort\(|\[\s*\.\.\.\s*mois\s*\]/.test(bs),
+      'les mois sont re-triés : l\'ordre du calendrier devient un classement')
+  }),
+
+  doit('19.4 — le tracé n\'emprunte aucune bibliothèque, et pas même un <svg>', () => {
+    /* Le jeu d'icônes tient tout le SVG du produit, et un essai refuse qu'un
+       écran en pose un à lui — c'est ce qui empêche l'assemblage de se
+       reconstituer. Ce qui aurait justifié un SVG ici, c'est un tracé CONTINU, et
+       il n'y en a pas : une ligne reliant deux mois inventerait des valeurs entre
+       eux, exactement comme une courbe lissée entre deux roulages. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Barres.tsx'))?.[1] ?? ''
+    vrai(!/<svg\b/.test(sansCommentaires(brut)), 'le tracé de l\'argent pose un <svg> à lui')
+    // Et le dépôt n'a toujours aucune dépendance d'interface.
+    vrai(!/chart|recharts|d3|victory|nivo|apexcharts/i.test(JSON.stringify(Object.keys(PUBLIC))),
+      'une bibliothèque de graphes est entrée par les fichiers servis')
+  }),
+
+  doit('aucune classe de la feuille n\'est déclarée deux fois', () => {
+    /* ⚠ DEUX FOIS EN DEUX JOURS, ET AUCUN DES DEUX NE SE VOYAIT EN LISANT LE
+       CODE.
+         · `.vignette` était déclarée au premier niveau pour les photos du
+           roulage (96 px de haut) ET pour les pièces d'atelier (84 x 84,
+           rognées). La seconde gagnait par cascade : les photos n'avaient pas la
+           taille que leur commentaire annonçait (récit 18.2) ;
+         · `.barre` allait l'être une troisième fois — c'est la barre de
+           NAVIGATION du bas, en `position: fixed; bottom: 0`, et le tracé de
+           l'argent allait plaquer chacune de ses barres par-dessus (récit 19.4).
+
+       Une collision de ce genre ne produit ni erreur de type, ni écran cassé, ni
+       ligne rouge : elle produit un écran presque juste, et on cherche ailleurs.
+       La règle est donc mécanique — un sélecteur de classe SEUL, au premier
+       niveau, ne s'écrit qu'une fois. Les sélecteurs composés (`.a .b`,
+       `.a.b`, `.a[data-x]`) sont hors du champ : ce sont des affinages
+       délibérés, et c'est le nom NU qui pose le fondement. */
+    const sansBlocs = FEUILLE.replace(/@media[^{]*\{(?:[^{}]|\{[^{}]*\})*\}/g, ' ')
+    const declares = new Map<string, number>()
+    // Chaque groupe de sélecteurs devant une accolade, à plat.
+    for (const m of sansBlocs.replace(/\/\*[\s\S]*?\*\//g, ' ').matchAll(/([^{}();]+)\{/g)) {
+      for (const sel of m[1].split(',')) {
+        const s = sel.trim()
+        // Un nom de classe NU et rien d'autre : `.machin`, jamais `.a .b`.
+        // ⚠ LES LETTRES ACCENTUÉES COMPTENT. `\w` est ASCII en JavaScript : une
+        //   classe `.tracé-argent` passait donc à travers cette garde sans être
+        //   lue, et un doublon accentué serait resté invisible — c'est-à-dire
+        //   exactement le défaut que la garde existe pour attraper.
+        if (!/^\.[\p{L}_][\p{L}\p{N}_-]*$/u.test(s)) continue
+        declares.set(s, (declares.get(s) ?? 0) + 1)
+      }
+    }
+    const doublons = [...declares].filter(([, n]) => n > 1).map(([s, n]) => `${s} (${n})`)
+    vrai(declares.size > 40, `seulement ${declares.size} classes lues : la lecture est cassée`)
+    egal(doublons, [], 'des classes sont déclarées deux fois au premier niveau de la feuille')
+  }),
 ]
 
 for (const e of essais) await e()

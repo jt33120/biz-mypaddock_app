@@ -387,7 +387,21 @@ body {
    portrait garde sa place (AD-2), et tous les chiffres portent sur l'OBJET —
    c'est la machine qui monte en niveau, jamais le pilote. */
 .garage { display: flex; flex-direction: column; gap: 14px; }
-.garage-tete { display: flex; justify-content: space-between; align-items: baseline; }
+/* ⚠ `center` ET NON `baseline`, ET C'EST UN VRAI DÉFAUT QU'ON ÉVITE. Une tête
+   de page aligne un LIEN de 40 px de haut et un libellé d'une ligne : sur la
+   ligne de base, le libellé remonte de toute la hauteur du lien et sort par le
+   haut de l'écran — vu sur la capture, « DANS 18 JOURS » à moitié coupé sous le
+   bandeau. La même tête sert à la fiche de circuit, où le second élément est le
+   PAYS : il n'apparaît que quand le référentiel est descendu, c'est-à-dire
+   jamais encore. Le défaut y dort.
+
+   ⚠ ET CETTE CORRECTION VIVAIT QUATRE CENTS LIGNES PLUS BAS, dans une SECONDE
+   déclaration de `.garage-tete` au premier niveau. Elle marchait — la cascade
+   la faisait gagner — mais qui lisait celle-ci lisait `baseline` et croyait le
+   défaut présent, pendant que qui lisait celle-là ne voyait pas ce qu'elle
+   corrigeait. C'est le troisième doublon de sélecteur trouvé en deux jours,
+   après `.vignette` et `.barre` ; un essai unitaire les refuse maintenant tous. */
+.garage-tete { display: flex; justify-content: space-between; align-items: center; }
 .garage-tete b { color: var(--miami); font-weight: 600; }
 .garage-titre .marque {
   font-size: 11px; letter-spacing: .20em; text-transform: uppercase; color: var(--miami);
@@ -777,14 +791,6 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 .journee-page .garage-titre { border-left: 3px solid var(--plus-lent); padding-left: 12px; }
 .journee-page .garage-tete .lien { min-height: 40px; }
 .journee-page .garage-titre .sous-titre { color: var(--encre-faible); font-size: 14px; }
-/* ⚠ `center` ET NON `baseline`, ET C'EST UN VRAI DÉFAUT QU'ON ÉVITE. Une tête
-   de page aligne un LIEN de 40 px de haut et un libellé d'une ligne : sur la
-   ligne de base, le libellé remonte de toute la hauteur du lien et sort par le
-   haut de l'écran — vu sur la capture, « DANS 18 JOURS » à moitié coupé sous le
-   bandeau. La même tête sert à la fiche de circuit, où le second élément est le
-   PAYS : il n'apparaît que quand le référentiel est descendu, c'est-à-dire
-   jamais encore. Le défaut y dort. */
-.garage-tete { align-items: center; }
 
 /* Le champ d'ajout PASSE EN COLONNE quand son bouton est l'action première.
    « AJOUTER UNE CHOSE À FAIRE » ne se coupe pas (`white-space: nowrap`) et le
@@ -985,3 +991,38 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
   .languettes { transition: none; }
   .bloc[data-garde="1"], .bloc[data-garde="0"] { transition: none; }
 }
+
+/* ─── LE TRACÉ DE L'ARGENT — récit 19.4 ────────────────────────────────────
+   ⚠ CE N'EST PAS UNE JAUGE, et la différence n'est pas dans la feuille : elle
+   est dans l'ÉCHELLE, qui est le plus gros poste et jamais le plafond de la
+   saison (Barres.tsx). Une barre mesurée contre un plafond est un compteur à
+   rebours, et « dépasser son budget n'est pas une faute ».
+
+   ⚠ ET AUCUNE COULEUR NE DISTINGUE LES POSTES. La palette a quatre teintes
+   utiles, et l'une d'elles — `--alerte` — ne sert QU'À CE QUI DÉTRUIT : « un
+   rouge qui sert à deux choses ne sert plus à rien ». Colorier huit postes
+   obligerait à l'emprunter, et un poste « Pneus » en rouge se lirait comme un
+   avertissement sur un montant qui n'en est pas un. C'est la LONGUEUR qui
+   informe ; le mot et le montant sont juste au-dessus (UX-DR8).
+
+   ⚠ LES CLASSES S'APPELLENT `barre-argent` ET PAS `barre` : `.barre` est DÉJÀ
+   la barre de navigation du bas, en `position: fixed; left: 0; right: 0;
+   bottom: 0`. Une seconde déclaration au premier niveau aurait plaqué chaque
+   barre de ce tracé par-dessus la navigation. C'est le deuxième défaut de ce
+   genre en deux jours — `.vignette` était déclarée deux fois et la seconde
+   gagnait en silence — et un essai unitaire refuse désormais tout doublon de
+   sélecteur au premier niveau de cette feuille. */
+.trace-argent { gap: 10px; }
+.barre-argent-ligne { gap: 3px; }
+.barre-argent-fond {
+  height: 8px; background: rgba(8,12,28,.6);
+  border: 1px solid var(--filet);
+}
+/* Aucun rayon, aucun dégradé, aucune transition : un aplat net, comme tout le
+   reste du produit. La barre ne s'anime pas en arrivant — une barre qui pousse
+   fait regarder le mouvement au lieu de la longueur. */
+.barre-argent { height: 100%; background: var(--miami); }
+/* Ce que le produit ne sait pas ranger — « Sans poste », « Sans mois » — se
+   dit en retrait. Jamais absent : le ranger d'office ferait croire qu'un choix
+   a été fait. */
+.barre-argent[data-incertain="1"] { background: var(--encre-tenue); opacity: .55; }

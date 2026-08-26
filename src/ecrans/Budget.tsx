@@ -10,6 +10,7 @@ import {
 } from '../db/budget'
 import { photoEquipement, verserPhotoEquipement } from '../db/photos'
 import { Icone, type Nom } from './Icones'
+import { Barres, type Barre } from './Barres'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import {
@@ -105,6 +106,37 @@ export function Budget({ db, annee, machineId, onEcrit }: {
             </p>
           )}
 
+          {/* ─── LE TRACÉ PAR POSTE — récit 19.4 ──────────────────────────
+              Les huit postes étaient déjà calculés et n'existaient qu'en liste
+              de texte. Ils portent maintenant leur longueur, et la longueur est
+              ce qu'on lit d'un coup d'œil : « en quoi ma saison est partie ».
+
+              ⚠ CE N'EST PAS UNE JAUGE — l'échelle est le PLUS GROS POSTE, jamais
+              le plafond de la saison. Mesurée contre un plafond, une barre
+              devient un compteur à rebours, et « dépasser son budget n'est pas
+              une faute ». Le raisonnement complet est dans Barres.tsx.
+
+              ⚠ ET IL VIENT AVANT LA LISTE, pas après. La liste sert à SAISIR —
+              chaque ligne ouvre son champ ; le tracé sert à LIRE. Mettre le
+              tracé en dessous obligerait à faire défiler huit champs de saisie
+              pour voir la forme de sa saison. */}
+          <Barres titre="Par poste"
+                  description={"Ce que l'année a coûté, en quoi. La longueur compare les postes "
+                    + "entre eux — jamais à ton plafond."}
+                  barres={[
+                    ...POSTES.map((p) => ({ p, l: trouve(p) }))
+                      .filter((x): x is { p: Poste; l: LignePoste } => !!x.l)
+                      .sort((a, b) => b.l.total - a.l.total)
+                      .map(({ p, l }): Barre => ({
+                        nom: NOM_POSTE[p], centimes: l.total,
+                        detail: `${l.n} dépense${l.n > 1 ? 's' : ''}`,
+                      })),
+                    ...(sansPoste ? [{
+                      nom: 'Sans poste', centimes: sansPoste.total, incertain: true,
+                      detail: 'saisies avant que les postes existent',
+                    } satisfies Barre] : []),
+                  ]} />
+
           {POSTES.map((p) => {
             const l = trouve(p)
             return (
@@ -186,28 +218,23 @@ export function Budget({ db, annee, machineId, onEcrit }: {
                 </p>
               )}
 
-              {mois.map((m) => (
-                <div className="rang ligne-atelier" key={m.mois ?? 'sans-mois'}>
-                  <span className="pile" style={{ gap: 0 }}>
-                    <span className={m.mois ? 'texte' : 'texte faible'}>
-                      {m.mois ? nomMois(m.mois) : 'Sans mois'}
-                    </span>
-                    {/* ⚠ LES DÉPENSES D'AVANT LA COLONNE SE DISENT, elles ne se
-                        rangent pas au hasard — exactement comme « Sans poste »
-                        juste au-dessus, et pour la même raison : leur attribuer
-                        un mois ferait croire qu'un choix a été fait. */}
-                    <span className="sous-titre">
-                      {m.mois
-                        ? m.postes.map((p) => p.poste ? NOM_POSTE[p.poste].toLowerCase() : 'sans poste')
-                          .join(' · ')
-                        : "saisies avant que la dépense porte son jour"}
-                    </span>
-                  </span>
-                  <span className={m.mois ? 'chiffre hud-16' : 'chiffre hud-16 faible'}>
-                    {formaterEuros(m.total)}
-                  </span>
-                </div>
-              ))}
+              {/* ⚠ LES MOIS GARDENT L'ORDRE DU CALENDRIER, ET LES BARRES AUSSI.
+                  Les trier par montant ferait un classement — « le mois le plus
+                  cher » — et un classement de dépenses est un verdict. Les
+                  dépenses d'avant la colonne restent DITES, en retrait, jamais
+                  rangées au hasard : leur attribuer un mois ferait croire qu'un
+                  choix a été fait. */}
+              <Barres titre="" description={"Ce que chaque mois a coûté, dans l'ordre du "
+                        + "calendrier, et de quoi il était fait."}
+                      barres={mois.map((m): Barre => ({
+                        nom: m.mois ? nomMois(m.mois) : 'Sans mois',
+                        centimes: m.total,
+                        incertain: !m.mois,
+                        detail: m.mois
+                          ? m.postes.map((p) => p.poste ? NOM_POSTE[p.poste].toLowerCase() : 'sans poste')
+                            .join(' · ')
+                          : 'saisies avant que la dépense porte son jour',
+                      }))} />
             </div>
           )}
         </>

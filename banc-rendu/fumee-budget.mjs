@@ -105,8 +105,14 @@ verifier('①bis le mois existe', budget.includes('Par mois') && budget.includes
   moisCourant)
 verifier('   le mois porte le total des trois postes',
   new RegExp(`${moisCourant}[^€]*716,30`).test(budget), budget.slice(budget.indexOf('Par mois'), budget.indexOf('Par mois') + 160))
+// ⚠ LA FENÊTRE EST BORNÉE EN CARACTÈRES, PLUS EN « AVANT LE PREMIER € ». Le
+// récit 19.4 a mis le montant AVANT la composition — nom, montant, barre,
+// composition — et `[^€]*` ne pouvait plus franchir le montant. L'assertion
+// serait devenue rouge sur un écran juste ; la borne dit ce qu'elle veut
+// vraiment : la composition est ATTACHÉE à ce mois-là, pas au suivant.
 verifier('   le mois dit de quoi il était fait',
-  new RegExp(`${moisCourant}[^€]*engagement`).test(budget))
+  new RegExp(`${moisCourant}[\\s\\S]{0,40}engagement`).test(budget),
+  budget.slice(budget.indexOf(moisCourant), budget.indexOf(moisCourant) + 90))
 
 // ⚠ LES TROIS REFUS DU MOIS, et ils comptent autant que son existence. Un total
 // mensuel est l'endroit du produit où la comparaison, le pourcentage et le
