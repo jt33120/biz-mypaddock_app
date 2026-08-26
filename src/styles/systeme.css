@@ -164,7 +164,7 @@ body {
    Un rouge qui sert à deux choses ne sert plus à rien.
 
    ⚠ ET LA COULEUR N'EST JAMAIS SEULE (UX-DR8). Deux signes la doublent PARTOUT,
-   sur les 14 gestes rouges du produit : le MOT dit ce qui part — retirer,
+   sur les 15 gestes rouges du produit : le MOT dit ce qui part — retirer,
    supprimer, effacer, oublier — et la FORME — filet plein sur tout le tour,
    texte de la même teinte — se distingue du secondaire même pour un œil qui ne
    sépare pas les rouges des gris. Retirer l'un des deux ramène le défaut que
@@ -174,11 +174,12 @@ body {
    reste entière », ET C'ÉTAIT FAUX POUR LA MOITIÉ D'ENTRE EUX. Les deux temps
    existent pour 4 gestes — une journée de roulage et tout ce qu'elle emporte,
    une chute, le compte entier, une photo de l'album — soit 8 boutons rouges sur
-   14, l'ouvrant et le confirmant. Les 6 autres partent au premier tap :
-   « Retirer ce que la sonde a écrit », et cinq « retirer » au bout d'une ligne
+   15, l'ouvrant et le confirmant. Les 7 autres partent au premier tap :
+   « Retirer ce que la sonde a écrit », et six « retirer » au bout d'une ligne
    de liste (une horloge, une pièce d'atelier, une pièce d'équipement, une ligne
-   de chargement, une tâche d'avant d'y aller). La règle réelle est là : les deux
-   temps gardent ce qui ne se retape pas, pas ce qui se retape en cinq secondes.
+   de chargement, une tâche d'avant d'y aller, une chose qu'on venait chercher).
+   La règle réelle est là : les deux temps gardent ce qui ne se retape pas, pas
+   ce qui se retape en cinq secondes.
 
    ⚠ ET LA PHOTO EST ENTRÉE DANS LE PREMIER GROUPE, PAS DANS LE SECOND — récit
    18.2. Une ligne de chargement se retape en cinq secondes ; un cliché du
@@ -186,7 +187,7 @@ body {
    SEULE, parce que la seule suppression de photo qui existait jusque-là
    emportait la journée entière.
 
-   Ces 14 se répartissent en 5 `.bouton.destructif` et 9 `.lien.destructif`, et
+   Ces 15 se répartissent en 5 `.bouton.destructif` et 10 `.lien.destructif`, et
    un essai unitaire recompte les trois nombres écrits ici. Un commentaire est la
    mémoire du défaut dans ce dépôt : celui-ci décrivait une garde qu'on croyait
    tenue et qui ne tenait qu'à moitié, et c'est pire qu'une garde absente, parce
@@ -1026,3 +1027,28 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
    dit en retrait. Jamais absent : le ranger d'office ferait croire qu'un choix
    a été fait. */
 .barre-argent[data-incertain="1"] { background: var(--encre-tenue); opacity: .55; }
+
+/* ─── L'AVERTISSEMENT PERMANENT — récit 17.5 ───────────────────────────────
+   La contrepartie posée par Julian le 25 août pour lever trois règles écrites
+   d'un coup : le mot « objectif » interdit à l'écran, la cible chiffrée de
+   chrono, et les caps de bravoure. Il paie une chose réelle — une promesse
+   qu'on s'est faite avant de partir pèse sur la décision qu'on prend en piste.
+
+   ⚠ IL NE SE FERME PAS, et il n'a donc aucun bouton. Un avertissement qu'on
+   peut renvoyer d'un tap est un avertissement qu'on renvoie une fois pour
+   toutes le premier jour. Il est discret et il reste : c'est le prix de la
+   levée, et il se paie en continu ou il ne se paie pas.
+
+   La marge du bas laisse passer la barre de navigation, qui est en
+   `position: fixed` : sans elle, la dernière ligne vit derrière les onglets. */
+.avertissement {
+  margin: 18px 0 calc(78px + env(safe-area-inset-bottom));
+  color: var(--encre-tenue); font-size: 11px; line-height: 1.5;
+  text-align: center; padding: 0 4px;
+}
+
+/* CE QU'ON VIENT CHERCHER — récit 17.5. Aucune coche, aucune pastille, aucun
+   décompte : la ligne est un `<span>` et pas un bouton, parce qu'un élément qui
+   réagit au doigt invite à taper dessus, et taper dessus voudrait dire
+   « atteint ». */
+.objectifs .ligne-atelier { align-items: center; }

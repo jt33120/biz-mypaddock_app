@@ -50,8 +50,23 @@ export function Legal({ onFermer }: { onFermer: () => void }) {
         <p className="texte">
           Ton adresse e-mail et ton mot de passe (chiffré, jamais lisible par nous) ·
           tes roulages, sessions et chronos · tes dépenses et ton budget · tes motos et
-          leurs interventions · tes photos · la phrase que tu écris pour toi-même ·
-          et les trois mesures ci-dessous, si tu les acceptes.
+          leurs interventions · une copie réduite de tes photos · la phrase que tu écris
+          pour toi-même · et les trois mesures ci-dessous, si tu les acceptes.
+        </p>
+        {/* ⚠ « TES PHOTOS » ÉTAIT FAUX, ET C'EST LA PAGE OÙ ÇA COMPTE LE PLUS —
+            récit 18.4. Ce qui part est une vignette de 1600 pixels en WebP, 200
+            à 400 Ko. L'original — 48 Mpx en HEIC sur un iPhone récent, 3 à 8 Mo
+            — n'est jamais lu en entier : ses dimensions se lisent dans son
+            en-tête, le décodage se fait déjà réduit, et le fichier de la
+            pellicule n'est ni copié, ni téléversé, ni touché. Écrire « tes
+            photos » sur une page de confidentialité laissait imaginer un cloud
+            qui avale la pellicule, ce que le produit ne fait pas et ne peut
+            techniquement pas faire. */}
+        <p className="note">
+          Ce qui part de tes photos est une COPIE RÉDUITE à 1600 pixels, entre 200 et
+          400 Ko — jamais le fichier de ta pellicule, qui n'est ni lu en entier, ni copié,
+          ni envoyé. Et l'envoi se coupe entièrement dans l'écran compte : les photos
+          restent alors sur ce téléphone.
         </p>
         <p className="note">
           Base légale : l'exécution du service que tu demandes en créant un compte. Les mesures

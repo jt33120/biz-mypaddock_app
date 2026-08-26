@@ -593,6 +593,30 @@ export default function App() {
           parce qu'il doit se lire SANS compte — un inconnu venu d'une publicité
           ne doit pas avoir à ouvrir l'onglet du compte pour savoir ce qu'on fait
           de ses données. */}
+      {/* ⚠ L'AVERTISSEMENT PERMANENT — LA CONTREPARTIE POSÉE PAR JULIAN LUI-MÊME
+          le 25 août, et sans elle le récit 17.5 n'aurait pas dû s'écrire :
+
+            « C'est la pratique d'un sport, un petit disclaimer en bas de l'app
+              devrait suffire. »
+
+          Ce que ça paie : le produit accepte maintenant qu'on POSE ce qu'on vient
+          chercher — « poser le genou à gauche », « faire 1 min 30 » —, c'est-à-dire
+          trois règles écrites levées d'un coup (le mot « objectif » interdit, la
+          cible chiffrée de chrono, les caps de bravoure). Une chose qu'on s'est
+          promise avant de partir pèse sur la décision qu'on prend en piste, et
+          c'est exactement pour ça que ces règles existaient.
+
+          ⚠ IL NE SE FERME PAS, IL NE SE COCHE PAS, IL NE S'OUBLIE PAS. Un
+          avertissement qu'on peut renvoyer d'un tap est un avertissement qu'on
+          renvoie une fois pour toutes le premier jour. Il est en bas, discret,
+          sur tous les écrans — c'est le prix de la levée, et il se paie en
+          continu ou il ne se paie pas. */}
+      <p className="note avertissement">
+        Le roulage sur circuit est une pratique sportive à risque. Ce que tu poses ici
+        n'engage que toi : aucune ligne de cette application ne vaut un conseil, une
+        validation, ni une raison de forcer.
+      </p>
+
       <nav className="barre">
         <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
         <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => setEcran('garage')}>GARAGE</button>

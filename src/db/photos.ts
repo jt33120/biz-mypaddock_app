@@ -333,6 +333,60 @@ export const oublierPhoto = async (db: PowerSyncDatabase, photoId: string): Prom
   await marquerSaisie(db)
 }
 
+/* ─── CE QUI QUITTE LE TÉLÉPHONE, ET LE MOYEN DE LE COUPER — récit 18.4 ─────
+
+   Question de Julian, 25 août : « on ne sauvegarde pas les photos dans notre
+   cloud ». Le produit doit répondre par ce qu'il FAIT, pas par une intention.
+
+   ⚠ CE QUI PART EST UNE VIGNETTE, ET RIEN D'AUTRE. `reduire` ramène le côté long
+   à COTE_LONG (1600 px) et encode en WebP à 0,82 : 200 à 400 Ko selon la scène.
+   L'ORIGINAL — 48 Mpx en HEIC sur un iPhone récent, 3 à 8 Mo — n'est JAMAIS lu
+   en entier : ses dimensions se lisent dans l'en-tête (`dimensions`), le décodage
+   se fait déjà réduit, et il n'est ni copié, ni téléversé, ni touché. C'est ce
+   que la page légale doit dire, mot pour mot, au lieu de « vos photos ».
+
+   ⚠ ET AUCUN POINTEUR VERS LA PHOTOTHÈQUE N'EST STOCKÉ, JAMAIS. L'idée de
+   « taguer les photos de l'appareil » plutôt que d'en garder une copie est
+   séduisante et elle est impossible sur le web : iOS ne rend aucun nom stable
+   (une capture arrive en `image.jpg`), aucune API ne rouvre un fichier après un
+   rechargement sans que l'utilisateur le repointe, et l'album afficherait des
+   cases vides avec un bouton « retrouve-la toi-même ». Ce n'est pas un report,
+   c'est une exclusion.
+
+   ⚠ LE VOLUME, CHIFFRÉ — parce qu'il n'était écrit nulle part et que c'est LUI
+   qui devrait décider si le cloud reste ouvert :
+
+     · une vignette : 200 à 400 Ko, disons 300 Ko en moyenne ;
+     · une journée de piste bien photographiée : 20 vignettes, soit ~6 Mo ;
+     · une saison de dix journées : ~60 Mo ;
+     · mille photos, soit une petite dizaine de saisons : ~300 Mo.
+
+   Autrement dit : le premier gigaoctet couvre une trentaine de saisons d'un
+   pilote. Le TARIF, lui, se lit chez l'hébergeur et n'est pas recopié ici —
+   un prix figé dans un dépôt est un prix faux dans six mois, et c'est pire
+   qu'un prix absent parce qu'on le croit. Ce qui est écrit ici est le VOLUME,
+   qui ne bouge pas.
+
+   ⚠ ET LE LEVIER N'EST PAS LA PELLICULE, c'est `COTE_LONG` et la qualité WebP :
+   passer de 1600/0,82 à 1200/0,75 divise le poids par environ 2,2 sans changer
+   une ligne d'architecture. Le jour où le stockage devient le problème, c'est là
+   qu'on touche — pas au fait de garder une copie, qui est ce qui permet à
+   l'album d'exister hors ligne. */
+
+/** Le réglage vit dans les RÉGLAGES du produit, avec son préfixe : il part donc
+ *  avec « effacer mon téléphone », comme les autres. Absent = envoi actif, parce
+ *  que c'est le comportement d'origine et qu'un réglage absent ne doit jamais
+ *  changer silencieusement ce que le produit faisait hier. */
+const CLE_ENVOI = 'mypaddock.envoi-cloud'
+
+export const envoiCloudActif = (): boolean => {
+  try { return localStorage.getItem(CLE_ENVOI) !== '0' } catch { return true }
+}
+
+export const poserEnvoiCloud = (actif: boolean): void => {
+  try { localStorage.setItem(CLE_ENVOI, actif ? '1' : '0') } catch { /* rien à faire */ }
+}
+
 /* ─── LE TÉLÉVERSEMENT DIFFÉRÉ ─────────────────────────────────────────────
    AD-6 : DEUX DÉCLENCHEURS EXACTEMENT — le retour au premier plan et le retour
    de connectivité. Rien d'autre : sur iOS rien ne s'exécute pendant que
@@ -344,6 +398,15 @@ export const televerserEnAttente = async (
   db: PowerSyncDatabase, piloteId: string,
 ): Promise<number> => {
   if (!supabase || !navigator.onLine) return 0
+  /* ⚠ LE PILOTE PEUT COUPER L'ENVOI, ET C'EST LE SEUL ENDROIT QUI LE LIT — récit
+     18.4. Couper ne casse RIEN : la copie locale existe déjà (elle est écrite
+     avant toute chose), l'album s'affiche depuis elle, et le produit marche
+     entièrement hors ligne de toute façon. Ce que ça change est précis : les
+     photos ne redescendront pas sur un autre appareil, et elles partiront avec
+     le téléphone s'il se perd. Le réglage le dit en ces termes.
+     Il est lu ICI et pas à l'appel : un appelant qui oublierait de le tester
+     enverrait quand même, et ce réglage-là ne peut pas se rater. */
+  if (!envoiCloudActif()) return 0
   const l = await db.getAll<Photo>(
     `SELECT id, roulage_id, machine_id, intervention_id, geste_id, chemin_objet,
             largeur, hauteur, etat, genre

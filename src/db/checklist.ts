@@ -25,9 +25,11 @@ import { TOUTES_JOURNEES } from './vecu'
  * rend utile l'année suivante, quand on ne se rappelle plus ce qu'on avait pris.
  */
 
-/** ⚠ `preparation` DIT CE QU'ON FAIT AVANT, les trois autres ce qu'on EMPORTE.
- *  Elles ne se remplacent pas : on peut avoir tout chargé et n'avoir pas payé. */
-export type Categorie = 'machine' | 'equipement' | 'conformite' | 'preparation'
+/** ⚠ `preparation` DIT CE QU'ON FAIT AVANT, les trois premières ce qu'on
+ *  EMPORTE, et `objectif` CE QU'ON VIENT CHERCHER. Elles ne se remplacent pas :
+ *  on peut avoir tout chargé, n'avoir pas payé, et savoir quand même ce qu'on
+ *  vient travailler. */
+export type Categorie = 'machine' | 'equipement' | 'conformite' | 'preparation' | 'objectif'
 
 export type Ligne = {
   id: string
@@ -82,6 +84,14 @@ export const NOM_CATEGORIE: Record<Categorie, string> = {
   equipement: 'Ce que tu portes',
   conformite: "Ce que l'organisateur publie",
   preparation: "Avant d'y aller",
+  /* ⚠ LE MOT « OBJECTIF » ÉTAIT INTERDIT À L'ÉCRAN — EXPERIENCE.md:114, « jamais
+     performance, jamais objectif ». Julian l'a levé le 25 août, en l'employant
+     lui-même et en posant la contrepartie : un avertissement permanent en pied
+     d'application. Le titre reste néanmoins celui de sa phrase — « ce que je
+     vais chercher » — parce que c'est ce qu'il décrit : poser le genou à gauche,
+     travailler les virages à gauche. Un « objectif » se rate ; ce qu'on vient
+     chercher, on l'a cherché. */
+  objectif: 'Ce que tu viens chercher',
 }
 
 /**

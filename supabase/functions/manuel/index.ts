@@ -80,6 +80,122 @@ const urlAcceptable = (brut: string): URL | null => {
 const estUnPdf = (o: Uint8Array) =>
   o.length > 4 && o[0] === 0x25 && o[1] === 0x50 && o[2] === 0x44 && o[3] === 0x46
 
+/* ═══ ⑤ LE TRAITEMENT — le chaînon que Julian a nommé, 25 août 2026 ═════════
+ *
+ *   « Recherche et import automatique ET TRAITEMENT et tout. J'ai une moto, je
+ *     cherche le manuel sur internet, je remplis et prépare tout ce qu'il peut
+ *     m'apporter sur la moto, mais c'est transparent pour l'utilisateur. »
+ *
+ * ⚠ IL MANQUAIT ENTIÈREMENT. La recherche existait — connecteur `web_search`,
+ * fonction déployée et active —, le PDF était trouvé, vérifié sur ses octets et
+ * rapatrié dans l'espace privé du pilote. Et là, plus rien : personne ne le
+ * LISAIT. Aucun intervalle n'en sortait, aucune horloge ne s'en remplissait, et
+ * « vérifier l'huile » restait indérivable. Un manuel qu'on télécharge et qu'on
+ * ne lit pas est un fichier, pas une connaissance.
+ *
+ * ═══ CE QU'IL EXTRAIT, ET CE QU'IL REFUSE DE FAIRE ════════════════════════
+ *
+ * Il extrait les POSTES d'entretien de CETTE moto et leur périodicité TELLE QUE
+ * LE MANUEL L'ÉCRIT — « tous les 6 000 km ou 12 mois ».
+ *
+ * ⚠ IL NE CONVERTIT RIEN EN ROULAGES, ET C'EST LA CLAUSE ENTIÈRE. Une journée de
+ * piste vaut 200 à 300 km selon le circuit, le groupe et la météo, et l'usure
+ * d'un moteur en piste n'a pas le même rapport au kilomètre que sur route.
+ * Traduire « 6 000 km » en « 24 roulages » serait une INTERPRÉTATION, et FR-44
+ * l'interdit précisément là où elle porterait sur la sécurité d'une machine :
+ * « le barème est TRANSCRIT, JAMAIS INTERPRÉTÉ ». `intervalle_roulages` reste
+ * donc NUL, l'horloge compte sans jamais échoir, et le texte du manuel est
+ * rapporté à côté du compteur avec sa source.
+ *
+ * ⚠ ET IL N'ÉCRASE JAMAIS CE QUE LE PILOTE A POSÉ. Un `intervalle_roulages`
+ * saisi à la main, un point de départ (`depuis_intervention`) : intouchables.
+ * Le traitement ne fait que DEUX choses — créer les postes qui manquent, et
+ * remplir le barème de ceux qui n'en ont pas.
+ *
+ * ⚠ ET IL NE PEUT PAS FAIRE ÉCHOUER LE RAPATRIEMENT. Il arrive APRÈS que la
+ * ligne `document` est écrite, et toute erreur y est avalée : un manuel bien
+ * rapatrié dont la lecture rate reste un manuel rapatrié. L'inverse — perdre le
+ * PDF parce qu'un modèle a répondu de travers — serait absurde.
+ */
+/** À plat : sans accent, sans casse, sans séparateur. Le même rapprochement que
+ *  partout ailleurs dans ce produit — deux orthographes ne font pas deux postes,
+ *  et « Filtre à huile » du manuel doit retrouver « Filtre à huile » du socle. */
+const aplati = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').trim()
+
+type PosteLu = { operation: string; periodicite: string }
+
+/**
+ * Lire le manuel — un seul appel, sur le PDF déjà stocké.
+ *
+ * ⚠ L'URL EST SIGNÉE ET COURTE. Le bucket est privé : c'est ce qui rend la copie
+ * défendable en droit d'auteur (« une copie privée faite pour son détenteur »).
+ * Une URL publique, même le temps d'un appel, romprait ça. Dix minutes suffisent
+ * largement, et le lien meurt tout seul.
+ */
+const lireLeManuel = async (
+  cle: string, urlSignee: string, quoi: string,
+): Promise<PosteLu[]> => {
+  const rep = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${cle}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(90_000),
+    body: JSON.stringify({
+      model: MODELE,
+      // Le modèle DOIT rendre du JSON : une prose ne se range pas en base, et
+      // « à peu près du JSON » est pire que rien — on écrirait des postes dont
+      // le nom serait une phrase.
+      response_format: { type: 'json_object' },
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `Ce document est le manuel de : ${quoi}.\n`
+              + `Relève le TABLEAU D'ENTRETIEN PÉRIODIQUE et rends-le en JSON strict :\n`
+              + `{"postes":[{"operation":"...","periodicite":"..."}]}\n\n`
+              + `RÈGLES ABSOLUES :\n`
+              + `- "periodicite" est RECOPIÉE DU DOCUMENT, mot pour mot, dans SON unité `
+              + `(km, miles, heures, mois). Exemple : "tous les 6 000 km ou 12 mois".\n`
+              + `- NE CONVERTIS RIEN. Ni en kilomètres si le manuel dit des miles, ni en `
+              + `nombre de sorties, ni en rien d'autre.\n`
+              + `- N'INVENTE AUCUNE PÉRIODICITÉ. Si le manuel n'en donne pas pour un poste, `
+              + `n'inclus pas ce poste.\n`
+              + `- "operation" est le nom court du poste, en français, sans phrase.\n`
+              + `- Si le document n'est pas un manuel d'entretien, rends {"postes":[]}.`,
+          },
+          { type: 'document_url', document_url: urlSignee },
+        ],
+      }],
+    }),
+  })
+  if (!rep.ok) throw new Error(`lecture ${rep.status}: ${(await rep.text()).slice(0, 200)}`)
+  const j = await rep.json()
+  const brut = String(j?.choices?.[0]?.message?.content ?? '{}')
+  const lu = JSON.parse(brut) as { postes?: unknown }
+  if (!Array.isArray(lu.postes)) return []
+
+  const vus = new Set<string>()
+  const sortie: PosteLu[] = []
+  for (const p of lu.postes) {
+    const o = (p as PosteLu)?.operation
+    const per = (p as PosteLu)?.periodicite
+    // ⚠ ON REFUSE CE QU'ON NE PEUT PAS AFFICHER. Un poste sans périodicité n'a
+    // rien à apporter — le socle l'a déjà posé — et une périodicité de trois
+    // cents caractères est une phrase, pas un barème : le modèle a répondu à
+    // côté, et l'écrire en base la rendrait illisible pour toujours.
+    if (typeof o !== 'string' || typeof per !== 'string') continue
+    const nom = o.trim(), texte = per.trim()
+    if (!nom || !texte || nom.length > 60 || texte.length > 120) continue
+    const cle2 = aplati(nom)
+    if (!cle2 || vus.has(cle2)) continue
+    vus.add(cle2)
+    sortie.push({ operation: nom, periodicite: texte })
+  }
+  return sortie
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: entetes })
   if (req.method !== 'POST') return repondre({ refus: 'methode' }, 405)
@@ -234,8 +350,71 @@ Deno.serve(async (req) => {
     return repondre({ refus: 'ligne', detail: eIns.message }, 500)
   }
 
+  // ─── ⑤ LE TRAITEMENT ─────────────────────────────────────────────────────
+  //
+  // ⚠ IL ARRIVE APRÈS L'ÉCRITURE DE LA LIGNE, ET IL NE PEUT PAS LA DÉFAIRE. Un
+  // manuel bien rapatrié dont la lecture rate reste un manuel rapatrié : perdre
+  // le PDF parce qu'un modèle a répondu de travers serait absurde. Tout échoue
+  // en silence ici, et le résultat le DIT — `postes` vaut 0, ce qui est un fait
+  // et pas une erreur.
+  //
+  // ⚠ ET IL N'EST PAS RÉSERVÉ SÉPARÉMENT. `reserver_manuel` a déjà compté ce
+  // tap ; la lecture est le second appel du MÊME geste, pas un geste de plus. Un
+  // second jeton ferait payer deux fois ce que le pilote a demandé une fois.
+  let postes = 0
+  try {
+    const { data: lien, error: eLien } = await admin.storage.from('documents')
+      .createSignedUrl(chemin, 600)
+    // ⚠ L'ERREUR EST LIÉE ET TESTÉE. supabase-js RETOURNE ses erreurs de stockage
+    // au lieu de les lever : un try/catch autour ne suffirait pas, et on
+    // enverrait `undefined` comme URL au modèle.
+    if (eLien || !lien?.signedUrl) throw new Error(eLien?.message ?? 'url non signée')
+
+    const lus = await lireLeManuel(cle, lien.signedUrl, quoi)
+
+    // Les horloges déjà là, pour ne rien écraser de ce que le pilote a posé.
+    const { data: deja } = await admin.from('horloge')
+      .select('id, operation, barometre, intervalle_roulages')
+      .eq('machine_id', m.id)
+    const connues = new Map((deja ?? []).map((h) => [aplati(h.operation), h]))
+    const maintenant = new Date().toISOString()
+
+    for (const p of lus) {
+      const existante = connues.get(aplati(p.operation))
+      if (!existante) {
+        // ⚠ `intervalle_roulages` RESTE NUL, et c'est FR-44 : sans barème en
+        // roulages, l'horloge compte sans jamais échoir. Le texte du manuel
+        // vit dans `barometre`, transcrit, jamais converti.
+        await admin.from('horloge').insert({
+          id: crypto.randomUUID(), pilote_id: pilote, machine_id: m.id,
+          operation: p.operation, intervalle_roulages: null,
+          barometre: p.periodicite, source_url: cible.href,
+          recolte_le: maintenant, extrait_par_ia: true,
+        })
+        postes++
+      } else if (!existante.barometre) {
+        // Elle existe — le socle l'a posée, ou le pilote — et elle n'a pas de
+        // barème. On ne remplit QUE ce vide : ni son intervalle, ni son point de
+        // départ, ni rien de ce qu'il a décidé.
+        await admin.from('horloge').update({
+          barometre: p.periodicite, source_url: cible.href,
+          recolte_le: maintenant, extrait_par_ia: true,
+        }).eq('id', existante.id)
+        postes++
+      }
+    }
+  } catch (e) {
+    // Le manuel est là, c'est l'essentiel. La lecture se rejouera au prochain
+    // tap, sur le même geste et sans coût supplémentaire de stockage.
+    console.warn('[manuel] traitement non abouti', (e as Error).message)
+  }
+
   return repondre({
     id, nom: `Manuel — ${quoi}`, octets: octets.byteLength,
+    // ⚠ CE QUE LA LECTURE A DONNÉ, EN CLAIR. Zéro est un FAIT — le manuel ne
+    // porte pas de tableau d'entretien lisible — et pas une erreur : l'écran
+    // doit pouvoir le dire sans s'excuser.
+    postes,
     // ⚠ LA SOURCE VOYAGE AVEC LE FICHIER, et l'écran doit l'afficher : un
     // document rapatrié qui ne dirait pas d'où il vient serait indistinguable
     // d'un document versé à la main, et c'est la distinction qui compte ici.

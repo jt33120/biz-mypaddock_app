@@ -55,10 +55,18 @@ import {
   CHARGEMENT, CHARGEMENT_EMBARQUE, direLAge, direPublication, MOIS_AVANT_DOUTE, moisDepuis,
   NOM_CATEGORIE,
 } from '../../src/db/checklist'
-// La migration telle qu'elle est appliquée. Comme le YAML de synchronisation :
-// rien ne la relie au code, et c'est précisément le problème.
-import MIGRATION_CATEGORIES from
-  '../../supabase/migrations/20260823000001_preparation_et_skin_equipement.sql?raw'
+// ⚠ LA CONTRAINTE DES CATÉGORIES NE SE LIT PLUS DANS UNE MIGRATION NOMMÉE.
+// Elle l'était — `20260823000001` — et le jour où le récit 17.5 a ajouté
+// `objectif` dans une migration PLUS RÉCENTE, la garde a accusé le produit
+// d'envoyer une catégorie refusée alors que le serveur venait de l'accepter.
+// Une garde ancrée sur un nom de fichier éprouve le nom du fichier. Elle lit
+// maintenant `MIGRATIONS` en entier et prend la DERNIÈRE contrainte posée.
+// LA FONCTION SERVEUR LUE À LA LETTRE. Rien dans le dépôt ne relie ce fichier
+// au schéma local ni aux clauses du produit : c'est du TypeScript qui tourne
+// ailleurs, déployé à part, et personne ne le recompile avec le reste. C'est
+// exactement le cas du YAML de synchronisation, et pour la même raison la seule
+// façon de l'éprouver ici est de le lire comme du texte.
+import MANUEL from '../../supabase/functions/manuel/index.ts?raw'
 import { lireEnvironnement } from '../../src/product'
 import { direLAbri, type Abri } from '../../src/db/abri'
 import { spritifier } from '../../src/pixel/spritifier'
@@ -901,24 +909,43 @@ const essais = [
     vrai(CHARGEMENT.length > 0, 'le chargement ne regarde plus rien')
   }),
   doit('aucune catégorie ne peut apparaître sans être rangée d\'un côté', () => {
-    // Une cinquième catégorie ajoutée demain doit OBLIGER à trancher : dans le
-    // camion, ou avant d'y aller ? Sans cet essai, elle serait silencieusement
-    // écrite, jamais rendue, et comptée quand même — exactement le défaut du
-    // 23 août, à l'identique.
-    const rangees = new Set<string>([...CHARGEMENT, 'preparation'])
+    /* Une catégorie ajoutée demain doit OBLIGER à trancher : dans le camion,
+       avant d'y aller, ou parmi ce qu'on vient chercher ? Sans cet essai, elle
+       serait silencieusement écrite, jamais rendue, et comptée quand même —
+       exactement le défaut du 23 août, à l'identique.
+
+       ⚠ ET IL A FAIT SON TRAVAIL. La cinquième — `objectif`, récit 17.5 — l'a
+       fait rougir à la seconde où elle est entrée dans `NOM_CATEGORIE`, avant
+       qu'un seul écran ne la rende. C'est exactement ce qu'on lui demande : ce
+       qui n'est rangé nulle part se compte quelque part, toujours, et toujours
+       au mauvais endroit. */
+    const rangees = new Set<string>([...CHARGEMENT, 'preparation', 'objectif'])
     for (const c of Object.keys(NOM_CATEGORIE))
-      vrai(rangees.has(c), `« ${c} » n'est ni du chargement ni de la préparation`)
+      vrai(rangees.has(c), `« ${c} » n'est rangée ni dans le camion, ni avant, ni dans ce qu'on vient chercher`)
     egal(rangees.size, Object.keys(NOM_CATEGORIE).length,
       'une catégorie est rangée mais n\'existe pas')
+    // Et les trois familles ne se chevauchent pas : une catégorie dans deux
+    // familles serait comptée deux fois, ce qui est le défaut d'origine.
+    vrai(!CHARGEMENT.includes('preparation' as never) && !CHARGEMENT.includes('objectif' as never),
+      'une catégorie est à la fois dans le camion et ailleurs')
   }),
   doit('le serveur accepte exactement les catégories que le produit connaît', () => {
     // Le même motif que le YAML de synchronisation : deux copies d'une même
     // vérité, dont une prend du retard. Une catégorie ajoutée au code sans
     // l'être à la contrainte serait refusée à l'envoi — donc une file bloquée,
     // donc toute la saison qui cesse de monter. C'est l'incident du 19 août.
-    const m = MIGRATION_CATEGORIES.match(/check \(categorie in \(([^)]*)\)\)/)
-    vrai(!!m, 'la contrainte de catégories est introuvable dans la migration')
-    const serveur = new Set([...m![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]))
+    /* ⚠ LA CONTRAINTE SE LIT DANS LA DERNIÈRE MIGRATION QUI LA POSE, pas dans
+       une migration nommée. La garde lisait `20260823000001` en dur : le jour où
+       le récit 17.5 a ajouté `objectif` dans une migration PLUS RÉCENTE, elle
+       aurait accusé le produit d'envoyer une catégorie refusée alors que le
+       serveur venait de l'accepter. Une garde ancrée sur un nom de fichier
+       éprouve le nom du fichier. */
+    const contraintes = Object.entries(MIGRATIONS)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([, sql]) => [...sql.matchAll(/check \(categorie in \(([^)]*)\)\)/g)])
+    vrai(contraintes.length > 0, 'la contrainte de catégories est introuvable dans les migrations')
+    const m = contraintes[contraintes.length - 1]
+    const serveur = new Set([...m[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]))
     for (const c of Object.keys(NOM_CATEGORIE))
       vrai(serveur.has(c), `« ${c} » existe dans le produit et serait REFUSÉE à l'envoi`)
     for (const c of serveur)
@@ -2569,6 +2596,245 @@ const essais = [
     const doublons = [...declares].filter(([, n]) => n > 1).map(([s, n]) => `${s} (${n})`)
     vrai(declares.size > 40, `seulement ${declares.size} classes lues : la lecture est cassée`)
     egal(doublons, [], 'des classes sont déclarées deux fois au premier niveau de la feuille')
+  }),
+
+  doit('17.5 — ce qu\'on vient chercher ne se coche jamais', () => {
+    /* ⚠ C'EST LA CLAUSE ENTIÈRE DU RÉCIT. Un objectif non coché le soir est un
+       échec affiché sans qu'aucun libellé ait à le dire — et « travailler les
+       virages à gauche » n'a pas de fin qu'on puisse cocher. Pas de case, pas
+       d'« atteint », pas de « 2 sur 3 », pas de retour en vert.
+
+       La garde porte sur la BALISE : la ligne d'« Avant d'y aller » qu'on ajoute
+       soi-même est un `<button class="coche">`, celle-ci est un `<span>`. Un
+       élément qui réagit au doigt invite à taper dessus, et taper dessus voudrait
+       dire « atteint ». */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Objectifs.tsx'))?.[1] ?? ''
+    vrai(brut.length > 0, 'l\'écran de ce qu\'on vient chercher a disparu')
+    const source = sansCommentaires(brut)
+    vrai(!/className="coche"/.test(source), 'une case à cocher est apparue sur un objectif')
+    vrai(!/data-actif/.test(source), 'un objectif porte un état actif/inactif')
+    for (const mot of ['atteint', 'réussi', 'validé', 'sur 3', 'progression', 'accompli'])
+      vrai(!new RegExp(mot, 'i').test(source), `l'écran des objectifs dit « ${mot} »`)
+    // Et rien dans la couche de données ne sait cocher un objectif.
+    const db = Object.entries(SOURCES).find(([c]) => c.endsWith('db/objectifs.ts'))?.[1] ?? ''
+    vrai(!/\bcocher\b/.test(sansCommentaires(db)),
+      'la couche des objectifs sait cocher : la clause du récit est ouverte')
+  }),
+
+  doit('17.5 — le produit propose AVANT de demander', () => {
+    /* ⚠ IL Y A UN PRÉCÉDENT, ET IL EST ÉCRIT DANS LE CODE. Julian a DÉJÀ rejeté
+       un champ de texte libre à remplir avant de rouler, verbatim : « ça fait un
+       peu gamin, personne va prendre le temps de le remplir… c'est quoi cette
+       merde ». C'était le plan si-alors, l'intervention la mieux établie du
+       dossier. Un champ vide sous un titre est le même objet sous un autre nom.
+
+       La garde porte sur l'ORDRE dans le fichier : les propositions doivent
+       précéder le champ libre. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Objectifs.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const offres = source.indexOf('offres.map')
+    const champ = source.indexOf('<input')
+    vrai(offres > 0, 'les propositions ont disparu : il ne reste qu\'un champ vide')
+    vrai(champ > offres, 'le champ libre passe avant les propositions')
+    // Et les propositions viennent de ce que le produit SAIT, pas d'une liste
+    // embarquée : la fiche du circuit, le catalogue de caps, et le vécu.
+    const db = sansCommentaires(
+      Object.entries(SOURCES).find(([c]) => c.endsWith('db/objectifs.ts'))?.[1] ?? '')
+    vrai(/ficheCircuit\(/.test(db), 'les virages du circuit ne sont plus proposés')
+    vrai(/listerCaps\(/.test(db), 'les caps ne sont plus proposés')
+    vrai(/fiche\.sien\.journees/.test(db), 'le fait « jamais roulé ici » n\'est plus lu')
+  }),
+
+  doit('17.5 — un chrono visé reste du texte, la courbe ne bouge pas', () => {
+    /* Julian a levé le MOT, pas le verdict. « Faire 1 min 30 » s'écrit comme du
+       texte et RESTE du texte : aucune cible n'apparaît sur le tracé, aucun écart
+       ne s'y calcule. Un chrono visé qui deviendrait une ligne sur la courbe
+       fabriquerait un verdict le soir même, et c'est exactement ce que le refus
+       de la tendance protège (courbe.ts, epics.md:1815-1834). */
+    const courbe = sansCommentaires(
+      Object.entries(ECRANS).find(([c]) => c.endsWith('/Courbe.tsx'))?.[1] ?? '')
+    vrai(courbe.length > 0, 'Courbe.tsx introuvable')
+    for (const mot of ['objectif', 'cible', 'vise', 'visé', 'tendance', 'projection'])
+      vrai(!new RegExp(`\\b${mot}`, 'i').test(courbe), `la courbe porte « ${mot} »`)
+    // Et la couche des objectifs ne parle jamais à la courbe.
+    const db = sansCommentaires(
+      Object.entries(SOURCES).find(([c]) => c.endsWith('db/objectifs.ts'))?.[1] ?? '')
+    vrai(!/courbe/i.test(db), 'les objectifs remontent sur la courbe')
+  }),
+
+  doit('17.5 — l\'avertissement est permanent, et il ne se ferme pas', () => {
+    /* ⚠ C'EST LA CONTREPARTIE, POSÉE PAR JULIAN LUI-MÊME, et sans elle le récit
+       17.5 n'aurait pas dû s'écrire : « c'est la pratique d'un sport, un petit
+       disclaimer en bas de l'app devrait suffire ». Ce qu'elle paie : trois
+       règles écrites levées d'un coup — le mot « objectif » interdit, la cible
+       chiffrée de chrono, les caps de bravoure.
+
+       Un avertissement qu'on peut renvoyer d'un tap est un avertissement qu'on
+       renvoie une fois pour toutes le premier jour. Il n'a donc ni bouton, ni
+       état, ni condition : il est rendu à plat, sur tous les écrans. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/App.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const i = source.indexOf('note avertissement')
+    vrai(i > 0, 'l\'avertissement a disparu : trois règles sont levées sans contrepartie')
+    /* ⚠ AUCUNE CONDITION DEVANT LUI, ET LA FENÊTRE NE PEUT PAS ÊTRE « SA LIGNE ».
+       La première version lisait de l'accolade au début de la ligne courante :
+       un `{false && <p className="note avertissement">` la traversait sans
+       rougir, parce que le `&&` était sur la MÊME ligne que la balise. Un
+       avertissement rendu sous condition est un avertissement qui ne paie plus
+       la levée de trois règles, et c'est exactement ce qu'on garde ici. */
+    const avant = source.slice(Math.max(0, i - 120), i)
+    vrai(!/&&|\?[^>]*$|\bif\b/.test(avant), 'l\'avertissement est devenu conditionnel')
+    // Et aucun bouton dans son bloc.
+    const bloc = source.slice(i, source.indexOf('</p>', i))
+    vrai(!/<button/.test(bloc), 'l\'avertissement porte un bouton : il se refermera')
+    vrai(/risque/i.test(bloc), 'l\'avertissement ne nomme plus le risque')
+    // Il est SOUS l'écran et au-dessus de la barre : « en bas de l'app ».
+    vrai(i > source.indexOf('className="ecran"') && i < source.indexOf('<nav className="barre">'),
+      'l\'avertissement a quitté le pied de l\'application')
+    // Et la feuille lui laisse la place de la barre fixe, sinon il vit derrière.
+    vrai(/\.avertissement\s*\{[^}]*safe-area-inset-bottom/.test(FEUILLE),
+      'l\'avertissement passe derrière la barre de navigation')
+  }),
+
+  doit('18.4 — l\'envoi des photos se coupe, et couper ne casse rien', () => {
+    /* « On ne sauvegarde pas les photos dans notre cloud ? » — il n'existait
+       AUCUN réglage : dès qu'il y avait un compte et du réseau, ça partait.
+       Le réglage est lu DANS `televerserEnAttente` et pas à l'appel : un
+       appelant qui oublierait de le tester enverrait quand même, et ce
+       réglage-là ne peut pas se rater. */
+    const brut = Object.entries(SOURCES).find(([c]) => c.endsWith('db/photos.ts'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(/export const envoiCloudActif/.test(source), 'le réglage d\'envoi a disparu')
+    const d = source.indexOf('export const televerserEnAttente')
+    vrai(d > 0, '`televerserEnAttente` a disparu')
+    const corps = source.slice(d, source.indexOf('\nexport ', d + 20))
+    vrai(/envoiCloudActif\(\)/.test(corps),
+      'le téléversement ne lit plus le réglage : couper ne coupe rien')
+    // ⚠ ABSENT = ACTIF. Un réglage absent ne doit jamais changer silencieusement
+    //   ce que le produit faisait hier.
+    vrai(/!== '0'/.test(source), 'un réglage absent coupe l\'envoi : le comportement change tout seul')
+    // Et il vit sous le préfixe du produit, donc il part avec « effacer mon téléphone ».
+    vrai(/'mypaddock\.envoi-cloud'/.test(brut), 'le réglage d\'envoi sort du préfixe du produit')
+  }),
+
+  doit('18.4 — la page légale dit la vignette, pas « vos photos »', () => {
+    /* Ce qui part est une COPIE RÉDUITE à 1600 px en WebP, 200 à 400 Ko.
+       L'original — 48 Mpx en HEIC, 3 à 8 Mo — n'est jamais lu en entier : ses
+       dimensions se lisent dans son en-tête et le décodage se fait déjà réduit.
+       Écrire « tes photos » sur une page de confidentialité laissait imaginer un
+       cloud qui avale la pellicule, ce que le produit ne fait pas et ne peut
+       techniquement pas faire. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Legal.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(/copie réduite/i.test(source), 'la page légale ne dit plus ce qui part vraiment')
+    vrai(/1600/.test(source), 'la page légale ne dit plus la taille de ce qui part')
+    vrai(!/·\s*tes photos\s*·/.test(source),
+      'la page légale annonce « tes photos » : elle promet plus qu\'elle ne prend')
+    // Et le VOLUME est chiffré quelque part — c'est ce chiffre qui devrait
+    // décider si le cloud reste ouvert, et il n'était écrit nulle part.
+    const photos = Object.entries(SOURCES).find(([c]) => c.endsWith('db/photos.ts'))?.[1] ?? ''
+    vrai(/300 Ko/.test(photos) && /300 Mo/.test(photos),
+      'le volume du stockage n\'est chiffré nulle part : rien ne peut décider')
+    // Le levier est la taille et la qualité, jamais la pellicule.
+    vrai(/COTE_LONG/.test(photos) && /1200/.test(photos),
+      'le levier de poids n\'est plus nommé')
+  }),
+
+  doit('le manuel se LIT, et il ne convertit jamais rien en roulages', () => {
+    /* ⚠ LE CHAÎNON QUE JULIAN A NOMMÉ : « recherche et import automatique ET
+       TRAITEMENT et tout ». La recherche existait — connecteur `web_search`,
+       fonction déployée — le PDF était trouvé, vérifié sur ses octets et
+       rapatrié dans l'espace privé du pilote. Et personne ne le LISAIT.
+
+       ⚠ ET CE QU'IL EN TIRE NE SE CONVERTIT PAS. Une journée de piste vaut 200 à
+       300 km selon le circuit, le groupe et la météo : traduire « 6 000 km » en
+       « 24 roulages » serait une INTERPRÉTATION, et FR-44 l'interdit précisément
+       là où elle porterait sur la sécurité d'une machine. `intervalle_roulages`
+       reste donc NUL, l'horloge compte sans jamais échoir, et le texte du manuel
+       est rapporté à la lettre. */
+    const brut = MANUEL
+    vrai(/lireLeManuel/.test(brut), 'la lecture du manuel a disparu : le PDF redevient un fichier')
+    vrai(/document_url/.test(brut), 'le PDF n\'est plus donné au modèle')
+    vrai(/createSignedUrl/.test(brut),
+      'le PDF est exposé autrement qu\'en URL signée : le bucket privé est ce qui rend la copie défendable')
+    vrai(/intervalle_roulages: null/.test(brut),
+      'le traitement écrit un intervalle en roulages : il convertit des kilomètres')
+    vrai(/barometre: p\.periodicite/.test(brut), 'la périodicité du manuel n\'est plus transcrite')
+    // Le modèle reçoit l'interdiction, en toutes lettres, dans sa consigne.
+    vrai(/NE CONVERTIS RIEN/.test(brut), 'la consigne ne défend plus la conversion')
+    vrai(/N'INVENTE AUCUNE PÉRIODICITÉ/.test(brut), 'la consigne ne défend plus l\'invention')
+  }),
+
+  doit('le traitement du manuel n\'écrase jamais le pilote, et ne perd jamais le PDF', () => {
+    /* DEUX CLAUSES, ET AUCUNE N'EST DÉCORATIVE.
+
+       ① Un `intervalle_roulages` saisi à la main et un point de départ
+         (`depuis_intervention`) sont INTOUCHABLES : le traitement ne fait que
+         créer les postes manquants et remplir le barème de ceux qui n'en ont
+         pas. Un traitement qui remettrait à zéro l'horloge d'un pilote qui vient
+         de changer ses plaquettes serait pire que pas de traitement du tout.
+
+       ② Il arrive APRÈS l'écriture de la ligne `document`, et toute erreur y est
+         avalée. Perdre le PDF parce qu'un modèle a répondu de travers serait
+         absurde : un manuel bien rapatrié dont la lecture rate reste un manuel
+         rapatrié. */
+    /* ⚠ `lastIndexOf` ET PAS `indexOf` : le titre « ⑤ LE TRAITEMENT » apparaît
+       DEUX fois — une au-dessus de la fonction de lecture, au niveau du module,
+       une dans le gestionnaire. La première version prenait la première, donc un
+       point du fichier situé AVANT l'écriture de la ligne `document`, et
+       accusait le traitement de passer trop tôt alors qu'il passe après. Un
+       témoin ancré sur un titre doit dire lequel. */
+    const i = MANUEL.lastIndexOf('⑤ LE TRAITEMENT')
+    vrai(i > 0, 'le traitement a disparu de la fonction')
+    const corps = MANUEL.slice(i)
+    // ① il ne met à jour QUE le barème et sa provenance.
+    const maj = corps.slice(corps.indexOf('.update({'), corps.indexOf('}).eq('))
+    vrai(maj.length > 0, 'la mise à jour d\'une horloge a disparu')
+    for (const champ of ['intervalle_roulages', 'depuis_intervention', 'operation'])
+      vrai(!new RegExp(champ).test(maj),
+        `le traitement réécrit \`${champ}\` : il efface ce que le pilote a posé`)
+    vrai(/!existante\.barometre/.test(corps),
+      'le traitement réécrit un barème déjà là, sans regarder d\'où il vient')
+    // ② il est APRÈS l'insertion du document, et il est enveloppé.
+    vrai(corps.indexOf('try {') > 0 && /catch \(e\)/.test(corps),
+      'le traitement n\'est plus enveloppé : une lecture ratée ferait perdre le PDF')
+    vrai(MANUEL.indexOf("from('document').insert") < i,
+      'le traitement passe AVANT l\'écriture de la ligne : un échec perdrait le manuel')
+    /* Et il ne réserve pas un second jeton : c'est le même geste. La lecture se
+       fait SANS COMMENTAIRES — le commentaire du bloc CITE `reserver_manuel`
+       pour dire pourquoi il ne le rappelle pas, et un témoin qui lit le texte
+       brut accuse alors la mémoire du défaut au lieu du défaut. C'est le même
+       piège que partout ailleurs dans ce banc. */
+    vrai((sansCommentaires(corps).match(/reserver_manuel/g) ?? []).length === 0,
+      'le traitement réserve une seconde fois : le pilote paie deux fois un seul tap')
+  }),
+
+  doit('la colonne du barème existe des deux côtés, et reste du TEXTE', () => {
+    /* Le même motif que le YAML de synchronisation et que les catégories : deux
+       copies d'une même vérité, dont une prend du retard. Une colonne posée au
+       serveur et absente du schéma local ne descendrait jamais ; posée en local
+       et absente au serveur, elle ferait refuser la ligne à l'envoi — donc une
+       file bloquée, donc toute la saison qui cesse de monter.
+
+       ⚠ ET C'EST DU TEXTE, PAS UN NOMBRE. Un `integer` ici serait la conversion
+       elle-même : il n'y a pas de nombre qui dise « tous les 6 000 km ou
+       12 mois » sans choisir une unité, et choisir l'unité c'est interpréter. */
+    const schema = Object.entries(SOURCES).find(([c]) => c.endsWith('db/schema.ts'))?.[1] ?? ''
+    vrai(/barometre: column\.text/.test(sansCommentaires(schema)),
+      'le barème a disparu du schéma local, ou n\'est plus du texte')
+    const migre = Object.values(MIGRATIONS)
+      .some((sql) => /alter table horloge add column if not exists barometre text/i.test(sql))
+    vrai(migre, 'aucune migration ne pose le barème au serveur : la ligne serait refusée à l\'envoi')
+    // Et la lecture le rend, sinon l'écran ne peut rien afficher.
+    const usure = sansCommentaires(
+      Object.entries(SOURCES).find(([c]) => c.endsWith('db/usure.ts'))?.[1] ?? '')
+    vrai(/barometre: l\.barometre/.test(usure), 'l\'avancement ne porte plus le barème')
+    const ecran = sansCommentaires(
+      Object.entries(ECRANS).find(([c]) => c.endsWith('/Usure.tsx'))?.[1] ?? '')
+    vrai(/a\.barometre/.test(ecran), 'le garage n\'affiche plus ce que le manuel dit')
+    // Et l'écran DIT que les deux compteurs ne se parlent pas.
+    vrai(/convertit pas/.test(ecran),
+      'l\'écran laisse croire que les kilomètres du manuel et les roulages se convertissent')
   }),
 ]
 

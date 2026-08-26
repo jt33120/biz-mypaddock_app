@@ -72,6 +72,23 @@ export function Usure({ db, machineId, onEcrit }: {
               <p className="note">Au-delà de l'intervalle transcrit.</p>
             )}
 
+            {a.barometre && (
+              /* ⚠ CE QUE LE MANUEL DIT, MOT POUR MOT, ET SANS CONVERSION. C'est
+                 le chaînon que Julian a nommé — « je remplis et prépare tout ce
+                 que le manuel peut m'apporter sur la moto » — et c'est aussi
+                 l'endroit où la tentation de convertir est la plus forte :
+                 « 6 000 km » ferait volontiers « 24 roulages ». Une journée de
+                 piste vaut 200 à 300 km selon le circuit, le groupe et la
+                 météo ; la conversion serait une interprétation portant sur la
+                 sécurité d'une machine, et FR-44 l'interdit nommément. Le
+                 compteur au-dessus compte des roulages, celui-ci rapporte des
+                 kilomètres, et les deux ne se parlent pas. */
+              <p className="note">
+                Le manuel dit : {a.barometre}. Transcrit tel quel — ce compteur, lui, compte
+                des roulages, et le produit ne convertit pas les deux.
+              </p>
+            )}
+
             {a.source.url && (
               <p className="note">
                 Barème relevé le {a.source.recolteLe?.slice(0, 10)}

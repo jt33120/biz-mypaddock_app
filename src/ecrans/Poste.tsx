@@ -179,11 +179,17 @@ function Manuel({ db, machine, onEcrit }: {
      La ligne redescend par la synchronisation : le serveur l'écrit, on la
      relit. L'insérer ici la ferait exister sur ce téléphone alors que les
      octets seraient peut-être restés en route. */
+  const [postes, setPostes] = useState<number | null>(null)
   const [chercher, cherche] = useGeste(async () => {
-    setSouci(null); setTrouve(null)
+    setSouci(null); setTrouve(null); setPostes(null)
     const r = await rapatrierLeManuel(machine.id)
     if (!r.ok) { setSouci(r.message); return }
     setTrouve(r.source)
+    /* ⚠ CE QUE LA LECTURE A DONNÉ SE DIT, ET ZÉRO SE DIT AUSSI. Le manuel est
+       rapatrié dans les deux cas ; ce qui change est ce que le produit a pu en
+       TIRER. Taire le zéro laisserait croire que les horloges se sont remplies,
+       et le pilote irait chercher au garage ce qui n'y est pas. */
+    setPostes(r.postes)
     await charger(); onEcrit()
   })
 
@@ -233,6 +239,24 @@ function Manuel({ db, machine, onEcrit }: {
         </p>
       )}
       {trouve && <p className="note">Trouvé sur <b>{new URL(trouve).hostname}</b>.</p>}
+      {trouve && postes != null && (
+        /* ⚠ CE QUE LE MANUEL A DONNÉ, ET CE QU'IL NE PEUT PAS DONNER. La phrase
+           du succès dit ce qui est ARRIVÉ AU GARAGE — c'est vérifiable en un tap
+           — et elle dit dans le même souffle que les périodicités restent en
+           KILOMÈTRES : le compteur d'usure, lui, compte des roulages, et le
+           produit ne convertit pas les deux (FR-44). Promettre une échéance que
+           le produit ne sait pas calculer serait la faute exacte que toute
+           l'horloge existe pour éviter. */
+        <p className="note">
+          {postes > 0
+            ? `${postes} poste${postes > 1 ? 's' : ''} d'entretien relevé${postes > 1 ? 's' : ''} `
+              + `dans le manuel, avec leur périodicité telle qu'elle y est écrite. `
+              + `Elle est en kilomètres ou en mois — le compteur d'usure, lui, compte des `
+              + `roulages, et rien ne convertit les deux.`
+            : "Aucun tableau d'entretien n'a pu être relevé dans ce PDF. Le manuel est "
+              + 'gardé quand même, et il s\'ouvre hors ligne.'}
+        </p>
+      )}
       {souci && <p className="mot-erreur">{souci}</p>}
 
       <input ref={fichier} type="file" hidden

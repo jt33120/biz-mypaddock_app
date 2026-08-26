@@ -330,6 +330,14 @@ const horloge = new Table({
   machine_id: column.text,
   operation: column.text,
   intervalle_roulages: column.integer,
+  /** ⚠ LA PÉRIODICITÉ TELLE QUE LE MANUEL L'ÉCRIT — « tous les 6 000 km ou
+   *  12 mois ». Du TEXTE, et c'est une décision, pas une facilité : une journée
+   *  de piste vaut 200 à 300 km selon le circuit et le groupe, et traduire des
+   *  kilomètres en roulages serait une interprétation portant sur la sécurité
+   *  d'une machine — ce que FR-44 interdit nommément. `intervalle_roulages`
+   *  reste donc nul quand ce champ vient du manuel, et l'horloge compte sans
+   *  jamais échoir. */
+  barometre: column.text,
   source_url: column.text,
   recolte_le: column.text,
   extrait_par_ia: column.integer,

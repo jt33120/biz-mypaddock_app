@@ -113,7 +113,13 @@ export const documentsDeLaMachine = (db: PowerSyncDatabase, machineId: string) =
    que les octets soient arrivés là-bas. */
 
 export type IssueManuel =
-  | { ok: true; nom: string; octets: number; source: string }
+  /** ⚠ `postes` EST LE CHAÎNON QUE JULIAN A NOMMÉ — « recherche et import
+   *  automatique ET TRAITEMENT et tout ». Le manuel était rapatrié et personne
+   *  ne le LISAIT : aucun intervalle n'en sortait, aucune horloge ne s'en
+   *  remplissait. C'est le nombre de postes d'entretien que le serveur a
+   *  RÉELLEMENT tirés du document, et zéro est un FAIT — le PDF ne porte pas de
+   *  tableau lisible — jamais une erreur. */
+  | { ok: true; nom: string; octets: number; source: string; postes: number }
   | { ok: false; message: string }
 
 const MOT: Record<string, string> = {
@@ -149,7 +155,12 @@ export const rapatrierLeManuel = async (machineId: string): Promise<IssueManuel>
   if (!rep.ok || !corps.id) {
     return { ok: false, message: MOT[String(corps.refus)] ?? "La recherche n'a pas abouti." }
   }
-  return { ok: true, nom: corps.nom, octets: corps.octets, source: corps.source }
+  return {
+    ok: true, nom: corps.nom, octets: corps.octets, source: corps.source,
+    // Un serveur d'avant le traitement ne renvoie rien : zéro, et l'écran le dit
+    // comme il dit un manuel sans tableau — sans s'excuser.
+    postes: Number(corps.postes ?? 0),
+  }
 }
 
 /** La copie locale d'abord, TOUJOURS. Un document versé au paddock hors ligne

@@ -72,6 +72,13 @@ export type Avancement = {
   /** L'intervalle transcrit du barème. `null` = aucun barème connu, et alors
    *  l'horloge COMPTE sans jamais échoir — elle n'invente pas d'échéance. */
   intervalle: number | null
+  /** ⚠ CE QUE LE MANUEL DIT, MOT POUR MOT — « tous les 6 000 km ou 12 mois ».
+   *  Il ne se convertit JAMAIS en `intervalle` : une journée de piste vaut 200 à
+   *  300 km selon le circuit et le groupe, et la conversion serait une
+   *  interprétation sur la sécurité d'une machine (FR-44). Les deux champs
+   *  coexistent donc, et ils ne disent pas la même chose : l'un fait échoir
+   *  l'horloge, l'autre l'informe sans jamais la faire échoir. */
+  barometre: string | null
   /** FR-40 — la complétude, dans le même objet, obligatoirement. */
   completude: { saisis: number; sansGroupe: number }
   /** FR-61 — la provenance de la recommandation, jamais un état de la machine. */
@@ -88,6 +95,7 @@ export type Horloge = {
 type Ligne = {
   id: string; machine_id: string; operation: string
   intervalle_roulages: number | null
+  barometre: string | null
   source_url: string | null; recolte_le: string | null; extrait_par_ia: number | null
   depuis_intervention: string | null
 }
@@ -104,8 +112,8 @@ export const horloges = async (
   db: PowerSyncDatabase, machineId: string, jour = aujourdhui(),
 ): Promise<Horloge[]> => {
   const lignes = await db.getAll<Ligne>(
-    `SELECT id, machine_id, operation, intervalle_roulages, source_url, recolte_le,
-            extrait_par_ia, depuis_intervention
+    `SELECT id, machine_id, operation, intervalle_roulages, barometre, source_url,
+            recolte_le, extrait_par_ia, depuis_intervention
        FROM horloge WHERE machine_id = ? ORDER BY operation`, [machineId])
   if (!lignes.length) return []
 
@@ -152,6 +160,7 @@ export const horloges = async (
       avancement: {
         ponderes: Math.round(ponderes * 10) / 10,
         intervalle: l.intervalle_roulages,
+        barometre: l.barometre,
         completude: { saisis: roulages.length, sansGroupe },
         source: {
           url: l.source_url, recolteLe: l.recolte_le, extraitParIa: l.extrait_par_ia === 1,

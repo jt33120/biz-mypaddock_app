@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { Preparation } from './Preparation'
 import { Checklist } from './Checklist'
+import { Objectifs } from './Objectifs'
 import { direAVenir, direLeJour, ecartJours } from '../db/accueil'
 import { aujourdhui } from '../db/vecu'
 import type { Tache } from '../db/preparation'
@@ -106,12 +107,19 @@ export function Journee({
                    roulage={{ id: r.id, machineId: r.machine_id, date: r.date }}
                    onAller={onAller} />
 
-      {/* ② CE QU'ON EMPORTE. Le composant se DÉPLACE, il ne se duplique pas :
+      {/* ② CE QU'ON VIENT CHERCHER — récit 17.5. Il vient APRÈS ce qu'il faut
+          faire et AVANT ce qu'il faut charger : le jeudi soir on règle d'abord
+          ce qui bloque (payer, réparer), et ce qu'on vient travailler se pose
+          quand la journée est acquise. Rien ne s'y coche, et rien n'en remonte
+          sur la courbe. */}
+      <Objectifs db={db} roulage={{ id: r.id, circuit: r.circuit }} />
+
+      {/* ③ CE QU'ON EMPORTE. Le composant se DÉPLACE, il ne se duplique pas :
           c'est celui du bilan, monté ici. Une seconde checklist écrite à part
           aurait pris du retard sur la première dès la semaine suivante. */}
       <Checklist db={db} roulageId={r.id} jour={r.date} />
 
-      {/* ─── ③ LE SECOND RANG — LES GESTES DU JOUR MÊME ───────────────────
+      {/* ─── ④ LE SECOND RANG — LES GESTES DU JOUR MÊME ───────────────────
           Le pilote est au paddock : il photographie, il déclare un geste, il
           chute, il paie. Aucun de ces gestes n'appartient au bilan plutôt qu'à
           la préparation — ils appartiennent à la JOURNÉE, et l'écran qui la

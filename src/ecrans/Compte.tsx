@@ -11,6 +11,7 @@ import { powersyncConfigure } from '../db/connecteur'
 import { accepterMesures, mesuresAcceptees } from '../db/mesures'
 import { composer as composerEmport, formaterPoids, peser, type Poids } from '../db/emporter'
 import { effacerAuServeur, effacerLeTelephone } from '../db/effacer'
+import { envoiCloudActif, poserEnvoiCloud } from '../db/photos'
 import type { Adoption } from '../App'
 
 /** Ce que dit l'écran pendant que l'application s'en occupe. Aucune de ces
@@ -573,6 +574,8 @@ function Connecte({ db, identite, adoption }: {
         )}
       </div>
 
+      <EnvoiDesPhotos />
+
       {/* LE BOUTON RESTE, comme recours et comme preuve : on peut toujours
           forcer, et voir ligne par ligne ce qui est parti. Ce qui a changé est
           qu'on n'ATTEND plus rien de lui — une sauvegarde qu'il faut penser à
@@ -654,6 +657,61 @@ function Mesures() {
         {oui
           ? "Elles voyagent avec tes données, par le même chemin. Aucun traceur, aucun service tiers."
           : "Rien n'est écrit — pas même dans le téléphone. L'application fonctionne à l'identique."}
+      </p>
+    </div>
+  )
+}
+
+
+/**
+ * CE QUI QUITTE LE TÉLÉPHONE — récit 18.4.
+ *
+ * Question de Julian, 25 août : « on ne sauvegarde pas les photos dans notre
+ * cloud ». Le produit répond par ce qu'il FAIT, chiffres compris — et il offre
+ * de le couper, ce qui n'existait pas : dès qu'il y avait un compte et du
+ * réseau, ça partait, sans que rien ne le dise ni ne le règle.
+ *
+ * ⚠ ET COUPER NE CASSE RIEN, ce qui est la seule chose qui rend ce réglage
+ * honnête. La copie locale est écrite AVANT toute chose (`verserPhoto`), l'album
+ * s'affiche depuis elle, et le produit marche entièrement hors ligne de toute
+ * façon. Ce que ça change est précis, et la phrase le dit sans le maquiller :
+ * les photos ne redescendront pas sur un autre appareil, et elles partiront avec
+ * le téléphone s'il se perd.
+ *
+ * ⚠ AUCUNE DES DEUX POSITIONS N'EST « LA BONNE ». Pas de « recommandé », pas de
+ * pastille, pas d'avertissement quand on coupe : c'est un arbitrage entre la
+ * confidentialité et la perte, et il n'appartient qu'au pilote.
+ */
+function EnvoiDesPhotos() {
+  const [actif, setActif] = useState(envoiCloudActif())
+  return (
+    <div className="bloc pile">
+      <div className="rang">
+        <span className="libelle">Envoyer les photos</span>
+        <button className="puce" data-actif={actif ? '1' : '0'}
+                aria-pressed={actif}
+                onClick={() => { poserEnvoiCloud(!actif); setActif(!actif) }}>
+          {actif ? 'OUI' : 'NON'}
+        </button>
+      </div>
+      {/* ⚠ CE QUI PART EST DIT AU GRAMME PRÈS, pas « vos photos ». Une vignette
+          de 1600 px en WebP, 200 à 400 Ko. L'original — 48 Mpx en HEIC, 3 à 8 Mo
+          — n'est jamais lu en entier : ses dimensions se lisent dans l'en-tête,
+          le décodage se fait déjà réduit, et il n'est ni copié, ni envoyé, ni
+          touché. */}
+      <p className="texte">
+        Ce qui part n'est jamais ta photo d'origine : c'est une copie réduite à 1600 pixels,
+        entre 200 et 400 Ko. Le fichier de ta pellicule n'est ni lu en entier, ni copié,
+        ni envoyé.
+      </p>
+      <p className="note">
+        {actif
+          ? "Coupé, tout continue de marcher : les photos restent sur ce téléphone et l'album "
+            + "s'affiche hors ligne. Ce que tu perds est précis — elles ne redescendront pas "
+            + "sur tes autres appareils, et elles partiront avec ce téléphone s'il se perd."
+          : "L'envoi est coupé. Les photos restent sur ce téléphone et l'album s'affiche hors "
+            + "ligne, comme avant. Elles ne redescendront pas sur tes autres appareils, et "
+            + "elles partiront avec ce téléphone s'il se perd."}
       </p>
     </div>
   )
