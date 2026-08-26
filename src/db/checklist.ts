@@ -1,4 +1,5 @@
 import type { PowerSyncDatabase } from '@powersync/web'
+import { aplati } from './depot'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
 import { TOUTES_JOURNEES } from './vecu'
@@ -255,4 +256,96 @@ export const direPublication = (publieLe: string, par: string | null): string =>
   const d = new Date(publieLe + 'T12:00:00Z').toLocaleDateString('fr-FR',
     { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
   return par ? `publié par ${par} le ${d}` : `publié le ${d}`
+}
+
+/**
+ * LES RÈGLES QUI ARRIVENT APRÈS COUP — récit 17.4.
+ *
+ * ⚠ ELLES ÉTAIENT PERDUES, DÉFINITIVEMENT ET SANS UN MOT. `composer` rend 0 dès
+ * qu'une ligne de chargement existe, et c'est juste : recomposer effacerait les
+ * coches. Mais le geste ordinaire est celui-ci — on compose le chargement le
+ * jeudi soir au garage, hors ligne ; les règles de Pau-Arnos redescendent le
+ * vendredi par la synchronisation ; on rouvre la liste, et elles n'y sont pas.
+ * Elles ne seront JAMAIS là pour ce roulage, parce que plus rien ne rappellera
+ * `composer`.
+ *
+ * Cette fonction fait le contraire de `composer` sur le seul point qui compte :
+ * elle N'ÉCRIT QUE CE QUI MANQUE. Aucune ligne existante n'est touchée, aucune
+ * coche ne bouge, aucune ligne du pilote ne disparaît. La comparaison porte sur
+ * (libellé aplati, source), pas sur l'identifiant : la même règle re-récoltée
+ * chez un organisateur porte un identifiant neuf et le même texte.
+ *
+ * Elle est sans effet — et sans écriture — tant qu'il n'y a rien de neuf, ce
+ * qui est le cas ordinaire : elle peut donc être appelée à chaque ouverture.
+ */
+export const verserLesReglesManquantes = async (
+  db: PowerSyncDatabase, roulageId: string,
+): Promise<number> => {
+  const r = await db.get<{ circuit_id: string | null; organisateur_id: string | null }>(
+    // Lecture par identifiant : elle voit une journée à venir, et c'est
+    // précisément la seule qui nous intéresse ici.
+    `SELECT circuit_id, organisateur_id FROM roulage ${TOUTES_JOURNEES} WHERE id = ?`,
+    [roulageId])
+  if (!r || (!r.circuit_id && !r.organisateur_id)) return 0
+
+  const regles = await db.getAll<{
+    libelle: string; source_url: string; publie_le: string
+    publie_par: string | null; extrait_par_ia: number | null
+  }>(
+    `SELECT g.libelle, g.source_url, g.publie_le,
+            coalesce(o.nom, c.nom) AS publie_par,
+            coalesce(g.extrait_par_ia, 1) AS extrait_par_ia
+       FROM regle_organisateur g
+       LEFT JOIN organisateur o ON o.id = g.organisateur_id
+       LEFT JOIN circuit c ON c.id = g.circuit_id
+      WHERE (? IS NOT NULL AND g.circuit_id = ?)
+         OR (? IS NOT NULL AND g.organisateur_id = ?)`,
+    [r.circuit_id, r.circuit_id, r.organisateur_id, r.organisateur_id])
+  if (!regles.length) return 0
+
+  const deja = await db.getAll<{ libelle: string; source_url: string | null }>(
+    `SELECT libelle, source_url FROM checklist_ligne
+      WHERE roulage_id = ? AND categorie = 'conformite'`, [roulageId])
+  const empreintes = new Set(deja.map((d) => `${aplati(d.libelle)} ${d.source_url ?? ''}`))
+
+  let n = 0
+  for (const g of regles) {
+    if (empreintes.has(`${aplati(g.libelle)} ${g.source_url}`)) continue
+    await db.execute(
+      `INSERT INTO checklist_ligne
+         (id, roulage_id, libelle, categorie, cochee, source_url, publie_le,
+          publie_par, extrait_par_ia)
+       VALUES (?, ?, ?, 'conformite', 0, ?, ?, ?, ?)`,
+      [nouvelId(), roulageId, g.libelle, g.source_url, g.publie_le,
+       g.publie_par, g.extrait_par_ia ?? 1])
+    empreintes.add(`${aplati(g.libelle)} ${g.source_url}`)
+    n++
+  }
+  if (n) await marquerSaisie(db)
+  return n
+}
+
+/**
+ * POURQUOI LA SECTION CONFORMITÉ EST VIDE — et les deux motifs ne se disent pas
+ * de la même manière (récit 17.4).
+ *
+ * ⚠ « LE PRODUIT NE SAIT RIEN » ET « LE PRODUIT N'A PAS PU LIRE » SONT DEUX
+ * PHRASES DIFFÉRENTES, et jusqu'ici l'écran ne disait que la première. Or le
+ * mode PAR DÉFAUT du produit est le pilote sans compte : son `circuit_id` reste
+ * nul pour toujours, parce que le rattachement au référentiel se fait côté
+ * serveur (migration 20260825000003) et que rien de lui ne monte au serveur.
+ * L'écran affirmait donc « aucune règle publiée n'est connue » à un pilote pour
+ * qui la question n'a même pas été posée. C'est une absence de savoir présentée
+ * comme un savoir de l'absence, et c'est l'inverse de ce que l'épine promet.
+ */
+export type Rattachement = 'rattache' | 'non_rattache'
+
+export const rattachement = async (
+  db: PowerSyncDatabase, roulageId: string,
+): Promise<Rattachement> => {
+  const r = await db.get<{ circuit_id: string | null; organisateur_id: string | null }>(
+    // Lecture par identifiant, journée à venir comprise — c'est son cas type.
+    `SELECT circuit_id, organisateur_id FROM roulage ${TOUTES_JOURNEES} WHERE id = ?`,
+    [roulageId])
+  return r && (r.circuit_id || r.organisateur_id) ? 'rattache' : 'non_rattache'
 }

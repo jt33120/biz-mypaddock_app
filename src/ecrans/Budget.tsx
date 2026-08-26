@@ -9,6 +9,7 @@ import {
   type Poste,
 } from '../db/budget'
 import { photoEquipement, verserPhotoEquipement } from '../db/photos'
+import { Icone, type Nom } from './Icones'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import {
@@ -432,6 +433,23 @@ export function NoterUneDepense({ db, onEcrit }: {
  * n'en dérive rien. Le schéma n'a aucune colonne d'échéance : ce qui n'existe
  * pas ne peut pas s'afficher par accident.
  */
+/** Le tracé d'une pièce d'équipement SANS média — récit 20.4. Dérivé des
+ *  catégories elles-mêmes, donc une sixième ne compile pas sans qu'on lui
+ *  choisisse une forme.
+ *
+ *  ⚠ LA COMBINAISON A ÉTÉ TENTÉE ET ABANDONNÉE. À 12 × 12, elle ne se distingue
+ *  pas d'un bonhomme, et un bonhomme sur une pièce de protection ne dit rien du
+ *  tout. Le casque porte la protection à lui seul ; ailleurs, la caisse à outils
+ *  dit « du matériel » sans prétendre nommer lequel. Le libellé texte est là
+ *  pour ça, et le produit privilégie déjà le mot partout. */
+const TRACE_EQUIPEMENT: Record<CategorieEquipement, Nom> = {
+  protection: 'casque',
+  paddock: 'caisse',
+  transport: 'caisse',
+  outillage: 'cle',
+  autre: 'caisse',
+}
+
 export function Equipement({ db, onEcrit, appele }: {
   db: PowerSyncDatabase; onEcrit: () => void
   /** Un compteur qui s'incrémente à chaque appel depuis la tête du garage :
@@ -575,10 +593,22 @@ function LigneMateriel({ db, e, onEcrit }: {
       {/* TROIS ÉTATS, même préséance qu'au garage : le portrait pixel s'il a été
           gardé, la photo réelle sinon, et rien du tout en dernier — un
           équipement sans média reste pleinement un équipement. */}
-      {(e.sprite || photoUrl) && (
+      {(e.sprite || photoUrl) ? (
         <div className="scene-equipement">
           <img className={e.sprite ? 'sprite' : 'photo-machine'}
                src={e.sprite ?? photoUrl!} alt={e.nom} />
+        </div>
+      ) : (
+        /* ⚠ QUATRIÈME ÉTAT, ET IL EST LE DERNIER — récit 20.4. Le tracé ne
+           s'affiche QUE si ni portrait ni photo n'existent : « la combinaison
+           c'est comme un skin, et le casque aussi, c'est à pixeliser », et une
+           icône qui rivaliserait avec le sprite volerait la place du sujet.
+           C'est une amorce sourde, à 28 px, sans échéance, sans âge, sans
+           compteur — un compteur qui monte sur un équipement de protection est
+           un compte à rebours déguisé, et le schéma n'a délibérément aucune
+           colonne d'échéance. */
+        <div className="scene-equipement vide">
+          <Icone nom={TRACE_EQUIPEMENT[e.categorie] ?? 'caisse'} taille={28} />
         </div>
       )}
 

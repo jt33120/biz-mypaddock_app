@@ -40,6 +40,17 @@ import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
 import { niveauDuGroupe } from '../../src/db/usure'
 import { sePrepare } from '../../src/db/vecu'
+import { direLaCompletude, memeTache } from '../../src/db/preparation'
+import { chemins, dessins, GRILLE } from '../../src/ecrans/dessins'
+// Ce que le dépôt SERT tel quel.  — bluesky, discord, github,
+// x — était le reliquat du gabarit Vite, référencé nulle part et servi à tout le
+// monde depuis un dépôt public.
+const PUBLIC = import.meta.glob('../../public/**/*',
+  { query: '?url', import: 'default', eager: true }) as Record<string, string>
+
+/** Le nombre de pixels pleins d'un dessin. Un dessin presque vide passerait
+ *  toutes les gardes de forme et ne montrerait rien à l'écran. */
+const l_pleine = (art: string) => (art.match(/#/g) ?? []).length
 import {
   CHARGEMENT, CHARGEMENT_EMBARQUE, direLAge, direPublication, MOIS_AVANT_DOUTE, moisDepuis,
   NOM_CATEGORIE,
@@ -1821,6 +1832,296 @@ const essais = [
     // Et le vide reste DISABLE : quand la liste a répondu et qu'elle est vide,
     // le produit le dit. Une absence se dit ; c'est l'ignorance qui se tait.
     vrai(source.includes('data-etat="su"'), 'l\'état « je sais » a disparu du DOM')
+  }),
+
+  doit('17.3 — le garage et l\'avant-roulage comptent la MÊME chose', () => {
+    /* ⚠ DEUX ERREURS VIVAIENT LÀ ET SE COMPENSAIENT EXACTEMENT, ce qui est la
+       pire forme : rien ne se voyait, et corriger UNE SEULE décalait toute la
+       liste d'un roulage.
+
+         · l'avant-roulage faisait un `count(*)` BRUT là où le garage additionne
+           des coefficients de pondération ;
+         · il testait `n > intervalle` là où le garage lit `pondérés >= intervalle`.
+
+       Comme `n` valait `pondérés + 1` — le roulage préparé se comptant
+       lui-même —, les deux fautes s'annulaient.
+
+       Le remède n'est pas d'aligner deux calculs : c'est de n'en avoir plus
+       qu'un. Ce témoin refuse donc à `preparation.ts` toute lecture de `roulage`
+       — la seule manière d'empêcher le troisième calcul de renaître. */
+    const brut = Object.entries(SOURCES).find(([c]) => c.endsWith('db/preparation.ts'))?.[1] ?? ''
+    vrai(brut.length > 0, 'preparation.ts introuvable')
+    const source = sansCommentaires(brut)
+    vrai(/\bhorloges\(/.test(source),
+      'l\'avant-roulage ne passe plus par `horloges` : il a repris un calcul à lui')
+    vrai(!/FROM\s+roulage\b/i.test(source),
+      'preparation.ts relit `roulage` : c\'est exactement le second calcul qui divergeait')
+    vrai(!/count\(\*\)[\s\S]{0,80}FROM\s+roulage/i.test(source),
+      'un `count(*)` brut de roulages est revenu dans l\'avant-roulage')
+  }),
+
+  doit('17.3 — un chiffre d\'usure ne s\'affiche jamais sans sa complétude', () => {
+    /* FR-40 n'a PAS d'exception d'écran, et c'est la seule clause du produit qui
+       touche la sécurité d'une machine. Le garage affiche « sur 7 roulages
+       saisis » à côté de chaque horloge ; l'avant-roulage affichait le même
+       chiffre tout nu.
+
+       La garde porte sur le TYPE d'abord — `Tache.complet` n'est pas optionnel,
+       donc aucune tâche ne peut être construite sans se prononcer — et sur le
+       rendu ensuite. Un `complet?:` suffirait à rouvrir le trou en silence. */
+    const db = Object.entries(SOURCES).find(([c]) => c.endsWith('db/preparation.ts'))?.[1] ?? ''
+    const ecran = Object.entries(ECRANS).find(([c]) => c.endsWith('/Preparation.tsx'))?.[1] ?? ''
+    vrai(db.length > 0 && ecran.length > 0, 'les sources de la préparation sont introuvables')
+    vrai(/complet:\s*string\s*\|\s*null/.test(sansCommentaires(db)),
+      '`Tache.complet` a disparu ou est devenu optionnel : le chiffre peut repartir tout nu')
+    vrai(/t\.complet/.test(sansCommentaires(ecran)),
+      'l\'écran ne rend plus la complétude à côté du chiffre d\'usure')
+    /* Et la formulation est celle du garage AUX MÊMES MOTS — éprouvée sur la
+       sortie, pas sur le texte source : la phrase du garage est assemblée de
+       trois ternaires, donc « roulages saisis » n'y apparaît nulle part en
+       toutes lettres. Un témoin qui lirait la source se satisferait de
+       n'importe quoi. Deux phrases pour le même fait sur deux écrans font
+       douter du chiffre, et c'est le chiffre qui touche la sécurité. */
+    egal(direLaCompletude({ saisis: 7, sansGroupe: 0 }), 'sur 7 roulages saisis',
+      'la complétude ne se dit plus dans les mots du garage')
+    egal(direLaCompletude({ saisis: 1, sansGroupe: 0 }), 'sur 1 roulage saisi',
+      'la complétude ne s\'accorde plus au singulier')
+    egal(direLaCompletude({ saisis: 7, sansGroupe: 2 }),
+      'sur 7 roulages saisis · 2 sans groupe, donc comptés sans pondération',
+      'la complétude tait les roulages sans groupe : le chiffre prétend à une précision qu\'il n\'a pas')
+  }),
+
+  doit('17.3 — le socle pose des compteurs, jamais des échéances', () => {
+    /* DÉCISION DE JULIAN DU 25 AOÛT : le socle n'est pas une liste embarquée,
+       ce sont des HORLOGES posées sur SA moto. La différence tient entièrement
+       dans l'intervalle : sans barème, une horloge compte sans jamais échoir
+       (FR-44) et ne produit AUCUNE ligne d'avant-roulage.
+
+       Un intervalle inventé ici — une moyenne, un « en général 6000 km » —
+       fabriquerait un verdict sur une plaquette de frein à partir de rien. */
+    const brut = Object.entries(SOURCES).find(([c]) => c.endsWith('db/preparation.ts'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(/POSTES_DE_BASE/.test(source), 'le socle a disparu')
+    vrai(/intervalle:\s*null/.test(source),
+      'le socle pose un intervalle : le produit invente une échéance qu\'aucune source ne porte')
+    vrai(!/intervalle:\s*\d/.test(source), 'un intervalle chiffré est écrit en dur dans le socle')
+    // Et la boucle des horloges continue de SORTIR sans barème.
+    vrai(/a\.intervalle == null\) continue/.test(source),
+      'une horloge sans barème peut de nouveau produire une ligne d\'avant-roulage')
+  }),
+
+  doit('17.4 — « assurance » et « L\'assurance » sont la même tâche', () => {
+    /* Le rapprochement ne portait que sur les libellés STRICTEMENT identiques,
+       et c'est le cas qui n'arrive jamais : la ligne dérivée s'appelle
+       « L'assurance », le pilote tape « assurance ». Deux lignes pour la même
+       chose, et le produit ne disait rien — ce qui est pire que de la montrer
+       deux fois, parce qu'on ne sait plus laquelle fait foi. */
+    vrai(memeTache("L'assurance", 'assurance'), 'l\'article de tête sépare encore deux fois la même tâche')
+    vrai(memeTache("L'engagement", 'Engagement'), 'la casse sépare encore deux fois la même tâche')
+    vrai(memeTache('Les pneus', 'pneus'), 'l\'article pluriel sépare encore deux fois la même tâche')
+    vrai(memeTache('Vidange moteur', 'vidange  MOTEUR'), 'l\'espace double sépare deux fois la même tâche')
+    /* ⚠ ET IL NE RAPPROCHE PAS TROP. Rapprocher à tort MASQUE une tâche que le
+       pilote a écrite lui-même, et il ne saura jamais pourquoi elle a disparu.
+       Dans le doute, on montre. */
+    vrai(!memeTache('Pneus', 'Pneumatiques'), 'le rapprochement racinise : il masquera des tâches vraies')
+    vrai(!memeTache("L'assurance", "L'engagement"), 'deux tâches distinctes sont confondues')
+    vrai(!memeTache('assurance', ''), 'une saisie vide se confond avec une tâche')
+  }),
+
+  doit('17.4 — les règles qui redescendent n\'effacent aucune coche', () => {
+    /* LE GESTE ORDINAIRE : on compose le chargement le jeudi soir au garage,
+       hors ligne ; les règles de Pau-Arnos arrivent le vendredi par la
+       synchronisation ; et plus rien n'appelle `composer`, qui rend 0 dès qu'une
+       ligne existe. Elles étaient perdues pour ce roulage, définitivement et
+       sans un mot.
+
+       Le remède ne peut PAS être de recomposer : ça décocherait tout. La
+       fonction n'a donc le droit d'écrire QUE des INSERT — un seul UPDATE ou
+       DELETE dans son corps et la liste se retourne contre le pilote. */
+    const brut = Object.entries(SOURCES).find(([c]) => c.endsWith('db/checklist.ts'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    const debut = source.indexOf('export const verserLesReglesManquantes')
+    vrai(debut > 0, '`verserLesReglesManquantes` a disparu : les règles tardives sont reperdues')
+    const fin = source.indexOf('export const', debut + 20)
+    const corps = source.slice(debut, fin > 0 ? fin : undefined)
+    vrai(!/\bUPDATE\b/i.test(corps), 'la reprise des règles fait un UPDATE : elle touche des coches')
+    vrai(!/\bDELETE\b/i.test(corps), 'la reprise des règles fait un DELETE : elle emporte des lignes')
+    vrai(/INSERT INTO checklist_ligne/.test(corps), 'la reprise des règles n\'écrit plus rien')
+    // Et elle est réellement APPELÉE : une fonction juste que personne n'appelle
+    // est exactement l'état d'avant.
+    const ecran = Object.entries(ECRANS).find(([c]) => c.endsWith('/Checklist.tsx'))?.[1] ?? ''
+    vrai(/verserLesReglesManquantes\(/.test(sansCommentaires(ecran)),
+      'plus personne n\'appelle la reprise des règles : elles sont reperdues')
+  }),
+
+  doit('17.4 — « je ne sais rien » et « je n\'ai pas pu lire » sont deux phrases', () => {
+    /* Le mode PAR DÉFAUT du produit est le pilote sans compte : son `circuit_id`
+       reste nul pour toujours, parce que le rattachement au référentiel se fait
+       CÔTÉ SERVEUR (migration 20260825000003) et que rien de lui ne monte au
+       serveur. Lui dire « aucune règle publiée n'est connue » présente une
+       absence de savoir comme un savoir de l'absence : la question n'a même pas
+       été posée pour sa journée.
+
+       Et aucune des deux phrases n'a le droit de conclure : l'organisateur
+       reste la seule source, dans les deux cas. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Checklist.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(/lien === 'rattache'/.test(source),
+      'l\'écran ne distingue plus les deux absences : il affirme ne rien savoir sans avoir cherché')
+    vrai(/rattachée à aucun circuit/.test(source), 'la phrase du non-rattachement a disparu')
+    vrai(/Aucune règle publiée/.test(source), 'la phrase du silence de l\'organisateur a disparu')
+    // Aucune des deux ne certifie quoi que ce soit — FR-50.
+    for (const mot of ['conforme', 'validé', 'admis', 'tu es en règle'])
+      vrai(!new RegExp(mot, 'i').test(source), `le chargement dit « ${mot} »`)
+  }),
+
+  doit('20.2 — chaque icône tombe sur la grille, et rien qu\'elle', () => {
+    /* ⚠ UN DESSIN DE ONZE LIGNES SE RENDRAIT DÉCALÉ, SANS ERREUR ET SANS UN MOT.
+       C'est le seul défaut que cette forme de tracé peut produire : on ne peut
+       pas écrire une coordonnée hors grille puisqu'il n'y a pas de coordonnée à
+       écrire, mais on peut oublier un point en fin de ligne. Le premier essai
+       écrit ici a trouvé exactement ça sur le trophée — onze caractères au lieu
+       de douze — avant que quoi que ce soit ne soit rendu à l'écran. */
+    const d = dessins()
+    const noms = Object.keys(d)
+    vrai(noms.length >= 10, `seulement ${noms.length} icônes : le jeu s'est vidé`)
+    for (const n of noms) {
+      const lignes = d[n as keyof typeof d].trim().split('\n')
+      egal(lignes.length, GRILLE, `« ${n} » n'a pas ${GRILLE} lignes`)
+      for (const [i, l] of lignes.entries()) {
+        egal(l.length, GRILLE, `« ${n} », ligne ${i} : largeur`)
+        vrai(/^[#.]+$/.test(l), `« ${n} », ligne ${i} porte autre chose que # et .`)
+      }
+      vrai(l_pleine(d[n as keyof typeof d]) > 8, `« ${n} » est presque vide : ce n'est pas un dessin`)
+    }
+  }),
+
+  doit('20.2 — le tracé rendu ne sort jamais du cadre', () => {
+    /* Le tracé est CALCULÉ, pas écrit : c'est ce qui garantit la grille. Reste à
+       éprouver le calcul lui-même — un rectangle qui déborderait d'un pixel
+       serait rogné par le `viewBox` en silence, et l'icône perdrait un bout sans
+       que rien ne rougisse. On relit donc les coordonnées produites. */
+    for (const [nom, d] of Object.entries(chemins())) {
+      vrai(d.length > 0, `« ${nom} » ne dessine plus rien`)
+      for (const m of d.matchAll(/M(\d+) (\d+)h(\d+)/g)) {
+        const [x, y, w] = [Number(m[1]), Number(m[2]), Number(m[3])]
+        vrai(y >= 0 && y < GRILLE, `« ${nom} » dessine hors du cadre en y=${y}`)
+        vrai(x >= 0 && x + w <= GRILLE, `« ${nom} » déborde en x : ${x}+${w}`)
+        vrai(w > 0, `« ${nom} » pose un rectangle de largeur nulle`)
+      }
+      // Et le tracé est COMPACT : une commande par suite horizontale, pas une
+      // par pixel. Une icône pleine ferait 144 commandes au lieu d'une douzaine.
+      const commandes = (d.match(/M/g) ?? []).length
+      vrai(commandes <= 40, `« ${nom} » pose ${commandes} rectangles : le regroupement est cassé`)
+    }
+  }),
+
+  doit('20.2 — une seule grille : le trophée a rejoint les autres', () => {
+    /* Il était en `stroke` de 1,8 sur 24 × 24 — un trait fin et lisse, seul de
+       son espèce, à côté d'aplats pixel. Deux registres côte à côte se voient, et
+       c'est exactement ce que Julian appelle « un assemblage ». */
+    const t = Object.entries(ECRANS).find(([c]) => c.endsWith('/Trophee.tsx'))?.[1] ?? ''
+    vrai(t.length > 0, 'Trophee.tsx introuvable')
+    const source = sansCommentaires(t)
+    vrai(/<Icone\b/.test(source), 'le trophée a repris un dessin à lui : deux registres cohabitent')
+    vrai(!/strokeWidth/.test(source), 'le trophée est revenu au trait fin')
+    vrai(!/viewBox="0 0 24 24"/.test(source), 'le trophée est revenu sur la grille de 24')
+    /* ⚠ ET AUCUN ÉCRAN N'A LE DROIT DE POSER UN <svg> À LUI. C'est la seule
+       garde qui empêche le jeu de se rouvrir icône par icône — la manière exacte
+       dont un assemblage se reconstitue. Deux exceptions déclarées : `Icones.tsx`
+       qui EST le jeu, et `Courbe.tsx`, qui n'est pas une icône mais un tracé de
+       données à l'échelle de l'écran. */
+    for (const [chemin, brut] of Object.entries(ECRANS)) {
+      if (/\/(Icones|Courbe)\.tsx$/.test(chemin)) continue
+      vrai(!/<svg\b/.test(sansCommentaires(brut)),
+        `${chemin.split('/').pop()} dessine un <svg> à lui : le jeu d'icônes se rouvre`)
+    }
+  }),
+
+  doit('20.2 — un tracé, jamais un emoji', () => {
+    /* 🔧 est rendu par la POLICE DU SYSTÈME : bombé et coloré sur iOS, plat sur
+       Android, absent d'un WebView pauvre. C'est la convention argumentée dans
+       `Trophee.tsx` depuis l'origine, et rien ne l'appliquait à l'échelle du
+       produit. On refuse donc les emojis pictographiques dans tout ce qui se
+       rend — pas les flèches ni les symboles typographiques, qui viennent de la
+       fonte du texte et se comportent comme du texte. */
+    const PICTO = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u
+    for (const [chemin, brut] of Object.entries(ECRANS)) {
+      const source = sansCommentaires(brut)
+      const trouve = source.match(PICTO)
+      vrai(!trouve, `${chemin.split('/').pop()} rend l'emoji ${trouve?.[0]} : il change de dessin selon le téléphone`)
+    }
+  }),
+
+  doit('20.3 — l\'atelier porte trois tracés, et le mur de FR-46 tient', () => {
+    /* FR-46 est une clause de SÉCURITÉ, pas de rangement : si « plaquettes en
+       fin de vie » s'affiche à côté de « sticker décollé », l'élément de sécurité
+       hérite du caractère repoussable du cosmétique. L'icône est un REPÈRE, pas
+       un regroupement — et une icône COMMUNE à deux catégories serait la
+       première marche vers la liste mélangée. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Atelier.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(/<Icone\b/.test(source), 'l\'atelier est redevenu trois boutons de texte')
+    const table = source.slice(source.indexOf('const TRACE'), source.indexOf('export function Atelier'))
+    for (const c of ['entretien', 'amelioration', 'reparation_non_vitale'])
+      vrai(new RegExp(`${c}:`).test(table), `la catégorie ${c} n'a plus de tracé`)
+    const formes = [...table.matchAll(/:\s*'(\w+)'/g)].map((m) => m[1])
+    egal(formes.length, 3, 'l\'atelier n\'a plus exactement trois tracés')
+    egal(new Set(formes).size, 3,
+      'deux catégories de l\'atelier partagent une icône : le mur de FR-46 commence à tomber')
+    // Et rien ne relance : FR-48, aucune pastille, aucune échéance, aucun rouge.
+    vrai(!/destructif|alerte|pastille|échéance/i.test(source),
+      'l\'atelier s\'est mis à réclamer quelque chose')
+  }),
+
+  doit('20.3 — l\'argent ne porte ni courbe ni jauge', () => {
+    /* « Le portefeuille énonce, une jauge jugerait. » Un graphe de coût qui
+       monte est très près d'un verdict, et « dépasser son budget n'est pas une
+       faute ». L'icône de l'argent est donc un PORTEFEUILLE, et la courbe est
+       réservée à ce qui AMÉLIORE — la cartographie moteur. */
+    const d = dessins()
+    vrai('portefeuille' in d, 'l\'icône de l\'argent a disparu')
+    vrai('courbe' in d, 'l\'icône des améliorations a disparu')
+    // Les deux dessins sont bien DIFFÉRENTS : une même forme sous deux noms
+    // ferait exactement ce qu'on s'interdit, sans qu'aucun nom ne le dise.
+    vrai(d.portefeuille.trim() !== d.courbe.trim(),
+      'l\'argent et les améliorations partagent un dessin')
+    // Et aucun écran d'argent ne rend la courbe.
+    for (const c of ['/Budget.tsx', '/Depense.tsx']) {
+      const brut = Object.entries(ECRANS).find(([k]) => k.endsWith(c))?.[1] ?? ''
+      vrai(!/nom="courbe"/.test(sansCommentaires(brut)), `${c} pose une courbe sur l'argent`)
+    }
+  }),
+
+  doit('20.4 — le tracé de l\'équipement perd toujours contre le sprite', () => {
+    /* « La combinaison c'est comme un skin, et le casque aussi, c'est à
+       pixeliser » (portrait.ts). L'icône n'est qu'un QUATRIÈME état, le dernier :
+       portrait pixel, sinon photo réelle, sinon tracé, sinon rien. Une icône qui
+       s'afficherait à côté du sprite lui volerait la place, et le sprite est le
+       sujet du produit. */
+    const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Budget.tsx'))?.[1] ?? ''
+    const source = sansCommentaires(brut)
+    vrai(/TRACE_EQUIPEMENT/.test(source), 'l\'équipement sans média n\'a plus de figure')
+    vrai(/\(e\.sprite \|\| photoUrl\) \?/.test(source),
+      'le tracé n\'est plus le DERNIER recours : il peut s\'afficher à côté du sprite')
+    vrai(/protection: 'casque'/.test(source), 'la protection ne porte plus le casque')
+    /* ⚠ ET AUCUNE ÉCHÉANCE, AUCUN ÂGE, AUCUN COMPTEUR sur cette figure. Un
+       compteur qui monte sur un équipement de protection est un compte à rebours
+       déguisé, et le schéma n'a délibérément aucune colonne d'échéance. */
+    const bloc = source.slice(source.indexOf('scene-equipement vide'),
+      source.indexOf('scene-equipement vide') + 400)
+    for (const mot of ['ans', 'mois', 'échéance', 'reste', 'usé'])
+      vrai(!new RegExp(`\\b${mot}\\b`, 'i').test(bloc),
+        `la figure de l'équipement porte « ${mot} » : c'est un compte à rebours déguisé`)
+  }),
+
+  doit('20.2 — le reliquat du gabarit Vite n\'est plus dans le dépôt', () => {
+    /* `public/icons.svg` — bluesky, discord, github, x — référencé nulle part et
+       servi à tout le monde. Il n'était pas grave, il était FAUX : quatre icônes
+       d'un autre produit dans un dépôt public qui n'en utilise aucune. */
+    const publics = Object.keys(PUBLIC)
+    vrai(!publics.some((c) => c.endsWith('/icons.svg')),
+      'public/icons.svg est revenu : le jeu du gabarit Vite traîne encore')
   }),
 ]
 

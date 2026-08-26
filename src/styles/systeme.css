@@ -834,3 +834,27 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
    texte de 90 px — c'est-à-dire une annonce qu'on ne lit pas, donc pas une
    annonce. Même règle qu'en tête de garage. */
 .actions-materiel > .bloc { flex: 1 0 100%; margin-top: 6px; }
+
+/* ─── LES ICÔNES — épique 20 ───────────────────────────────────────────────
+   Un seul jeu, une seule grille (12 x 12, en aplats), et la couleur du texte
+   qu'elles accompagnent : `fill: currentColor` dans le SVG, rien ici. Elles ne
+   portent JAMAIS le sens toutes seules (UX-DR8) — le mot est toujours à côté.
+
+   `crispEdges` est dans le SVG et pas dans la feuille : c'est une propriété de
+   rendu du tracé, pas une décision de mise en page, et la mettre ici la
+   rendrait débranchable par une cascade. */
+.icone { flex: 0 0 auto; display: block; }
+
+/* Dans l'atelier, le tracé ouvre la ligne. `align-self: center` plutôt que
+   `stretch` : le bloc porte deux lignes de texte de hauteurs inégales, et une
+   icône étirée sur les deux se lirait comme un séparateur. */
+.icone-atelier { align-self: center; opacity: .9; margin-right: 2px; }
+
+/* L'AMORCE SOURDE — récit 20.4. Elle occupe la place du portrait pixel sans
+   prétendre à sa présence : pas de cadre, pas de fond, et une opacité qui la
+   met franchement en retrait. Si elle était jolie, elle concurrencerait le
+   sprite, et le sprite est le sujet. */
+.scene-equipement.vide {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 44px; opacity: .45;
+}

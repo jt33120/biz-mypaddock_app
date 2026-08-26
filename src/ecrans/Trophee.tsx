@@ -1,3 +1,5 @@
+import { Icone } from './Icones'
+
 /**
  * LE TROPHÉE — demandé par Julian, « un icône trophée à côté du meilleur temps
  * au tour sur l'écran d'accueil ».
@@ -18,20 +20,14 @@
  *   déjà son libellé en toutes lettres ; l'annoncer une seconde fois ferait lire
  *   « trophée » à quelqu'un qui vient d'entendre « meilleur tour ».
  */
+/**
+ * ⚠ ④ IL EST SUR LA GRILLE COMMUNE — récit 20.2. Il était en `stroke` de 1,8 sur
+ *   24 × 24 : un trait fin et lisse, seul de son espèce, à côté d'aplats pixel.
+ *   Deux registres côte à côte se voient, et c'est exactement ce que Julian
+ *   appelle « un assemblage ». Le dessin vit maintenant dans `Icones.tsx` avec
+ *   les dix autres ; ce fichier garde son nom et ses trois clauses, qui sont ce
+ *   qu'on vient y chercher.
+ */
 export function Trophee({ taille = 18 }: { taille?: number }) {
-  return (
-    <svg className="trophee" width={taille} height={taille} viewBox="0 0 24 24"
-         fill="none" stroke="currentColor" strokeWidth="1.8"
-         strokeLinecap="square" strokeLinejoin="miter" aria-hidden="true" focusable="false">
-      {/* La coupe */}
-      <path d="M7 3h10v6a5 5 0 0 1-10 0V3Z" />
-      {/* Les deux anses — ce qui fait lire « coupe » et non « seau » */}
-      <path d="M7 5H4v2a3 3 0 0 0 3 3" />
-      <path d="M17 5h3v2a3 3 0 0 1-3 3" />
-      {/* Le pied et le socle */}
-      <path d="M12 14v4" />
-      <path d="M8 21h8" />
-      <path d="M9 18h6v3H9z" />
-    </svg>
-  )
+  return <Icone nom="trophee" taille={taille} className="trophee" />
 }

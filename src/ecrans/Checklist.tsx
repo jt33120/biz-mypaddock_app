@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
   ajouter, CHARGEMENT, cocher, composer, direLAge, direPublication, lignesDuChargement,
-  moisDepuis, MOIS_AVANT_DOUTE, NOM_CATEGORIE, retirer, type Ligne,
+  moisDepuis, MOIS_AVANT_DOUTE, NOM_CATEGORIE, rattachement, retirer,
+  verserLesReglesManquantes, type Ligne, type Rattachement,
 } from '../db/checklist'
 
 /**
@@ -25,9 +26,24 @@ export function Checklist({ db, roulageId, jour }: {
   const [liste, setListe] = useState<Ligne[]>([])
   const [ouverte, setOuverte] = useState(false)
   const [ajout, setAjout] = useState('')
+  /** Récit 17.4 — « je ne sais rien » et « je n'ai pas pu lire » sont deux
+   *  phrases, et jusqu'ici l'écran ne disait que la première. */
+  const [lien, setLien] = useState<Rattachement>('rattache')
 
-  const charger = useCallback(
-    async () => setListe(await lignesDuChargement(db, roulageId)), [db, roulageId])
+  const charger = useCallback(async () => {
+    /* ⚠ LES RÈGLES QUI REDESCENDENT APRÈS LA COMPOSITION ENTRENT ICI, ET NULLE
+       PART AILLEURS — récit 17.4. Le chargement se compose le jeudi soir au
+       garage, hors ligne ; les règles de Pau-Arnos arrivent le vendredi par la
+       synchronisation ; et plus rien n'appelait `composer`, qui rend 0 dès
+       qu'une ligne existe. Elles étaient perdues pour ce roulage,
+       définitivement et sans un mot.
+       Cet appel N'ÉCRIT QUE CE QUI MANQUE : aucune coche ne bouge, aucune ligne
+       du pilote ne disparaît, et il ne coûte rien tant qu'il n'y a rien de neuf
+       — ce qui est le cas ordinaire. */
+    await verserLesReglesManquantes(db, roulageId)
+    setLien(await rattachement(db, roulageId))
+    setListe(await lignesDuChargement(db, roulageId))
+  }, [db, roulageId])
   useEffect(() => { void charger() }, [charger])
 
   const creer = async () => { await composer(db, roulageId); await charger(); setOuverte(true) }
@@ -82,14 +98,30 @@ export function Checklist({ db, roulageId, jour }: {
         <div className={`pile ${c}`} key={c}>
           <div className="libelle faible">{NOM_CATEGORIE[c]}</div>
           {c === 'conformite' && !l.length && (
-            /* FR-50 — le produit DIT qu'il ne sait rien, au lieu de laisser un
-               silence qu'on lirait comme « rien n'est exigé ». Et il ne promet
-               pas de le savoir un jour : il renvoie à la seule source qui fait
-               foi. */
-            <p className="note">
-              Aucune règle publiée n’est connue pour ce roulage. Ça ne veut pas dire qu’il n’y
-              en a pas — l’organisateur reste la seule source.
-            </p>
+            /* FR-50 — le produit DIT ce qu'il ne sait pas, au lieu de laisser
+               un silence qu'on lirait comme « rien n'est exigé ». Et il ne
+               promet pas de le savoir un jour : il renvoie à la seule source qui
+               fait foi.
+
+               ⚠ DEUX ABSENCES, DEUX PHRASES — récit 17.4. Le mode PAR DÉFAUT du
+               produit est le pilote sans compte : son `circuit_id` reste nul
+               pour toujours, parce que le rattachement au référentiel se fait
+               côté serveur (migration 20260825000003) et que rien de lui ne
+               monte au serveur. Lui dire « aucune règle n'est connue » serait
+               présenter une absence de savoir comme un savoir de l'absence :
+               la question n'a même pas été posée pour sa journée. */
+            lien === 'rattache' ? (
+              <p className="note">
+                Aucune règle publiée n’est connue pour ce roulage. Ça ne veut pas dire qu’il n’y
+                en a pas — l’organisateur reste la seule source.
+              </p>
+            ) : (
+              <p className="note">
+                Cette journée n’est rattachée à aucun circuit du référentiel : le produit n’a pas
+                pu aller voir. Ça ne dit rien de ce que l’organisateur exige — il reste la seule
+                source.
+              </p>
+            )
           )}
           {l.map((ligne) => {
             const mois = ligne.publie_le ? moisDepuis(ligne.publie_le, jour) : 0

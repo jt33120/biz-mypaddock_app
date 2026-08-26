@@ -5,6 +5,7 @@ import {
   type Categorie, type Intervention,
 } from '../db/atelier'
 import { formaterEuros } from '../db/depot'
+import { Icone, type Nom } from './Icones'
 
 /**
  * L'ATELIER — épique 8, devenu un SOMMAIRE.
@@ -24,7 +25,33 @@ import { formaterEuros } from '../db/depot'
  *
  * Rien ici ne relance. Pas d'échéance, pas de compteur à rebours, pas de
  * pastille rouge : ce qui attend attend, c'est précisément son intérêt (FR-48).
+ *
+ * ⚠ ET CHAQUE ENTRÉE PORTE SON TRACÉ — récit 20.3, retour de Julian du 25 août :
+ * « une clé à molette pour la maintenance, une courbe ou une cartographie moteur
+ * pour les améliorations ». C'étaient trois boutons de texte qu'il fallait LIRE
+ * pour distinguer.
+ *
+ * ⚠ MAIS LE MUR DE FR-46 NE BOUGE PAS D'UN MILLIMÈTRE, et c'est la seule chose
+ * qui compte ici. L'icône est un REPÈRE, pas un regroupement : les trois listes
+ * restent trois listes, aucun écran n'en assemble deux, et la clé ne couvre que
+ * l'entretien. Si « plaquettes en fin de vie » s'affichait un jour à côté de
+ * « sticker décollé », l'élément de sécurité hériterait du caractère
+ * repoussable du cosmétique — et une icône commune serait la première marche.
+ *
+ * ⚠ ET LA COULEUR N'EST JAMAIS SEULE À PORTER LE SENS — UX-DR8. Le liseré de
+ * 3 px existait déjà ; le tracé et le mot restent tous les deux à côté de lui.
+ * Un pilote qui ne distingue pas le liseré lit le mot, et voit la forme.
  */
+/** Le tracé de chaque catégorie. Il est DÉRIVÉ des catégories elles-mêmes —
+ *  `Record<Categorie, Nom>` — donc une quatrième catégorie ne compile pas tant
+ *  qu'on ne lui a pas choisi de forme. Une table écrite à la main à côté prend
+ *  du retard à la première addition, et se tait en le prenant. */
+const TRACE: Record<Categorie, Nom> = {
+  entretien: 'cle',
+  amelioration: 'courbe',
+  reparation_non_vitale: 'caisse',
+}
+
 export function Atelier({ db, machineId, onOuvrir }: {
   db: PowerSyncDatabase; machineId: string; onOuvrir: (c: Categorie) => void
 }) {
@@ -56,6 +83,10 @@ function Apercu({ db, machineId, categorie, onOuvrir }: {
 
   return (
     <button className={`bloc rang atelier atelier-tete ${categorie}`} onClick={onOuvrir}>
+      {/* Le tracé D'ABORD, puis le mot. L'un se reconnaît de loin, l'autre
+          fait foi : `aria-hidden` sur l'icône, parce que le libellé qui suit dit
+          déjà la même chose et qu'un lecteur d'écran l'annoncerait deux fois. */}
+      <Icone nom={TRACE[categorie]} taille={22} className="icone-atelier" />
       {/* ⚠ CHAQUE CATÉGORIE PORTE SA DÉFINITION. « Je n'ai pas compris, pas
           clair ce que fait ce bouton » — et le défaut n'était pas le mot mais
           l'absence de définition : trois titres nus obligent à deviner, et ce
