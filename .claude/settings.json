@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v graft >/dev/null 2>&1 || npm install -g @nanonets/graft --silent 2>/dev/null || true; node .claude/helpers/graft-hooks.cjs SessionStart",
+            "timeout": 60,
+            "statusMessage": "Préparation du graphe graft…"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node .claude/helpers/graft-hooks.cjs UserPromptSubmit" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "node .claude/helpers/graft-hooks.cjs PostToolUse", "async": true }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node .claude/helpers/graft-hooks.cjs Stop", "async": true }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node .claude/helpers/graft-statusline.cjs"
+  }
+}
