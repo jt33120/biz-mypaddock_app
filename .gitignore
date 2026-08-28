@@ -39,3 +39,6 @@ banc-rendu/sorties/
 # 2,3 Mo qui se regénèrent en trois secondes n'ont rien à faire dans l'histoire
 # du dépôt.
 banc-rendu/.fixtures/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
