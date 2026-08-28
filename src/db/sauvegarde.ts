@@ -49,7 +49,7 @@ export type Resultat = { bilan: BilanEnvoi; refus: Refus[] }
 // qui part avant celle qu'elle référence est refusée en 23503, écartée
 // définitivement — quatre fois le même incident sur ce produit, et deux d'entre
 // eux découverts des jours plus tard.
-export const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'chute', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'intervention', 'photo', 'evenement_vise', 'horloge', 'checklist_ligne', 'document'] as const
+export const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'chute', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'intervention', 'photo', 'evenement_vise', 'horloge', 'checklist_ligne', 'document', 'video'] as const
 
 /**
  * CE QUE CHAQUE TABLE RÉFÉRENCE, parmi les tables du pilote — les clés
@@ -74,6 +74,10 @@ export const DEPENDANCES: Readonly<Record<string, readonly string[]>> = {
   horloge: ['machine', 'intervention'],
   checklist_ligne: ['roulage'],
   document: ['machine'],
+  // La vidéo référence les deux, et le tombstone n'en référence aucun — mais
+  // l'ordre se règle sur le cas plein : une ligne détachée ne peut pas violer
+  // une clé étrangère qu'elle ne porte plus.
+  video: ['roulage', 'chute'],
 }
 
 /**
@@ -128,6 +132,7 @@ export const NOM_TABLE: Readonly<Record<string, readonly [string, string]>> = {
   horloge: ["horloge d'usure", "horloges d'usure"],
   checklist_ligne: ['ligne de checklist', 'lignes de checklist'],
   document: ['document', 'documents'],
+  video: ['vidéo', 'vidéos'],
 }
 
 /** Le nom seul, accordé. Une table sans nom retombe sur le sien plutôt que de
@@ -210,6 +215,7 @@ export const DEFAUTS_SERVEUR: Readonly<Record<string, Readonly<Record<string, un
   intervention: { etat: 'faite' },             // écrite : src/db/usure.ts, src/db/atelier.ts
   mesure: { valeur: 0 },                       // écrite : src/db/mesures.ts:102-103
   photo: { etat: 'locale', genre: 'photo' },   // écrites : src/db/photos.ts:169-172
+  video: { etat: 'locale' },                   // écrite : src/db/video.ts, verserVideo
   roulage: { chrono_visible: 0, etat: 'usage', crash_statut: 'a_renseigner' },
   // Les trois valeurs sont écrites explicitement dans `depot.ts` et `chute.ts`.
 }

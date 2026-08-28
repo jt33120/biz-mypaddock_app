@@ -19,6 +19,7 @@ import { adopter, estAdopte, marquerPremiereSauvegardeDite, premiereSauvegardeDi
 import { supabaseConfigure } from './db/supabase'
 import { ouverture } from './db/mesures'
 import { surRetourDeReseau, televerserEnAttente } from './db/photos'
+import { televerserVideosEnAttente } from './db/video'
 import { Photos } from './ecrans/Photos'
 import { Icone } from './ecrans/Icones'
 import { useGlissement } from './ecrans/glissement'
@@ -291,6 +292,12 @@ export default function App() {
       // La reprise d'une suppression locale ne dépend pas d'un compte ; seul
       // l'envoi d'une nouvelle photo est court-circuité sans identité.
       void televerserEnAttente(db, identite?.id ?? null)
+      // ⚠ LA VIDÉO PASSE PAR LES MÊMES DEUX DÉCLENCHEURS, mais elle est la seule
+      // à REPRENDRE au lieu de recommencer : un clip coupé à 80 % sur la 4G du
+      // paddock repart de 80 % à la prochaine ouverture. C'est ce qui la rend
+      // durable — sans reprise, un fichier de cette taille ne finit jamais de
+      // monter et le carnet montrerait une pièce que le serveur n'a pas.
+      void televerserVideosEnAttente(db, identite?.id ?? null)
       if (identite) {
         // Les documents suivent le même chemin et les mêmes deux déclencheurs :
         // un manuel versé au paddock part au retour du réseau, pas avant.
