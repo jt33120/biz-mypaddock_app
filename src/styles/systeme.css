@@ -164,7 +164,7 @@ body {
    Un rouge qui sert à deux choses ne sert plus à rien.
 
    ⚠ ET LA COULEUR N'EST JAMAIS SEULE (UX-DR8). Deux signes la doublent PARTOUT,
-   sur les 17 gestes rouges du produit : le MOT dit ce qui part — retirer,
+   sur les 19 gestes rouges du produit : le MOT dit ce qui part — retirer,
    supprimer, effacer, oublier — et la FORME — filet plein sur tout le tour,
    texte de la même teinte — se distingue du secondaire même pour un œil qui ne
    sépare pas les rouges des gris. Retirer l'un des deux ramène le défaut que
@@ -172,9 +172,10 @@ body {
 
    ⚠ CE COMMENTAIRE AJOUTAIT UN TROISIÈME SIGNE, « la CONFIRMATION en deux temps
    reste entière », ET C'ÉTAIT FAUX POUR LA MOITIÉ D'ENTRE EUX. Les deux temps
-   existent pour 5 gestes — une journée de roulage et tout ce qu'elle emporte,
-   une chute, le compte entier, une photo de l'album et une photo de crash —
-   soit 10 boutons rouges sur 17, l'ouvrant et le confirmant. Les 7 autres partent au premier tap :
+   existent pour 6 gestes — une journée de roulage et tout ce qu'elle emporte,
+   une chute, le compte entier, une photo de l'album, une photo de crash et une
+   vidéo de crash —
+   soit 12 boutons rouges sur 19, l'ouvrant et le confirmant. Les 7 autres partent au premier tap :
    « Retirer ce que la sonde a écrit », et six « retirer » au bout d'une ligne
    de liste (une horloge, une pièce d'atelier, une pièce d'équipement, une ligne
    de chargement, une tâche d'avant d'y aller, une chose qu'on venait chercher).
@@ -187,7 +188,13 @@ body {
    SEULE, parce que la seule suppression de photo qui existait jusque-là
    emportait la journée entière.
 
-   Ces 17 se répartissent en 6 `.bouton.destructif` et 11 `.lien.destructif`, et
+   ⚠ ET LA VIDÉO DE CRASH SUIT LA PHOTO, POUR UNE RAISON PLUS FORTE — récit 23.10.
+   Une photo de crash ne se retape pas ; une vidéo de crash ne se retape ni ne se
+   refilme, et elle peut de surcroît être en cours de versement au moment où on
+   la retire. Sa confirmation dit donc, comme celle de la photo, que les deux
+   copies partent — maintenant ou au retour du réseau.
+
+   Ces 19 se répartissent en 6 `.bouton.destructif` et 13 `.lien.destructif`, et
    un essai unitaire recompte les trois nombres écrits ici. Un commentaire est la
    mémoire du défaut dans ce dépôt : celui-ci décrivait une garde qu'on croyait
    tenue et qui ne tenait qu'à moitié, et c'est pire qu'une garde absente, parce
@@ -827,10 +834,25 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 }
 .case-photo-crash > .note { align-self: center; justify-self: center; padding: 8px; }
 .case-photo-crash > .lien { min-height: 44px; }
+/* La vidéo n'est PAS une case de grille comme la photo : une vignette se lit à
+   112 px, un clip ne se regarde pas à cette taille. Elle occupe donc la largeur
+   disponible, et `max-width: 100%` la borne — sans lui, la largeur intrinsèque
+   d'une vidéo 720p déborde le cadre à 375 px et pousse toute la page. */
+.videos-crash { gap: 10px; }
+.case-video-crash {
+  min-width: 0; border: 1px solid var(--filet); background: rgba(8,12,28,.6);
+  display: grid; gap: 4px; padding-bottom: 4px;
+}
+.case-video-crash video {
+  width: 100%; max-width: 100%; height: auto; display: block; background: #000;
+}
+.case-video-crash > .note { padding: 8px; }
+.case-video-crash > .lien { min-height: 44px; }
 .confirmation-photo-crash { padding: 8px; }
 .confirmation-photo-crash .lien,
 .confirmation-photo-crash .bouton { min-height: 44px; }
-.ajout-photo-crash { cursor: pointer; display: inline-flex; align-items: center; min-height: 44px; }
+.ajout-photo-crash,
+.ajout-video-crash { cursor: pointer; display: inline-flex; align-items: center; min-height: 44px; }
 .ligne-roulage-resultats { margin-left: auto; gap: 12px; }
 .marqueur-crash {
   display: inline-flex; align-items: center; gap: 5px;
