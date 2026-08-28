@@ -3,6 +3,7 @@ import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
 import { CIRCUITS_EMBARQUES } from './corpus'
 import { supprimerPhotosEnAttente } from './photos'
+import { supprimerVideosEnAttente } from './video'
 import { A_EU_LIEU, aujourdhui, TOUTES_JOURNEES } from './vecu'
 import type { Poste } from './budget'
 import type { StatutCrash } from './chute'
@@ -365,6 +366,17 @@ export const supprimerRoulage = async (db: PowerSyncDatabase, roulageId: string)
            OR chute_id IN (SELECT id FROM chute WHERE roulage_id = ?)
            OR geste_id IN (SELECT id FROM geste WHERE roulage_id = ?)`,
       [roulageId, roulageId, roulageId])
+    // La vidéo suit exactement le même chemin, et il lui est plus nécessaire
+    // encore : son objet pèse cent fois une vignette. Un clip laissé au
+    // stockage parce que sa journée a disparu avant lui est un objet que plus
+    // aucune ligne ne désigne — donc que plus rien ne viendra jamais effacer,
+    // et qui continue pourtant de manger le quota du pilote.
+    await tx.execute(
+      `UPDATE video
+          SET etat = 'a_supprimer', roulage_id = NULL, chute_id = NULL
+        WHERE roulage_id = ?
+           OR chute_id IN (SELECT id FROM chute WHERE roulage_id = ?)`,
+      [roulageId, roulageId])
     await tx.execute(
       `DELETE FROM tour WHERE session_id IN (SELECT id FROM session WHERE roulage_id = ?)`,
       [roulageId])
@@ -384,6 +396,7 @@ export const supprimerRoulage = async (db: PowerSyncDatabase, roulageId: string)
   // La journée est déjà retirée : un échec Storage ou SQLite ne doit pas faire
   // croire le contraire. Le tombstone gardé ci-dessus sera repris au montage.
   try { await supprimerPhotosEnAttente(db) } catch { /* reprise différée */ }
+  try { await supprimerVideosEnAttente(db) } catch { /* reprise différée */ }
 }
 
 /**

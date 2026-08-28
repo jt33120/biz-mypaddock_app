@@ -30,6 +30,10 @@ import {
   consignerChute, consignerReparationDeChute, declarerAucunCrash, oublierChute,
 } from '../../src/db/chute'
 import {
+  extensionDe, nomLocalVideo, QUOTA_VIDEO_OCTETS, televerserVideosEnAttente, verserVideo,
+} from '../../src/db/video'
+import { cadre, capaciteVideo } from '../../src/video/comprimer'
+import {
   capaciteLocale, ecrireLocale, effacerLocale, eprouverLeCoffre, fermerLaConnexionDuCoffre,
   lireLocale, nomsBrutsDuCoffre, nomsDuCoffre, oublierLeMagasin, viderLeCoffre,
 } from '../../src/db/coffre'
@@ -1072,6 +1076,204 @@ const essais = [
       "l'album journée lit encore exclusivement le cache de l'appareil A")
   }),
 
+  /* ─── LA VIDÉO DURABLE — récit 23.10 ───────────────────────────────────────
+     Le lot 23 l'avait REPORTÉE, et son hypothèse disait exactement pourquoi :
+     sans versement reprenable, sans quota dit à voix haute, sans suppression ni
+     export ni lecture sur un second appareil, la pièce n'est pas durable — elle
+     est seulement affichée. Ces essais tiennent ces clauses-là, une par une.
+
+     ⚠ CELUI QUI COMPTE LE PLUS EST LE VERSEMENT COUPÉ. C'est la seule chose que
+     la photo n'a jamais eu à traiter — un aller-retour rate ou réussit — et
+     c'est la seule qui puisse, ici, produire une vidéo à moitié écrite que le
+     carnet déclare montée. */
+
+  doit('le quota vidéo se refuse en disant ses deux chiffres, sans rien écrire', async () => {
+    let ecrit = false
+    const db = {
+      get: async () => ({ total: QUOTA_VIDEO_OCTETS - 1024 }),
+      getOptional: async () => ({ roulage_id: 'r1' }),
+      execute: async () => { ecrit = true; return {} },
+    } as any
+    const r = await verserVideo(
+      db, { chuteId: 'c1' }, new Blob([new Uint8Array(4096)], { type: 'video/mp4' }))
+    vrai('refus' in r, 'une vidéo au-delà du quota est entrée dans le carnet')
+    const refus = (r as { refus: string }).refus
+    // Un quota qui dit seulement « plein » n'est pas explicite : le pilote doit
+    // pouvoir décider quoi retirer, donc savoir ce qu'il pèse et ce qu'il reste.
+    vrai(/pèse/.test(refus) && /reste/.test(refus),
+      'le refus ne dit ni le poids de la vidéo ni la place restante')
+    vrai(/Mo|Ko/.test(refus), 'le refus ne donne aucun chiffre lisible')
+    vrai(!ecrit, 'une vidéo refusée a quand même écrit sa ligne')
+  }),
+
+  doit('une vidéo de crash retrouve sa journée et garde les deux liens', async () => {
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    const db = {
+      get: async () => ({ total: 0 }),
+      getOptional: async () => ({ roulage_id: 'r-du-crash' }),
+      execute: async (sql: string, params: unknown[] = []) => {
+        ecrites.push({ sql, params }); return {}
+      },
+    } as any
+    const r = await verserVideo(
+      db, { chuteId: 'c1' }, new Blob([new Uint8Array(64)], { type: 'video/mp4' }))
+    vrai(!('refus' in r), 'une vidéo dans le quota a été refusée')
+    const v = r as {
+      id: string; roulage_id: string | null; chute_id: string | null; chemin_objet: string
+    }
+    // La même clause que la photo de crash : retirer le récit ne doit pas
+    // détruire la preuve, donc la journée porte la vidéo elle aussi.
+    egal(v.roulage_id, 'r-du-crash', 'la vidéo de crash ne retrouve pas sa journée')
+    egal(v.chute_id, 'c1', 'la vidéo a perdu son crash')
+    const insertion = ecrites.find((e) => /INSERT INTO video/.test(e.sql))
+    vrai(!!insertion, 'aucune ligne de vidéo n’est écrite')
+    vrai(/'locale'/.test(insertion!.sql), 'la vidéo naît dans un état inconnu')
+    await effacerLocale(nomLocalVideo(v))
+  }),
+
+  doit('un versement vidéo coupé garde son avancement et ne se dit jamais monté', async () => {
+    const v = {
+      id: 'video-coupee', roulage_id: 'r1', chute_id: 'c1',
+      chemin_objet: 'local/c1/video-coupee.mp4', octets: 8000,
+      duree_ms: 1000, largeur: 2, hauteur: 2, type_mime: 'video/mp4',
+      etat: 'locale' as const,
+    }
+    await ecrireLocale(nomLocalVideo(v), new Blob([new Uint8Array(8000)], { type: 'video/mp4' }))
+    const ecrites: string[] = []
+    const db = {
+      getAll: async (sql: string) => (/a_supprimer/.test(sql) ? [] : [v]),
+      getOptional: async () => v,
+      execute: async (sql: string) => { ecrites.push(sql); return {} },
+    } as any
+    // 3 000 octets sur 8 000 : le serveur en détient une partie, et c'est le
+    // cas NOMINAL d'une 4G de paddock, pas une erreur à signaler.
+    const montees = await televerserVideosEnAttente(db, 'pilote-1', {
+      peutTeleverser: () => true,
+      televerser: async () => 3000,
+      supprimer: async () => 'supprimee',
+    })
+    egal(montees, 0, 'un envoi coupé a été compté comme monté')
+    vrai(!ecrites.some((s) => /etat = 'montee'/.test(s)),
+      'une vidéo à moitié versée a été déclarée montée — le carnet montre une pièce que le serveur n’a pas')
+    await effacerLocale(nomLocalVideo(v))
+  }),
+
+  doit('un versement vidéo complet inscrit le chemin du pilote, jamais le chemin local', async () => {
+    const ligne = {
+      id: 'video-entiere', roulage_id: 'r1', chute_id: 'c1',
+      chemin_objet: 'local/c1/video-entiere.mp4', octets: 500,
+      duree_ms: 1000, largeur: 2, hauteur: 2, type_mime: 'video/mp4',
+      etat: 'locale' as string,
+    }
+    await ecrireLocale(nomLocalVideo(ligne), new Blob([new Uint8Array(500)], { type: 'video/mp4' }))
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    const db = {
+      getAll: async (sql: string) => (/a_supprimer/.test(sql) ? [] : [{ ...ligne }]),
+      getOptional: async (sql: string) =>
+        (/AND etat = 'locale'/.test(sql) && ligne.etat !== 'locale' ? null : { ...ligne }),
+      execute: async (sql: string, params: unknown[] = []) => {
+        ecrites.push({ sql, params })
+        if (/SET etat = 'montee'/.test(sql) && ligne.etat === 'locale') {
+          ligne.etat = 'montee'; ligne.chemin_objet = String(params[0])
+        }
+        return {}
+      },
+    } as any
+    const montees = await televerserVideosEnAttente(db, 'pilote-1', {
+      peutTeleverser: () => true,
+      televerser: async () => 500,
+      supprimer: async () => 'supprimee',
+    })
+    egal(montees, 1, 'un envoi complet n’est pas compté')
+    const majeur = ecrites.find((e) => /SET etat = 'montee'/.test(e.sql))
+    vrai(!!majeur, 'la vidéo montée ne change pas d’état')
+    // ⚠ LE PREMIER SEGMENT EST CE QUE LA POLITIQUE DU BUCKET COMPARE À auth.uid().
+    // Un chemin resté en `local/` serait refusé en 403 au premier accès.
+    egal(majeur!.params[0], 'pilote-1/c1/video-entiere.mp4',
+      'le chemin distant ne commence pas par le pilote')
+    vrai(/WHERE id = \? AND etat = 'locale'/.test(majeur!.sql),
+      'un retrait gagné pendant l’envoi pourrait être ressuscité en montée')
+    await effacerLocale('video-entiere.mp4')
+  }),
+
+  doit('une vidéo retirée pendant son envoi est effacée du stockage, jamais ressuscitée', async () => {
+    const ligne = {
+      id: 'video-retiree', roulage_id: 'r1', chute_id: 'c1',
+      chemin_objet: 'local/c1/video-retiree.mp4', octets: 300,
+      duree_ms: 1000, largeur: 2, hauteur: 2, type_mime: 'video/mp4',
+      etat: 'locale' as string,
+    }
+    await ecrireLocale(nomLocalVideo(ligne), new Blob([new Uint8Array(300)], { type: 'video/mp4' }))
+    const supprimes: string[] = []
+    const db = {
+      getAll: async (sql: string) => (/a_supprimer/.test(sql) ? [] : [{ ...ligne }]),
+      // Le retrait gagne la course PENDANT l'HTTP : la relecture d'après ne voit
+      // plus qu'un tombstone.
+      getOptional: async (sql: string) =>
+        (/AND etat = 'locale'/.test(sql) ? { ...ligne } : { ...ligne, etat: 'a_supprimer' }),
+      execute: async () => ({}),
+    } as any
+    const montees = await televerserVideosEnAttente(db, 'pilote-1', {
+      peutTeleverser: () => true,
+      televerser: async () => 300,
+      supprimer: async (chemin: string) => { supprimes.push(chemin); return 'supprimee' },
+    })
+    egal(montees, 0, 'une vidéo retirée a été comptée comme montée')
+    vrai(supprimes.includes('pilote-1/c1/video-retiree.mp4'),
+      'l’objet tout juste écrit reste au stockage alors que le carnet l’a retiré')
+    await effacerLocale('video-retiree.mp4')
+  }),
+
+  doit('l’extension suit le type réel, pas le nom rendu par l’iPhone', () => {
+    // Un iPhone rend souvent un fichier SANS nom exploitable ; quand il en rend
+    // un, c'est `.MOV`. Le type MIME fait donc autorité, et le repli n'invente
+    // pas une extension à partir de n'importe quelle chaîne.
+    egal(extensionDe(new Blob([], { type: 'video/quicktime' })), 'mov')
+    egal(extensionDe(new Blob([], { type: 'video/mp4' })), 'mp4')
+    egal(extensionDe(new Blob([], { type: 'video/webm;codecs=vp9' })), 'webm')
+    egal(extensionDe(new Blob([], { type: '' })), 'mp4')
+  }),
+
+  doit('le cadre borne le côté long, garde des dimensions paires et n’agrandit jamais', () => {
+    const paysage = cadre(1920, 1080)
+    egal(paysage.largeur, 720, 'une vidéo paysage ne descend pas à 720 sur son côté long')
+    vrai(paysage.hauteur % 2 === 0, 'une hauteur impaire est refusée par les encodeurs')
+    vrai(Math.abs(paysage.hauteur - 405) <= 2, 'les proportions ne sont pas gardées')
+    // Le côté long d'une vidéo PORTRAIT est sa hauteur : c'est le cadrage que
+    // rend un téléphone tenu à la main, donc le cas courant au paddock.
+    egal(cadre(1080, 1920).hauteur, 720, 'une vidéo portrait n’est pas bornée sur son côté long')
+    // Agrandir coûterait des octets sans ajouter une seule information.
+    egal(cadre(320, 240), { largeur: 320, hauteur: 240 }, 'une petite vidéo a été agrandie')
+  }),
+
+  doit('la capacité vidéo se prononce toujours, et dit pourquoi', () => {
+    const c = capaciteVideo()
+    vrai(typeof c.comprime === 'boolean', 'la capacité ne tranche pas')
+    vrai(c.raison.length > 10, 'la capacité ne dit pas ce qu’elle a décidé (UX-DR8)')
+    // Quand elle ne comprime pas, elle ne doit pas prétendre avoir un format :
+    // c'est ce couple-là qui décide si l'original part tel quel.
+    vrai(c.comprime === (c.format !== null),
+      'la capacité annonce une compression sans format, ou un format sans compression')
+  }),
+
+  doit('l’emport garde les liens de la vidéo sans jamais encoder ses octets', () => {
+    const source = sansCommentaires(
+      Object.entries(SOURCES).find(([nom]) => nom.endsWith('/db/emporter.ts'))?.[1] ?? '')
+    // ⚠ 500 Mo de quota vidéo en base64 feraient un JSON de 700 Mo qui échoue au
+    // moment précis où le pilote croit sauver son carnet.
+    vrai(/photos_jointes/.test(source), 'les photos ne sont plus jointes')
+    const jointes = source.slice(source.indexOf('const jointes'), source.indexOf('contenu.photos_jointes'))
+    vrai(!/video/.test(jointes), 'les octets d’une vidéo sont encodés dans le fichier d’emport')
+    // Mais un manque tu : le récit 23.7 dit qu'un emport qui ment sur ses trous
+    // est pire qu'un emport incomplet.
+    vrai(/donnees\.video/.test(source) && /manques\.push/.test(source),
+      'l’emport ne dit pas que les vidéos n’y sont pas')
+    // Et le tombstone reste dehors, sinon la restauration ressusciterait une
+    // vidéo dont le retrait est déjà demandé.
+    vrai(/table === 'photo' \|\| table === 'video'/.test(source),
+      'un tombstone de vidéo part dans l’emport avec son chemin')
+  }),
+
   doit('une suppression non persistée garde les octets locaux pour réessayer', async () => {
     const photo = {
       id: 'photo-rejet', roulage_id: 'r1', machine_id: null,
@@ -1393,8 +1595,11 @@ const essais = [
       Object.entries(SOURCES).find(([nom]) => nom.endsWith('/db/emporter.ts'))?.[1] ?? '')
     vrai(/FROM photo WHERE etat != 'a_supprimer'/.test(emport),
       "l'emport immédiat remet dans le zip une photo retirée hors ligne")
+    // La règle vaut pour les DEUX tables qui portent un tombstone depuis le
+    // récit 23.10 : `photo` et `video` ont le même `etat` et le même danger —
+    // un chemin cloud révélé, et une pièce ressuscitée à la restauration.
     vrai((emport.match(/filtreEmport\(t\)/g) ?? []).length >= 2
-      && /table === 'photo' \? ` WHERE etat != 'a_supprimer'`/.test(emport),
+      && /table === 'photo' \|\| table === 'video' \? ` WHERE etat != 'a_supprimer'`/.test(emport),
     "le JSON ou la pesée compte encore le tombstone et révèle son chemin cloud")
   }),
 

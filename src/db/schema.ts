@@ -263,6 +263,31 @@ const photo = new Table({
   genre: column.text,
 })
 
+// LA VIDÉO — récit 23.10. ⚠ Mêmes métadonnées seules que la photo, et pour une
+// raison plus forte encore : un clip pèse cent fois une vignette, et la file
+// d'envoi n'a pas à le transporter. Les octets partent en HTTP direct vers le
+// bucket privé `videos`, par morceaux et de façon REPRENABLE — c'est la clause
+// qui a fait reporter cette pièce hors du lot 23.
+const video = new Table({
+  /** Le jour porte la vidéo même quand le crash la porte aussi : retirer le
+   *  récit du crash ne détruit pas la preuve, exactement comme pour la photo. */
+  roulage_id: column.text,
+  chute_id: column.text,
+  chemin_objet: column.text,
+  /** Le poids réel APRÈS compression, connu dès l'écriture locale. La reprise
+   *  compare cette cible à l'offset que le serveur lui rend ; sans elle, un
+   *  versement repris ne sait pas s'il a fini. */
+  octets: column.integer,
+  duree_ms: column.integer,
+  largeur: column.integer,
+  hauteur: column.integer,
+  type_mime: column.text,
+  /** 'locale' | 'montee' | 'a_supprimer'. Le tombstone est synchronisé : la
+   *  vidéo quitte les lectures tout de suite, son chemin survit jusqu'à ce que
+   *  le stockage confirme le retrait. */
+  etat: column.text,
+})
+
 // Le GESTE — purement déclaratif. Aucune reconnaissance d'image, jamais (FR-28).
 const geste = new Table({
   roulage_id: column.text,
@@ -457,6 +482,7 @@ export const AppSchema = new Schema({
   horloge,
   checklist_ligne,
   photo,
+  video,
   geste,
   plan_si_alors,
   document: document_,
