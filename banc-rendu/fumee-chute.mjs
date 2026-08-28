@@ -81,7 +81,9 @@ await page.waitForSelector('.chute:has-text("Virage 3")', { timeout: 15_000 })
 verifier('   le récit reste mot pour mot',
   (await page.textContent('.chute .texte.faible')).trim() === RECIT)
 
-// Photo liée à la chute, sans vidéo ni média seulement local inventé.
+// Photo liée à la chute. La VIDÉO du crash a son propre banc depuis le récit
+// 23.10 — `fumee-video.mjs` — parce que son versement reprenable, son quota et
+// sa compression n'ont rien de commun avec un cliché.
 for (const largeur of [375, 390, 430]) {
   await page.setViewportSize({ width: largeur, height: 844 })
   const cible = await page.locator('button.ajout-photo-crash').boundingBox()

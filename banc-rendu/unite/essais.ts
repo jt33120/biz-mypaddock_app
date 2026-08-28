@@ -2429,12 +2429,14 @@ const essais = [
     // Un sortant se reconnaît à ce qu'il FAIT — refermer la confirmation — et
     // pas seulement à son mot : « Garder » sert aussi à enregistrer une chute,
     // et ce bouton-là n'a rien d'un sortant.
-    // Ils sont CINQ : la journée, la chute, le compte, la photo de l'album et
-    // la photo liée au crash — un cliché du 12 septembre ne se retape pas.
+    // Ils sont SIX : la journée, la chute, le compte, la photo de l'album, la
+    // photo liée au crash — un cliché du 12 septembre ne se retape pas — et
+    // depuis le récit 23.10 la vidéo du crash, qui ne se refilme pas du tout.
     const sortants = Object.values(ECRANS).flatMap(boutonsDe)
-      .filter((b) => b.libelles.some((l) => /^Garder(?: mon compte| le crash| la photo)?$/.test(l))
+      .filter((b) => b.libelles.some(
+        (l) => /^Garder(?: mon compte| le crash| la photo| la vidéo)?$/.test(l))
         && /set(?:Confirme|Ouvert)\(false\)|setARetirer\(null\)/.test(b.gestionnaire))
-    vrai(sortants.length === 5, `${sortants.length} sortants de confirmation trouvés`)
+    vrai(sortants.length === 6, `${sortants.length} sortants de confirmation trouvés`)
     for (const s of sortants)
       egal(s.className, 'lien', `« ${s.libelles.join(' / ')} » ne sort pas en lien`)
   }),
