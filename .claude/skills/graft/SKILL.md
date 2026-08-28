@@ -17,15 +17,6 @@ Every command below is `$0`, needs no API key, and returns in under a second.
 There are six of them. **Pick the one that fits the task, run it, act on the
 answer; don't chain tools hoping for more. Most tasks need one call.**
 
-**Before your first graft command this session**, check it's on PATH —
-`command -v graft` — and if not, run `npm install -g @nanonets/graft` once
-(a real public npm package, ~5s, no API key). A SessionStart hook normally
-does this automatically, but some cloud session types skip project hooks
-(no error, `graft` is just absent), so do this check yourself rather than
-assuming the hook ran. If the install itself fails (offline, registry
-blocked), stop trying and fall back to Grep/Glob/Read for this session —
-don't retry on every subsequent task.
-
 ## The tools
 
 ### 1 · `graft ask "<question>" --source`: locate + understand (the default)

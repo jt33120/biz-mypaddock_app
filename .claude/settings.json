@@ -5,9 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v graft >/dev/null 2>&1 || npm install -g @nanonets/graft --silent 2>/dev/null || true; node .claude/helpers/graft-hooks.cjs SessionStart",
-            "timeout": 60,
-            "statusMessage": "Préparation du graphe graft…"
+            "command": "command -v graft >/dev/null 2>&1 || npm install -g @nanonets/graft --silent 2>/dev/null || true; node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/graft-hooks.cjs\" session-start",
+            "timeout": 8000
           }
         ]
       }
@@ -15,22 +14,44 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "node .claude/helpers/graft-hooks.cjs UserPromptSubmit" }
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/graft-hooks.cjs\" prompt",
+            "timeout": 15000
+          }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "node .claude/helpers/graft-hooks.cjs PostToolUse", "async": true }
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/graft-hooks.cjs\" post-edit",
+            "timeout": 10000
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|mcp__graft__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/graft-hooks.cjs\" tool-savings",
+            "timeout": 8000
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node .claude/helpers/graft-hooks.cjs Stop", "async": true }
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/graft-hooks.cjs\" stop",
+            "timeout": 8000
+          }
         ]
       }
     ]
@@ -38,5 +59,20 @@
   "statusLine": {
     "type": "command",
     "command": "node .claude/helpers/graft-statusline.cjs"
+  },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/graft-statusline.cjs\""
+  },
+  "footerLinksRegexes": [
+    "graft/[\\w./-]+\\.md"
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(graft:*)",
+      "Bash(npx graft:*)",
+      "Bash(graft-dev:*)",
+      "Bash(node dist/cli.js:*)"
+    ]
   }
 }
