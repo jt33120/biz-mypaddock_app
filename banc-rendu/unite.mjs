@@ -19,8 +19,14 @@ const attendre = async () => {
 }
 if (!await attendre()) { console.error('vite n\'a pas démarré'); mourir(1) }
 
+// Le Chrome du poste de travail reste le défaut. `CHROME` n'existe que pour les
+// machines qui n'ont pas d'`/Applications` — un conteneur d'intégration, une
+// revue à distance : sans elle, la seule façon de faire tourner ces essais
+// ailleurs est de modifier ce fichier, et une modification locale finit par
+// partir dans un commit.
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage()
 const erreurs = []
