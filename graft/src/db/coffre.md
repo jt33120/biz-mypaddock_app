@@ -1,0 +1,31 @@
+# src/db/coffre.ts
+
+- Magasin · type · L56-L56 — type Magasin = 'opfs' | 'indexeddb'
+- Capacite · type · L58-L70 — type Capacite = { /** Celui dans lequel on écrit. Le seul des deux qui soit un choix. */ magasin: Magasin /** `navigator.storage.getDirectory()` répond. Vrai depuis Safari 15.2. */ opfs: boolean /** L'API manquante de tout Safari antérieur à la 26. */ createWritable: boolean /** Un octet réellement écrit puis relu. C'est la seule preuve qui compte : une * méthode présente peut échouer (mode privé, quota nul, WebView bridée). */ ecritureEprouvee: boolean /** Ce qui se dit à l'écran. La couleur ne suffit jamais (UX-DR8). */ raison: string }
+- estUnTemoin · function · L92-L92 — estUnTemoin = (nom: string)
+- dossierPhotos · function · L94-L97 — dossierPhotos = async ()
+- replier · function · L113-L123 — replier = async ( opfs: boolean, createWritable: boolean, pourquoi: string, ): Promise<Capacite>
+- eprouverLeCoffre · function · L133-L164 — eprouverLeCoffre = async (): Promise<Capacite>
+- capaciteLocale · function · L170-L170 — capaciteLocale = (): Promise<Capacite>
+- oublierLeMagasin · function · L177-L177 — oublierLeMagasin = ()
+- retrograder · function · L183-L186 — retrograder = async (pourquoi: string)
+- Range · type · L193-L193 — type Range = { blob: Blob; type: string; modifie: number }
+- ouvrirCoffre · function · L214-L238 — ouvrirCoffre = (): Promise<IDBDatabase>
+- oublier · function · L219-L219 — oublier = ()
+- unePasse · function · L247-L263 — unePasse = async <T>( mode: IDBTransactionMode, agir: (r: IDBObjectStore) => IDBRequest<T>, ): Promise<T>
+- enRayon · function · L274-L284 — enRayon = async <T>( mode: IDBTransactionMode, agir: (r: IDBObjectStore) => IDBRequest<T>, ): Promise<T>
+- fermerLaConnexionDuCoffre · function · L298-L302 — fermerLaConnexionDuCoffre = async (): Promise<IDBDatabase>
+- ecrireIdb · function · L304-L307 — ecrireIdb = async (nom: string, blob: Blob)
+- lireIdb · function · L309-L317 — lireIdb = async (nom: string): Promise<File | null>
+- effacerIdb · function · L319-L321 — effacerIdb = async (nom: string)
+- eprouverIdb · function · L332-L344 — eprouverIdb = async (): Promise<boolean>
+- ecrireOpfs · function · L348-L354 — ecrireOpfs = async (nom: string, blob: Blob)
+- lireOpfs · function · L359-L364 — lireOpfs = async (nom: string): Promise<File | null>
+- effacerOpfs · function · L366-L368 — effacerOpfs = async (nom: string)
+- ecrireLocale · function · L382-L394 — ecrireLocale = async (nom: string, blob: Blob)
+- lireLocale · function · L406-L411 — lireLocale = async (nom: string): Promise<File | null>
+- effacerLocale · function · L416-L419 — effacerLocale = async (nom: string)
+- inventaireDuCoffre · function · L426-L429 — inventaireDuCoffre = async (): Promise<{ opfs: number; indexeddb: number }>
+- nomsDuCoffre · function · L434-L448 — nomsDuCoffre = async (): Promise<{ opfs: string[]; indexeddb: string[] }>
+- nomsBrutsDuCoffre · function · L463-L474 — nomsBrutsDuCoffre = async (): Promise<{ opfs: string[]; indexeddb: string[] }>
+- viderLeCoffre · function · L496-L519 — viderLeCoffre = async (): Promise<number>

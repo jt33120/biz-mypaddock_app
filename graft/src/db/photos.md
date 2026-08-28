@@ -1,0 +1,38 @@
+# src/db/photos.ts
+
+- dimensions · function · L38-L55 — dimensions = async (blob: Blob): Promise<{ w: number; h: number } | null>
+- u16 · function · L40-L40 — u16 = (i: number)
+- u32 · function · L41-L41 — u32 = (i: number)
+- Reduite · type · L57-L57 — type Reduite = { blob: Blob; largeur: number; hauteur: number; extension: string }
+- reduire · function · L67-L87 — reduire = async (fichier: Blob, cote = COTE_LONG): Promise<Reduite>
+- Genre · type · L111-L111 — type Genre = 'photo' | 'facture'
+- Photo · type · L113-L131 — type Photo = { id: string /** Au moins un porteur est renseigné. Une photo de crash garde aussi son * roulage : retirer le récit du crash ne doit ni détruire la preuve, ni la * laisser sans porteur côté serveur. */ roulage_id: string | null machine_id: string | null intervention_id: string | null chute_id: string | null geste_id: string | null chemin_objet: string largeur: number | null hauteur: number | null /** `a_supprimer` est un tombstone synchronisé : la photo disparaît des * lectures tout de suite, mais son chemin reste disponible tant que Storage * n'a pas confirmé le retrait. */ etat: 'locale' | 'montee' | 'a_supprimer' genre: Genre }
+- nomLocal · function · L135-L136 — nomLocal = (p: Pick<Photo, 'id' | 'chemin_objet'>)
+- Porteur · type · L142-L146 — type Porteur = | { roulageId: string; machineId?: null; interventionId?: null; chuteId?: null } | { machineId: string; roulageId?: null; interventionId?: null; chuteId?: null } | { interventionId: string; roulageId?: null; machineId?: null; chuteId?: null } | { chuteId: string; roulageId?: null; machineId?: null; interventionId?: null }
+- verserPhoto · function · L148-L186 — verserPhoto = async ( db: PowerSyncDatabase, porteur: Porteur, fichier: Blob, genre: Genre = 'photo', ): Promise<Photo>
+- piecesDeLIntervention · function · L190-L195 — piecesDeLIntervention = (db: PowerSyncDatabase, interventionId: string)
+- nomLocalMachine · function · L207-L208 — nomLocalMachine = (machineId: string, extension: string)
+- nomLocalEquipement · function · L219-L220 — nomLocalEquipement = (id: string, extension: string)
+- verserPhotoEquipement · function · L222-L232 — verserPhotoEquipement = async ( db: PowerSyncDatabase, equipementId: string, fichier: Blob, ): Promise<string>
+- photoEquipement · function · L234-L238 — photoEquipement = async (chemin: string | null): Promise<File | null>
+- verserPhotoMachine · function · L240-L253 — verserPhotoMachine = async ( db: PowerSyncDatabase, machineId: string, fichier: Blob, ): Promise<string>
+- photoMachine · function · L258-L262 — photoMachine = async (chemin: string | null): Promise<File | null>
+- photosDuRoulage · function · L277-L283 — photosDuRoulage = (db: PowerSyncDatabase, roulageId: string)
+- photosDeLaChute · function · L287-L293 — photosDeLaChute = (db: PowerSyncDatabase, chuteId: string)
+- lirePhoto · function · L298-L312 — lirePhoto = async (p: Photo): Promise<File | null>
+- Echec · type · L336-L336 — type Echec = { nom: string; motif: string }
+- verserEnSerie · function · L341-L365 — verserEnSerie = async <F extends { name?: string }, P>( fichiers: readonly F[], verser: (fichier: F) => Promise<P>, surChacune?: (photo: P) => void | Promise<void>, surAffichageEnRetard?: (photo: P) => void | Promise<void>, ): Promise<Echec[]>
+- verserPlusieurs · function · L367-L384 — verserPlusieurs = async ( db: PowerSyncDatabase, porteur: Porteur, fichiers: readonly File[], /** Appelé APRÈS chaque versement réussi, pour que l'écran se remplisse au fur * et à mesure. Une file qui ne rend rien avant la fin ressemble à une file * bloquée, et on la retape. */ surChacune?: (photo: Photo) => void | Promise<void>, /** Signal distinct : la photo est enregistrée, seul l'affichage doit être * rechargé. Il ne rejoint jamais `Echec[]`. */ surAffichageEnRetard?: (photo: Photo) => void | Promise<void>, ): Promise<Echec[]>
+- ResultatSuppressionPhoto · type · L402-L412 — type ResultatSuppressionPhoto = | { statut: 'introuvable'; distante: 'sans_objet' } | { statut: 'terminee'; distante: 'sans_objet' | 'supprimee' } | { statut: 'en_attente' distante: 'sans_objet' | 'en_attente' | 'supprimee' /** `base_locale` = la demande elle-même n'est pas persistée, la photo * reste visible. `finalisation_locale` = tombstone persisté et masqué, * mais sa ligne ou son cache doit encore être nettoyé. */ motif: 'base_locale' | 'finalisation_locale' | 'hors_ligne' | 'stockage' }
+- estUnObjetDistant · function · L414-L415 — estUnObjetDistant = (p: Pick<Photo, 'chemin_objet'>)
+- IssueSuppressionObjet · type · L417-L417 — type IssueSuppressionObjet = 'supprimee' | 'hors_ligne' | 'stockage'
+- OperationsStockagePhoto · type · L419-L423 — type OperationsStockagePhoto = { peutTeleverser: () => boolean televerser: (chemin: string, fichier: Blob) => Promise<boolean> supprimer: (chemin: string) => Promise<IssueSuppressionObjet> }
+- finaliserSuppressionPhoto · function · L450-L472 — finaliserSuppressionPhoto = async ( db: PowerSyncDatabase, p: Photo, supprimerObjet: OperationsStockagePhoto['supprimer'] = STOCKAGE_PHOTO.supprimer, ): Promise<ResultatSuppressionPhoto>
+- oublierPhoto · function · L474-L498 — oublierPhoto = async ( db: PowerSyncDatabase, photoId: string, ): Promise<ResultatSuppressionPhoto>
+- supprimerPhotosEnAttente · function · L502-L517 — supprimerPhotosEnAttente = async ( db: PowerSyncDatabase, supprimerObjet: OperationsStockagePhoto['supprimer'] = STOCKAGE_PHOTO.supprimer, ): Promise<{ terminees: number; enAttente: number }>
+- envoiCloudActif · function · L565-L567 — envoiCloudActif = (): boolean
+- poserEnvoiCloud · function · L569-L571 — poserEnvoiCloud = (actif: boolean): void
+- conserverSuppressionDistante · function · L581-L599 — conserverSuppressionDistante = async ( db: PowerSyncDatabase, p: Photo, chemin: string, ): Promise<boolean>
+- televerserEnAttente · function · L608-L695 — televerserEnAttente = async ( db: PowerSyncDatabase, piloteId: string | null, stockage: OperationsStockagePhoto = STOCKAGE_PHOTO, ): Promise<number>
+- surRetourDeReseau · function · L698-L710 — surRetourDeReseau = (relancer: () => void): (() => void)
+- visible · function · L699-L699 — visible = ()

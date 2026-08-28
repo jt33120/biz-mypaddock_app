@@ -20,6 +20,11 @@ dist/
 .vercel
 .railway
 
+# graft/.cache/ contient le texte brut des prompts (session cache) et des
+# artefacts régénérables ; graft/.graph/ se reconstruit avec `graft build`.
+graft/.cache/
+graft/.graph/
+
 # ── Trois codebases MyPaddock anterieures, clonees comme depots imbriques ──
 # Reference uniquement. Condition 5 de l'audit de viabilite : secrets
 # historiques renouveles, aucun ancien extracteur reactive.
@@ -34,4 +39,3 @@ banc-rendu/sorties/
 # 2,3 Mo qui se regénèrent en trois secondes n'ont rien à faire dans l'histoire
 # du dépôt.
 banc-rendu/.fixtures/
-

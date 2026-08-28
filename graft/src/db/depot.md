@@ -1,0 +1,41 @@
+# src/db/depot.ts
+
+- Roulage · type · L12-L23 — type Roulage = { id: string circuit_nom: string date_jour: string groupe_nom: string | null groupe_rang: number | null groupe_total: number | null machine_id: string | null /** Une qualification explicite : l'absence de chute enregistrée ne vaut * jamais « aucun crash » tant que le pilote ne l'a pas déclaré. */ crash_statut: StatutCrash }
+- Machine · type · L25-L39 — type Machine = { id: string; marque: string; modele: string; annee: number | null /** Ce que la moto a coûté à entrer au garage. ⚠ PAS une dépense de saison : * un achat conservé cinq ans écraserait le budget de la première année et * disparaîtrait des quatre suivantes. C'est une donnée d'identité. */ prix_achat_centimes: number | null /** Un MOIS, `AAAA-MM`. */ achetee_le: string | null /** Portrait pixel en data URI. `null` est un état valide : le garage montre alors une * silhouette. AD-2 fait de la machine une racine, pas un objet conditionnel à un média. */ sprite: string | null /** La photo RÉELLE, indépendante du sprite — c'est elle qui reprend la scène * quand un portrait de jeu est refusé ou retiré (récit 3bis.3). */ photo_chemin: string | null }
+- formaterChrono · function · L42-L47 — formaterChrono = (ms: number): string
+- formaterEcart · function · L51-L57 — formaterEcart = (ms: number): string
+- creerMachine · function · L59-L73 — creerMachine = async ( db: PowerSyncDatabase, m: { marque: string; modele: string; annee: number | null; sprite: string | null prixAchatCentimes?: number | null; acheteeLe?: string | null }, )
+- listerMachines · function · L75-L79 — listerMachines = (db: PowerSyncDatabase)
+- poserSprite · function · L83-L84 — poserSprite = (db: PowerSyncDatabase, machineId: string, sprite: string | null)
+- coutMachine · function · L101-L111 — coutMachine = async (db: PowerSyncDatabase, machineId: string)
+- modifierMachine · function · L117-L132 — modifierMachine = async ( db: PowerSyncDatabase, machineId: string, m: { marque: string; modele: string; annee: number | null prixAchatCentimes?: number | null; acheteeLe?: string | null }, )
+- BilanMachine · type · L134-L148 — type BilanMachine = { roulages: number /** ⚠ LE MEILLEUR TOUR VOYAGE AVEC SON CIRCUIT, et le type l'y oblige. * * « Meilleur tour : préciser le circuit, ça n'a pas de sens sinon au global * comme ça » — Julian, et il a raison au sens fort : un chrono sans circuit * n'est pas une information imprécise, c'est une information FAUSSE. 1'38 à * Pau-Arnos et 1'38 à Nogaro ne se comparent pas, et le garage les mettait * dans la même case. Les deux champs sont donc un seul objet, comme le coût * au tour et son budget : on ne peut pas déstructurer la moitié du couple. */ meilleur: { ms: number; circuit: string } | null /** Le circuit le plus roulé PAR CETTE MACHINE. `null` tant qu'aucun roulage * ne la désigne — pas « — », pas zéro : l'absence est une absence. */ favori: { nom: string; roulages: number } | null }
+- bilanMachine · function · L152-L201 — bilanMachine = async ( db: PowerSyncDatabase, machineId: string, jour = aujourdhui(), ): Promise<BilanMachine>
+- aplati · function · L210-L212 — aplati = (s: string)
+- creerRoulage · function · L217-L269 — creerRoulage = async ( db: PowerSyncDatabase, r: { circuit: string; date: string; groupeNom: string | null; rang: number | null; total: number | null; machineId: string | null }, )
+- ContenuDuRoulage · type · L288-L291 — type ContenuDuRoulage = { sessions: number; photos: number; gestes: number depenses: number; depenses_centimes: number; checklist: number; chutes: number }
+- listerRoulages · function · L293-L318 — listerRoulages = (db: PowerSyncDatabase)
+- classerRoulages · function · L322-L333 — classerRoulages = <T extends { id: string; date_jour: string }>( liste: readonly T[], jour: string = aujourdhui(), )
+- comparerAsc · function · L325-L326 — comparerAsc = (a: T, b: T)
+- comparerDesc · function · L327-L327 — comparerDesc = (a: T, b: T)
+- supprimerRoulage · function · L356-L387 — supprimerRoulage = async (db: PowerSyncDatabase, roulageId: string)
+- modifierRoulage · function · L416-L438 — modifierRoulage = async ( db: PowerSyncDatabase, id: string, r: { circuit: string; date: string; groupeNom: string | null; rang: number | null total: number | null; machineId: string | null }, ): Promise<void>
+- ajouterSession · function · L442-L455 — ajouterSession = async (db: PowerSyncDatabase, roulageId: string, tempsMs: number)
+- bilanRoulage · function · L459-L514 — bilanRoulage = async (db: PowerSyncDatabase, roulageId: string)
+- Cible · type · L523-L523 — type Cible = 'roulage' | 'machine' | 'saison'
+- anneeSaison · function · L535-L535 — anneeSaison = (dateIso: string)
+- creerDepense · function · L537-L567 — creerDepense = async ( db: PowerSyncDatabase, d: { cible: Cible; roulageId: string | null; machineId: string | null; centimes: number libelle: string; date: string; poste: Poste | null }, )
+- enCentimes · function · L572-L577 — enCentimes = (saisie: string): number | null
+- formaterEuros · function · L582-L586 — formaterEuros = (centimes: number)
+- depenseSaison · function · L591-L595 — depenseSaison = async (db: PowerSyncDatabase, annee: number)
+- budgetDeclare · function · L599-L603 — budgetDeclare = async (db: PowerSyncDatabase, annee: number)
+- poserBudget · function · L608-L623 — poserBudget = async (db: PowerSyncDatabase, annee: number, centimes: number)
+- coutRoulage · function · L625-L654 — coutRoulage = async (db: PowerSyncDatabase, roulageId: string)
+- listerDepenses · function · L656-L659 — listerDepenses = (db: PowerSyncDatabase, annee: number)
+- normaliserEtats · function · L679-L709 — normaliserEtats = async (db: PowerSyncDatabase): Promise<number>
+- normaliserCircuits · function · L711-L730 — normaliserCircuits = async (db: PowerSyncDatabase): Promise<number>
+- CoutRoulage · type · L743-L760 — type CoutRoulage = { /** La constatation. Toujours disponible, même à zéro. */ journeeCentimes: number tours: number /** * LE RAPPORT ET SON BUDGET SONT UN SEUL OBJET, et c'est délibéré. * * Exposés en trois champs indépendants, rien n'empêchait un futur écran — ou * le compositeur du récapitulatif — de rendre le coût au tour sans le budget * consommé : la clause n'était plus tenue que par un ternaire de rendu. * FR-35 exige qu'AUCUN CHEMIN ne puisse le contourner, donc l'invariant * descend dans le TYPE : on ne peut pas déstructurer la moitié de ce couple. * `null` = pas de budget = pas de rapport, ni zéro ni tiret. */ auTour: { centimes: number; budgetCentimes: number; consommeCentimes: number } | null /** Le consommé de la saison, disponible seul — il n'a rien de pervers. */ consommeCentimes: number }
+- coutDuRoulage · function · L762-L780 — coutDuRoulage = async ( db: PowerSyncDatabase, roulageId: string, annee: number, ): Promise<CoutRoulage>
+- Propose · type · L805-L805 — type Propose = { nom: string; source: 'deja' | 'connu' }
+- circuitsProposes · function · L807-L850 — circuitsProposes = async ( db: PowerSyncDatabase, saisie: string, max = 6, ): Promise<Propose[]>
+- retenir · function · L830-L841 — retenir = (nom: string, source: Propose['source'], matiere: string)

@@ -1,0 +1,25 @@
+# src/db/budget.ts
+
+- Poste · type · L30-L32 — type Poste = | 'engagement' | 'entretien' | 'pneus' | 'essence' | 'assurance' | 'transport' | 'equipement' | 'autre'
+- LignePoste · type · L64-L64 — type LignePoste = { poste: Poste | null; total: number; n: number }
+- parPoste · function · L77-L85 — parPoste = async ( db: PowerSyncDatabase, annee: number, ): Promise<LignePoste[]>
+- depenserSur · function · L89-L107 — depenserSur = async ( db: PowerSyncDatabase, d: { poste: Poste; cible: Cible; centimes: number; libelle: string; date: string roulageId?: string | null; machineId?: string | null }, )
+- oublierDepense · function · L109-L110 — oublierDepense = (db: PowerSyncDatabase, id: string)
+- moisDuJour · function · L146-L157 — moisDuJour = (jour: string | null | undefined): string | null
+- jourDansLAnnee · function · L173-L174 — jourDansLAnnee = (jour: string, annee: number): boolean
+- nomMois · function · L182-L186 — nomMois = (aaaaMm: string): string
+- DepenseDatee · type · L191-L195 — type DepenseDatee = { date_jour: string | null poste: Poste | null montant_centimes: number }
+- LigneMois · type · L204-L212 — type LigneMois = { mois: string | null total: number n: number /** Ce qui a été payé ce mois-là, poste par poste. Un constat de composition, * jamais une répartition « recommandée » — il n'existe aucune répartition * attendue à laquelle celle-ci pourrait être comparée. */ postes: { poste: Poste | null; total: number }[] }
+- grouperParMois · function · L223-L252 — grouperParMois = (lignes: DepenseDatee[]): LigneMois[]
+- parMois · function · L257-L261 — parMois = async ( db: PowerSyncDatabase, annee: number, ): Promise<LigneMois[]>
+- repereMensuel · function · L285-L286 — repereMensuel = (plafondCentimes: number | null): number | null
+- Jauge · type · L292-L292 — type Jauge = { part: number; repere: number | null }
+- jaugeBudget · function · L309-L320 — jaugeBudget = (consommeCentimes: number, plafondCentimes: number): Jauge
+- cent · function · L315-L315 — cent = (c: number)
+- CategorieEquipement · type · L324-L324 — type CategorieEquipement = 'protection' | 'paddock' | 'transport' | 'outillage' | 'autre'
+- Equipement · type · L345-L359 — type Equipement = { id: string nom: string categorie: CategorieEquipement /** Un MOIS, `AAAA-MM`. Jamais une échéance, jamais un âge « restant ». */ achete_le: string | null cout_centimes: number | null note: string | null /** Le portrait pixel — « la combinaison c'est comme un skin, et le casque * aussi ». Nullable : un équipement sans portrait est un état valide. */ sprite: string | null /** La photo réelle, indépendante du sprite. C'est elle qui reprend la place * quand un portrait est refusé ou retiré. */ photo_chemin: string | null }
+- listerEquipement · function · L363-L366 — listerEquipement = (db: PowerSyncDatabase)
+- poserSpriteEquipement · function · L371-L373 — poserSpriteEquipement = ( db: PowerSyncDatabase, id: string, sprite: string | null, )
+- declarerEquipement · function · L375-L390 — declarerEquipement = async ( db: PowerSyncDatabase, e: { nom: string; categorie: CategorieEquipement acheteLe?: string | null; centimes?: number | null; note?: string | null }, )
+- oublierEquipement · function · L392-L393 — oublierEquipement = (db: PowerSyncDatabase, id: string)
+- coutEquipement · function · L398-L402 — coutEquipement = async (db: PowerSyncDatabase)

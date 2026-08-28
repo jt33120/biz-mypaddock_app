@@ -1,0 +1,26 @@
+# banc-rendu/unite/essais.ts
+
+- l_pleine · function · L66-L66 — l_pleine = (art: string)
+- Resultat · type · L106-L106 — type Resultat = { titre: string; ok: boolean; detail: string }
+- doit · function · L109-L112 — doit = (titre: string, fn: () => void | Promise<void>)
+- egal · function · L113-L116 — egal = (obtenu: unknown, attendu: unknown, quoi = '')
+- vrai · function · L117-L117 — vrai = (c: boolean, quoi: string)
+- estPrimaire · function · L150-L151 — estPrimaire = (className: string): boolean
+- sansCommentaires · function · L158-L159 — sansCommentaires = (source: string): string
+- decouper · function · L190-L217 — decouper = (source: string): { litteraux: string[]; reste: string }
+- gabaritsSql · function · L219-L229 — gabaritsSql = (): { fichier: string; sql: string }[]
+- lecturesSql · function · L234-L234 — lecturesSql = ()
+- lecturesDeRoulage · function · L252-L260 — lecturesDeRoulage = (): { fichier: string; sql: string }[]
+- sansCreateWritable · function · L274-L284 — sansCreateWritable = async <T>(agir: () => Promise<T>): Promise<T>
+- octetsDe · function · L285-L288 — octetsDe = async (f: File | null)
+- blobDEssai · function · L290-L290 — blobDEssai = ()
+- ecrire · function · L355-L358 — ecrire = ()
+- executer · function · L1167-L1175 — executer = async (sql: string)
+- executer · function · L1475-L1482 — executer = async (op: { table: string; id: string })
+- aplati · function · L1516-L1517 — aplati = (s: string)
+- noter · function · L1777-L1780 — noter = (t: string, c: string)
+- retenir · function · L1861-L1862 — retenir = (t: string, c: string, type: string, defaut: string)
+- compter · function · L2210-L2211 — compter = (forme: string)
+- cite · function · L2213-L2213 — cite = (quoi: RegExp)
+- av · function · L2568-L2568 — av = (d: string, s = 0, m = 0)
+- colonnes · function · L3207-L3215 — colonnes = (fichier: string, fonction: string)

@@ -1,0 +1,15 @@
+# banc-rendu/destructif.mjs
+
+- sansCommentaires · function · L68-L69 — sansCommentaires = (source)
+- blocsDe · function · L124-L154 — blocsDe = (source)
+- citesDans · function · L159-L159 — citesDans = (texte)
+- gestesDestructifs · function · L169-L199 — gestesDestructifs = (modules)
+- estUnGeste · function · L178-L178 — estUnGeste = (nom)
+- finDeBalise · function · L221-L235 — finDeBalise = (source, depart)
+- gestionnaireDe · function · L239-L255 — gestionnaireDe = (balise)
+- normaliser · function · L259-L259 — normaliser = (l)
+- boutonsDe · function · L261-L285 — boutonsDe = (brut)
+- ditLaDestruction · function · L289-L290 — ditLaDestruction = (bouton)
+- appelleUneDestruction · function · L292-L296 — appelleUneDestruction = (bouton, noms)
+- detruit · function · L298-L299 — detruit = (bouton, noms)
+- libellesQuiDetruisentSansLeDire · function · L310-L318 — libellesQuiDetruisentSansLeDire = (modules)
