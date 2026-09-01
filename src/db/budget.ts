@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
+import type { GenreDeTenue } from './equipement'
 import { anneeSaison, type Cible } from './depot'
 
 /**
@@ -387,6 +388,26 @@ export const declarerEquipement = async (
       e.note?.trim() || null])
   await marquerSaisie(db)
   return id
+}
+
+/**
+ * DIRE QU'UNE PIÈCE EST UN CASQUE, OU UNE COMBINAISON.
+ *
+ * ⚠ CE CHEMIN EST UNE MISE À JOUR AVANT D'ÊTRE UNE SAISIE, et c'est le cas
+ * NOMINAL : les pièces à qualifier existent déjà dans le carnet. Un genre qui ne
+ * se poserait qu'à la déclaration aurait laissé inerte tout le dispositif de
+ * tenue pour quiconque avait saisi son équipement avant lui — c'est-à-dire pour
+ * tout le monde.
+ *
+ * `null` est un appel PLEIN : le même geste retire ce qu'il a posé. Une pièce
+ * mal qualifiée doit pouvoir cesser de l'être sans qu'on la supprime — et la
+ * supprimer coûterait la dépense qu'elle porte.
+ */
+export const poserGenreEquipement = async (
+  db: PowerSyncDatabase, id: string, genre: GenreDeTenue | null,
+) => {
+  await db.execute(`UPDATE equipement SET genre = ? WHERE id = ?`, [genre, id])
+  await marquerSaisie(db)
 }
 
 export const oublierEquipement = (db: PowerSyncDatabase, id: string) =>

@@ -7,6 +7,7 @@ import { supprimerVideosEnAttente } from './video'
 import { A_EU_LIEU, aujourdhui, TOUTES_JOURNEES } from './vecu'
 import type { Poste } from './budget'
 import type { StatutCrash } from './chute'
+import type { GenreDeTenue } from './equipement'
 
 /** Toutes les lectures et écritures passent ici. Aucun écran n'écrit de SQL. */
 
@@ -447,6 +448,48 @@ export const modifierRoulage = async (
             ${changeDeCircuit ? ', circuit_id = NULL, organisateur_id = NULL' : ''}
       WHERE id = ?`,
     [r.circuit, r.date, r.groupeNom, r.rang, r.total, r.machineId, id])
+  await marquerSaisie(db)
+}
+
+/**
+ * LA TENUE DU JOUR SE DÉCLARE, ET SE DÉDÉCLARE DU MÊME GESTE.
+ *
+ * « on peut lier à la journée de roule 1) la moto quand il y en a plusieurs,
+ *   2) le casque 3) la combi » — Julian, 1er septembre 2026.
+ *
+ * ⚠ `equipementId` À NUL EST UN APPEL PLEIN, PAS UN CAS D'ERREUR. C'est la
+ * seule façon de retirer un casque déclaré par erreur, et elle doit coûter le
+ * même geste que de le poser : sans elle, le sélecteur devient une porte à sens
+ * unique et le pilote n'a plus que la suppression de la journée pour corriger.
+ * C'est exactement le défaut qu'a payé `modifierRoulage` juste au-dessus.
+ *
+ * ⚠ AUCUNE ÉCRITURE AUTOMATIQUE, ET C'EST LA DIFFÉRENCE AVEC LA MACHINE.
+ * `creerRoulage` pose la machine tout seul quand le garage n'en compte qu'une :
+ * la question n'a alors qu'une réponse possible, et le formulaire perdrait
+ * l'information sans le dire. La tenue n'a pas ce bord — elle se pose par un
+ * tap explicite, à tout moment, jamais au passage d'un formulaire — et un
+ * casque lié d'office affirmerait un FAIT que personne n'a déclaré : « j'ai
+ * porté celui-ci ce jour-là ». Une journée sans tenue déclarée est un état
+ * valide et le reste (AD-2) ; ce n'est pas une tenue absente, c'est une tenue
+ * dont on n'a rien dit.
+ *
+ * ⚠ LE NOM DE COLONNE VIENT D'UNE TABLE FERMÉE, jamais de l'appelant. `genre`
+ * est une union de deux littéraux et `COLONNE_DE_TENUE` n'a que ces deux clés :
+ * l'interpolation dans le SQL ne peut porter que `casque_id` ou
+ * `combinaison_id`, et le compilateur refuse le troisième. C'est la seule forme
+ * d'interpolation acceptable dans une requête de ce fichier.
+ */
+const COLONNE_DE_TENUE = { casque: 'casque_id', combinaison: 'combinaison_id' } as const
+
+export const poserPieceDeTenue = async (
+  db: PowerSyncDatabase, roulageId: string,
+  genre: GenreDeTenue, equipementId: string | null,
+): Promise<void> => {
+  await db.execute(
+    `UPDATE roulage SET ${COLONNE_DE_TENUE[genre]} = ? WHERE id = ?`,
+    [equipementId, roulageId])
+  // Le témoin de sauvegarde vit sur `marquerSaisie` comme pour toute écriture
+  // de la journée : une déclaration de tenue est une saisie, pas un réglage.
   await marquerSaisie(db)
 }
 

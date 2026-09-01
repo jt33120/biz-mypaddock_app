@@ -6,10 +6,13 @@ import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, depenseSaison, formaterChrono,
   classerRoulages, listerMachines, type Machine,
   circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
-  modifierRoulage, normaliserEtats, poserBudget, supprimerRoulage,
+  modifierRoulage, normaliserEtats, poserBudget, poserPieceDeTenue, supprimerRoulage,
   type ContenuDuRoulage, type Propose,
   type CoutRoulage,
 } from './db/depot'
+import {
+  tenueDuJour, type GenreDeTenue, type PieceDeTenue, type TenueDuJour,
+} from './db/equipement'
 import { Depense } from './ecrans/Depense'
 import { jaugeBudget, repereMensuel } from './db/budget'
 import { NoterUneDepense } from './ecrans/Budget'
@@ -409,10 +412,24 @@ export default function App() {
    * même bloc divergent à la première correction — c'est exactement ce que la
    * checklist s'interdit en se DÉPLAÇANT plutôt qu'en se dupliquant. Un seul
    * `<Photos>`, un seul `<Chutes>`, un seul `<BlocCout>`, un seul
-   * `<Visibilite>` : les deux écrans reçoivent le même nœud.
+   * `<Visibilite>`, une seule `<Tenue>` : les deux écrans reçoivent le même
+   * nœud.
+   *
+   * ⚠ LA TENUE ENTRE ICI POUR NE PAS SE FERMER APRÈS LA PREMIÈRE SESSION.
+   * Elle se déclare la veille, sur l'écran de préparation — et à la première
+   * trace saisie, `sePrepare` bascule et cet écran-là disparaît au profit du
+   * bilan. Montée dans le seul `<Journee>`, elle serait devenue INDÉCLARABLE et
+   * INCORRIGIBLE le soir même : on ne se souvient de noter sa combinaison qu'en
+   * relisant sa journée. C'est mot pour mot la porte qui s'est déjà refermée en
+   * silence sur les six chemins ci-dessus, et elle ne se rouvre qu'ici.
    */
   const gestesDeLaJournee = bilan && courant ? {
     photos: <Photos db={db} roulageId={courant} />,
+    /* La moto, le casque et la combinaison en une image. Le
+       roulage suffit : la tenue lit ses trois liens elle-même, et un
+       `machineId` passé en second aurait donné deux sources pour la même
+       moto. */
+    tenue: <Tenue db={db} roulageId={courant} />,
     chutes: (
       <Chutes db={db} roulageId={courant} machineId={bilan.machine_id} date={bilan.date}
               onEcrit={() => {
@@ -536,6 +553,7 @@ export default function App() {
             photos={gestesDeLaJournee.photos}
             chutes={gestesDeLaJournee.chutes}
             cout={gestesDeLaJournee.cout}
+            tenue={gestesDeLaJournee.tenue}
             visibilite={gestesDeLaJournee.visibilite}
             onCircuit={() => { setCircuitVu(bilan.circuit); setEcran('circuit') }}
           />
@@ -555,6 +573,7 @@ export default function App() {
             photos={gestesDeLaJournee.photos}
             chutes={gestesDeLaJournee.chutes}
             cout={gestesDeLaJournee.cout}
+            tenue={gestesDeLaJournee.tenue}
             visibilite={gestesDeLaJournee.visibilite}
             onRecap={gestesDeLaJournee.onRecap}
             onAller={(vers) => {
@@ -1520,7 +1539,7 @@ function Session({ onValider, onAnnuler }: {
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, visibilite, onCircuit, onSession, onAccueil, onRecap }: {
+function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, tenue, visibilite, onCircuit, onSession, onAccueil, onRecap }: {
   db: Db; b: NonNullable<Bilan>; courbe: DonneesCourbe | null
   identite: Identite | null
   /** ⚠ LE COÛT ET LA VISIBILITÉ ARRIVENT MONTÉS, ILS NE SE COMPOSENT PLUS ICI —
@@ -1536,6 +1555,12 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, visibilite,
    *  journée une question, et ailleurs qu'ici elle serait introuvable le soir
    *  où l'on en a besoin. */
   chutes: React.ReactNode
+  /** LA TENUE DE CETTE JOURNÉE — la moto, le casque, la combinaison en une
+   *  image. Elle arrive montée pour la même raison que les autres : l'écran de
+   *  préparation porte EXACTEMENT le même nœud, et c'est là qu'on la déclare la
+   *  veille. Composée deux fois, elle aurait divergé ; montée seulement
+   *  là-bas, elle serait devenue incorrigible dès la première session. */
+  tenue: React.ReactNode
   /** Le nom du circuit ouvre sa fiche. C'est le seul endroit d'où l'on y entre :
    *  une fiche de circuit se consulte quand on pense à ce circuit-là, et c'est
    *  en regardant sa journée qu'on y pense. */
@@ -1594,6 +1619,13 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, visibilite,
           ce qui la rend utile l'année suivante, quand on ne se rappelle plus
           ce qu'on avait pris. */}
       <Checklist db={db} roulageId={b.id} jour={b.date} />
+
+      {/* La tenue suit le chargement, et c'est la même place que sur l'écran de
+          préparation : la checklist dit CE QU'ON EMPORTE, la tenue dit LEQUEL.
+          Les séparer d'un demi-écran obligerait à chercher deux fois la même
+          chose, et la position devait rester la même des deux côtés — un bloc
+          qui change de place selon l'écran se cherche à chaque ouverture. */}
+      {tenue}
 
       {/* FR-19 — LA VISIBILITÉ DU CHRONO EST UN INTERRUPTEUR, ROULAGE PAR
           ROULAGE, masqué par défaut. Il vit à côté du cercle parce que c'est le
@@ -1787,5 +1819,186 @@ function Visibilite({ db, roulageId }: { db: Db; roulageId: string }) {
         ? 'ton chrono de ce jour est visible par ton cercle · le masquer'
         : 'ton chrono de ce jour est masqué · le montrer à ton cercle'}
     </button>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA TENUE DU JOUR — moto, casque, combinaison.
+
+   « on peut lier à la journée de roule 1) la moto quand il y en a plusieurs,
+     2) le casque 3) la combi » — puis : « faire des genre de skin comme un
+   jeux vidéo ». — Julian, 1er septembre 2026.
+
+   ⚠ C'EST UNE SEULE IMAGE, ET C'EST TOUT LE SUJET. Trois vignettes posées
+   côte à côte se lisent comme trois objets rangés dans une caisse ; une grille
+   unique, un seul sol, une seule respiration se lisent comme une TENUE. Le
+   pilote doit reconnaître sa journée d'un coup d'œil, pas la déchiffrer.
+
+   ⚠ AUCUN SCORE, AUCUNE COMPLÉTUDE, AUCUN PALIER. Ni « 2 sur 3 », ni barre qui
+   se remplit, ni pastille, ni « tenue complète ». Une pièce non déclarée n'est
+   pas une case vide à remplir : c'est une pièce dont le pilote n'a rien dit, et
+   le produit ne relance JAMAIS personne pour compléter un carnet (AD-2, FR-31).
+   La tentation est ici plus forte qu'ailleurs — trois cases alignées appellent
+   un compteur — et c'est précisément pourquoi elle est écrite.
+
+   ⚠ ET UNE ABSENCE SE DIT EN TOUTES LETTRES. Deux absences vivent ici et elles
+   ne disent PAS la même chose : « rien de déclaré » (aucune pièce liée) et
+   « pas de portrait pixel » (la pièce est là, son portrait n'existe pas). Les
+   confondre dans un même cadre gris ferait croire à un lien manquant là où il y
+   en a un. Le mot porte toujours le sens, la couleur ne le porte jamais seule
+   (UX-DR8) — c'est la même règle que la silhouette du garage.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * UNE PIÈCE DANS LA SCÈNE — son portrait s'il existe, son absence sinon.
+ *
+ * ⚠ ELLE NE RETOMBE PAS SUR LA PHOTO RÉELLE, à la différence du garage, et
+ * c'est une décision. Le garage montre UN objet : sprite, puis photo, puis
+ * silhouette. Ici les trois pièces doivent se lire comme UNE image — une photo
+ * de casque à côté de deux sprites ne compose plus rien, elle se lit comme un
+ * montage raté. La photo garde sa place là où elle a un sens : sur la fiche de
+ * la pièce, où le portrait se fabrique à partir d'elle.
+ */
+function PieceDeLaTenue({ place, piece }: {
+  /** LE NOM DE LA PLACE EST AUSSI LE MOT AFFICHÉ, et c'est délibéré : deux
+   *  propriétés qui portent toujours la même valeur finissent par diverger, et
+   *  c'est alors la feuille de style qui dit une chose et l'écran une autre. */
+  place: 'moto' | 'casque' | 'combinaison'
+  piece: { nom: string; sprite: string | null } | null
+}) {
+  return (
+    <div className="tenue-piece" data-place={place}>
+      {piece?.sprite
+        ? <img className="tenue-sprite" src={piece.sprite} alt={`${piece.nom} en pixel`} />
+        : (
+          <p className="tenue-absente">
+            {piece ? 'pas de portrait pixel' : 'rien de déclaré'}
+          </p>
+        )}
+      {/* Le nom de la place d'abord, la pièce ensuite : sur une place vide, la
+          ligne dit quand même DE QUOI on parle. Sans elle, un cadre hachuré ne
+          se distingue pas d'une image qui n'a pas chargé — le défaut exact que
+          la silhouette du garage a déjà payé. */}
+      <p className="tenue-nom"><b>{place}</b>{piece?.nom}</p>
+    </div>
+  )
+}
+
+/**
+ * LE SÉLECTEUR D'UNE PIÈCE — même forme que celui de la moto (`Nouveau` et
+ * `Modifier`, plus haut), et même règle : IL NE S'AFFICHE QUE S'IL Y A DE QUOI
+ * CHOISIR.
+ *
+ * ⚠ « DE QUOI CHOISIR » EST UNE PIÈCE ICI, ET DEUX MOTOS LÀ-BAS. Ce n'est pas
+ * une divergence, c'est la même règle appliquée à deux situations qui ne se
+ * ressemblent pas : `creerRoulage` LIE D'OFFICE la moto unique du garage, donc
+ * en dessous de deux il n'y a rien à demander. Rien ne lie une tenue d'office —
+ * et rien ne doit le faire, un casque lié tout seul affirmerait un fait que
+ * personne n'a déclaré. Avec un seul casque au garage, le choix reste donc
+ * entier : le déclarer, ou ne rien dire. Le seuil à deux le rendrait
+ * indéclarable pour la plupart des pilotes, qui n'ont qu'un casque.
+ *
+ * ⚠ ET LE MÊME TAP DÉLIE. Taper la pièce active la retire — c'est la seule
+ * façon de corriger une déclaration, et elle doit coûter le même geste. Les
+ * puces de la moto se comportent déjà exactement ainsi.
+ */
+function ChoixDeTenue({ titre, genre, pieces, portee, occupe, sur }: {
+  titre: string
+  genre: GenreDeTenue
+  pieces: PieceDeTenue[]
+  portee: PieceDeTenue | null
+  occupe: boolean
+  sur: (genre: GenreDeTenue, equipementId: string | null) => void
+}) {
+  if (pieces.length === 0) return null
+  return (
+    <div className="pile">
+      <div className="libelle">{titre}</div>
+      <div className="puces">
+        {pieces.map((p) => (
+          <button key={p.id} className="puce" disabled={occupe}
+                  data-actif={portee?.id === p.id ? '1' : '0'}
+                  onClick={() => sur(genre, portee?.id === p.id ? null : p.id)}>
+            {p.nom.toUpperCase()}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Tenue({ db, roulageId }: { db: Db; roulageId: string }) {
+  const [tenue, setTenue] = useState<TenueDuJour | null>(null)
+  /* La relecture après écriture passe par un compteur plutôt que par un appel
+     direct : l'effet garde alors SON drapeau de vie, et une réponse en retard
+     ne peut pas écraser l'état d'un autre roulage. Le compteur ne s'appelle
+     surtout pas `tour` — dans ce dépôt un tour est un CHRONO. */
+  const [relecture, setRelecture] = useState(0)
+  useEffect(() => {
+    let vivant = true
+    void tenueDuJour(db, roulageId).then((t) => { if (vivant) setTenue(t) })
+    return () => { vivant = false }
+  }, [db, roulageId, relecture])
+
+  /* ⚠ LE MÊME VERROU QUE PARTOUT, et il n'est pas décoratif ici : la puce est
+     une BASCULE. Deux taps dans la même image de rendu verraient tous les deux
+     l'ancien état — le premier lie le casque, le second le délie aussitôt, et
+     le pilote voit sa déclaration disparaître sans comprendre. `useGeste` ferme
+     la porte sur une valeur mutable, seule à être lue et écrite dans le même
+     rendu. */
+  const [poser, occupe] = useGeste(async (genre: GenreDeTenue, id: string | null) => {
+    await poserPieceDeTenue(db, roulageId, genre, id)
+    setRelecture((n) => n + 1)
+  })
+
+  /* « Je ne sais pas encore » et « il n'y a rien » sont deux états : le second
+     se dit, le premier se tait. Annoncer « rien de déclaré » le temps d'une
+     requête écrirait un fait faux à chaque ouverture — récit 17.2. */
+  if (!tenue) return null
+
+  /* ⚠ LE BLOC PARLE DE LA TENUE, ET LA MOTO SEULE N'EN EST PAS UNE. Tant
+     qu'aucune pièce n'est portée ni disponible, il n'existe pas — sinon le
+     pilote qui ne tient pas son équipement verrait à chaque journée un portrait
+     de moto qu'il a déjà au garage, sous un titre qui lui rappelle ce qu'il n'a
+     pas saisi. C'est une relance déguisée, et rien ici ne relance (AD-2). La
+     moto REJOINT la scène dès qu'il y a une tenue à composer avec elle : c'est
+     elle qui fait l'image, ce n'est pas elle qui la justifie. */
+  const sansTenue = !tenue.casque && !tenue.combinaison
+    && tenue.casques.length === 0 && tenue.combinaisons.length === 0
+  if (sansTenue) return null
+
+  return (
+    <section className="bloc tenue">
+      {/* Sans temps grammatical : ce bloc est le MÊME nœud sur le bilan et sur
+          l'écran de préparation. « ce que tu portais » mentirait sur l'un,
+          « ce que tu porteras » sur l'autre. */}
+      <p className="libelle">La tenue de ce jour-là</p>
+
+      <div className="tenue-scene">
+        {/* ⚠ LES TROIS PLACES SUIVENT LA MÊME RÈGLE, et la moto y a échappé une
+            version durant : une place n'apparaît que si elle a quelque chose à
+            DIRE (une pièce portée) ou quelque chose à FAIRE (une pièce à
+            choisir ici). Sinon elle répète « rien de déclaré » sans qu'aucun
+            geste de ce bloc puisse y répondre.
+
+            La moto n'a que la première branche, et c'est ce qui la distingue :
+            elle se choisit à la création de la journée, pas ici. Sur une
+            journée sans machine liée — `creerRoulage` accepte un `machineId`
+            nul, garage vide au moment de la saisie — la place restait affichée
+            avec une absence que rien dans cet écran ne pouvait lever. */}
+        {tenue.machine && <PieceDeLaTenue place="moto" piece={tenue.machine} />}
+        {(tenue.casque || tenue.casques.length > 0) && (
+          <PieceDeLaTenue place="casque" piece={tenue.casque} />
+        )}
+        {(tenue.combinaison || tenue.combinaisons.length > 0) && (
+          <PieceDeLaTenue place="combinaison" piece={tenue.combinaison} />
+        )}
+      </div>
+
+      <ChoixDeTenue titre="Casque" genre="casque" pieces={tenue.casques}
+                    portee={tenue.casque} occupe={occupe} sur={(g, id) => void poser(g, id)} />
+      <ChoixDeTenue titre="Combinaison" genre="combinaison" pieces={tenue.combinaisons}
+                    portee={tenue.combinaison} occupe={occupe} sur={(g, id) => void poser(g, id)} />
+    </section>
   )
 }

@@ -60,16 +60,20 @@ import type { Tache } from '../db/preparation'
  * 23 jours » est une échéance déguisée.
  */
 export function Journee({
-  db, r, photos, chutes, cout, visibilite, onAller, onSession, onCircuit, onAccueil, onRecap,
+  db, r, photos, chutes, cout, tenue, visibilite, onAller, onSession, onCircuit, onAccueil, onRecap,
 }: {
   db: PowerSyncDatabase
   r: { id: string; circuit: string; date: string; machine_id: string | null }
-  /** LES QUATRE BLOCS DU BILAN QUI VALENT AUSSI LE JOUR MÊME. Ce sont les mêmes
-   *  nœuds que ceux du bilan, composés dans src/App.tsx et passés aux deux
-   *  écrans : deux compositions séparées auraient divergé. */
+  /** LES CINQ BLOCS QUI VALENT DES DEUX CÔTÉS. Ce sont les mêmes nœuds que ceux
+   *  du bilan, composés dans src/App.tsx et passés aux deux écrans : deux
+   *  compositions séparées auraient divergé. Quatre d'entre eux viennent du
+   *  bilan — ce sont les portes qui s'étaient refermées ici en silence ; la
+   *  tenue, elle, se déclare surtout AVANT et se relit après, donc elle est
+   *  partagée dès sa naissance et pour la même raison. */
   photos: React.ReactNode
   chutes: React.ReactNode
   cout: React.ReactNode
+  tenue: React.ReactNode
   visibilite: React.ReactNode
   /** Chaque ligne dérivée MÈNE QUELQUE PART — c'est la même promesse que sur
    *  l'accueil, et elle est portée par le même composant. */
@@ -119,7 +123,18 @@ export function Journee({
           aurait pris du retard sur la première dès la semaine suivante. */}
       <Checklist db={db} roulageId={r.id} jour={r.date} />
 
-      {/* ─── ④ LE SECOND RANG — LES GESTES DU JOUR MÊME ───────────────────
+      {/* ④ CE QU'ON PORTE. Le bloc prolonge le chargement plutôt qu'il ne
+          l'interrompt : la checklist dit qu'on emporte un casque et une
+          combinaison, la tenue dit LESQUELS. C'est encore de la préparation, il
+          reste donc au premier rang, juste à la fin.
+
+          ⚠ AUCUNE DES DEUX PIÈCES N'EST EXIGÉE, et rien ne le réclame : une
+          journée sans tenue déclarée est un état valide (AD-2). Le bloc ne compte
+          rien, ne se remplit pas, et se tait entièrement quand il n'y a ni pièce
+          liée ni pièce à choisir. */}
+      {tenue}
+
+      {/* ─── ⑤ LE SECOND RANG — LES GESTES DU JOUR MÊME ───────────────────
           Le pilote est au paddock : il photographie, il déclare un geste, il
           chute, il paie. Aucun de ces gestes n'appartient au bilan plutôt qu'à
           la préparation — ils appartiennent à la JOURNÉE, et l'écran qui la
