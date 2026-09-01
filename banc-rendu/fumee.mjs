@@ -6,7 +6,8 @@ import { sortir } from './verdict.mjs'
 const base = process.argv[2] ?? 'http://localhost:4173'
 const sortie = process.argv[3] ?? '/tmp/compte.png'
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []

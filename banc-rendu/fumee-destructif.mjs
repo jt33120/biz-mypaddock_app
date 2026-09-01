@@ -45,7 +45,8 @@ for (const nom of readdirSync(RACINE, { recursive: true }))
 const LIBELLES_QUI_DETRUISENT = [...libellesQuiDetruisentSansLeDire(sources)]
 
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
