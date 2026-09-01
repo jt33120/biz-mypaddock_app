@@ -1873,9 +1873,22 @@ const essais = [
        aurait accusé le produit d'envoyer une catégorie refusée alors que le
        serveur venait de l'accepter. Une garde ancrée sur un nom de fichier
        éprouve le nom du fichier. */
+    /* ⚠ ET ELLE S'ANCRE SUR LA CONTRAINTE NOMMÉE, PAS SUR LE MOTIF NU — deux
+       défauts, dont un s'est produit ici même.
+         · Le motif `check (categorie in (…))` n'est borné par AUCUNE table, et
+           CINQ migrations le portent : trois pour `checklist_ligne`, une pour
+           `equipement`, une pour `cap`. Toute contrainte de catégories posée
+           demain sur une autre table serait comparée à `NOM_CATEGORIE` de la
+           checklist, et le banc accuserait un fichier qui n'y est pour rien.
+         · Le SQL était lu BRUT, commentaires compris. Une migration qui se
+           contentait d'EXPLIQUER ce piège dans un commentaire le déclenchait :
+           le motif cité en prose gagnait le tri et rendait une liste vide. Un
+           témoin qu'un commentaire trompe ne témoigne pas — même leçon que
+           l'ancrage sur un nom de fichier, une ligne plus haut. */
     const contraintes = Object.entries(MIGRATIONS)
       .sort(([a], [b]) => a.localeCompare(b))
-      .flatMap(([, sql]) => [...sql.matchAll(/check \(categorie in \(([^)]*)\)\)/g)])
+      .flatMap(([, sql]) => [...sql.replace(/--[^\n]*/g, '').matchAll(
+        /constraint checklist_ligne_categorie_check\s+check \(categorie in \(([^)]*)\)\)/g)])
     vrai(contraintes.length > 0, 'la contrainte de catégories est introuvable dans les migrations')
     const m = contraintes[contraintes.length - 1]
     const serveur = new Set([...m[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]))
