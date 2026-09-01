@@ -30,6 +30,20 @@ _bmad-output/
 node_modules/
 dist/
 
+# ⚠ L'en-tête, deuxième victime. Ces chemins ne sont ignorés QUE par
+# `.gitignore` : ils n'apparaissent donc ni dans `git status`, ni ici, et rien
+# ne les signale avant le jour où l'on téléverse depuis un poste.
+# `graft/` : 5,4 Mo d'artefacts d'analyse — dont 4,5 Mo de `graft/.cache/`, où
+# dorment les prompts en texte brut. Rien n'y est source — `graft/.graph/` se
+# reconstruit par `graft build`, le reste est du cache — et aucun navigateur
+# n'en lit une ligne.
+# `.DS_Store` se recrée dans chaque dossier ouvert au Finder ; `.vercel/` et
+# `.railway/` sont l'état de liaison écrit par les CLI (projectId, orgId).
+graft/
+.DS_Store
+.vercel
+.railway
+
 # ⚠ `banc-rendu/` RESTE : le banc servi sous /banc est ÉMIS depuis sa source
 # unique au moment de la construction (vite.config.ts). L'exclure casserait la
 # construction. Seuls ses gros fichiers jetables partent.

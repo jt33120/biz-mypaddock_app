@@ -3,11 +3,13 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import {
   CATEGORIES_EQUIPEMENT, coutEquipement, declarerEquipement, depenserSur,
   EXEMPLE_EQUIPEMENT, EXEMPLE_POSTE, listerEquipement, NOM_EQUIPEMENT, NOM_POSTE,
-  jourDansLAnnee, nomMois, oublierEquipement, parMois, parPoste, poserSpriteEquipement,
+  jourDansLAnnee, nomMois, oublierEquipement, parMois, parPoste, poserGenreEquipement,
+  poserSpriteEquipement,
   POSTES, repereMensuel,
   type CategorieEquipement, type Equipement as Materiel, type LigneMois, type LignePoste,
   type Poste,
 } from '../db/budget'
+import { GENRES_DE_TENUE, piecesDeGenre, type GenreDeTenue } from '../db/equipement'
 import { photoEquipement, verserPhotoEquipement } from '../db/photos'
 import { Icone, type Nom } from './Icones'
 import { Barres, type Barre } from './Barres'
@@ -406,6 +408,11 @@ export function Equipement({ db, onEcrit, appele }: {
   appele?: number
 }) {
   const [liste, setListe] = useState<Materiel[]>([])
+  /** Ce que chaque pièce EST, quand le produit a besoin de le savoir. Absente
+   *  de la map = pièce sans genre, ce qui est l'état de la MAJORITÉ (une
+   *  glacière n'est ni un casque ni une combinaison) et un état parfaitement
+   *  valide — la migration 20260901000001 garde la colonne nullable exprès. */
+  const [genres, setGenres] = useState<Map<string, GenreDeTenue>>(new Map())
   const [cout, setCout] = useState(0)
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState(false)
@@ -423,6 +430,19 @@ export function Equipement({ db, onEcrit, appele }: {
   const charger = useCallback(async () => {
     setListe(await listerEquipement(db))
     setCout(await coutEquipement(db))
+    /* ⚠ LE GENRE SE LIT PAR LA MÊME REQUÊTE QUE LE SÉLECTEUR DE TENUE, et c'est
+       la raison de cette map plutôt qu'une colonne de plus sur l'inventaire.
+       `piecesDeGenre` est le SEUL endroit où le produit décide ce qui compte
+       comme un casque (db/equipement.ts). Si cet écran-ci lisait le genre
+       autrement, une pièce pourrait être proposée comme casque dans la tenue du
+       jour et se voir refuser le prompt de casque ici — deux écrans en
+       désaccord sur le même fait, et c'est le genre de divergence qu'on ne voit
+       qu'une fois payée. */
+    const m = new Map<string, GenreDeTenue>()
+    for (const g of ['casque', 'combinaison'] as const) {
+      for (const p of await piecesDeGenre(db, g)) m.set(p.id, g)
+    }
+    setGenres(m)
   }, [db])
   useEffect(() => { void charger() }, [charger])
 
@@ -457,7 +477,7 @@ export function Equipement({ db, onEcrit, appele }: {
               <div className="pile" key={c} style={{ gap: 6 }}>
                 <span className="sous-titre">{NOM_EQUIPEMENT[c]}</span>
                 {dedans.map((e) => (
-                  <LigneMateriel key={e.id} db={db} e={e}
+                  <LigneMateriel key={e.id} db={db} e={e} genre={genres.get(e.id) ?? null}
                                  onEcrit={() => void charger().then(onEcrit)} />
                 ))}
               </div>
@@ -474,8 +494,12 @@ export function Equipement({ db, onEcrit, appele }: {
   )
 }
 
-function LigneMateriel({ db, e, onEcrit }: {
-  db: PowerSyncDatabase; e: Materiel; onEcrit: () => void
+function LigneMateriel({ db, e, genre, onEcrit }: {
+  db: PowerSyncDatabase; e: Materiel
+  /** `null` pour tout ce qui n'est ni casque ni combinaison — la majorité de
+   *  l'inventaire. Il commande la fabrique de portrait, et rien d'autre. */
+  genre: GenreDeTenue | null
+  onEcrit: () => void
 }) {
   const [retirer, occupe] = useGeste(async () => {
     await oublierEquipement(db, e.id)
@@ -503,6 +527,27 @@ function LigneMateriel({ db, e, onEcrit }: {
     return () => { vivant = false }
   }, [e.photo_chemin])
 
+  /* ─── DIRE CE QUE LA PIÈCE EST — et c'était le chaînon manquant ──────────
+     Le refus de fabrication ci-dessous disait « cette pièce n'a pas dit si elle
+     est un casque ou une combinaison » alors qu'AUCUN écran du produit ne
+     permettait de le dire. Un refus qui nomme une information qu'on ne peut pas
+     fournir n'est pas un garde-fou, c'est une impasse — et elle tombait au
+     moment précis où le pilote essayait de dépenser.
+
+     ⚠ IL NE S'OFFRE QUE SUR LA PROTECTION. La catégorie couvre « casque,
+     combinaison, dorsale, gants, bottes » : c'est le seul endroit où la question
+     se pose. Proposer « casque ? » sous une glacière ferait du genre une case à
+     remplir partout, alors qu'il est nul pour la majorité des pièces et que
+     c'est son état normal.
+
+     ⚠ ET IL SE REPREND. Taper la puce active retire le genre au lieu de le
+     reposer : une pièce mal qualifiée doit pouvoir cesser de l'être sans qu'on
+     la supprime — la supprimer coûterait la dépense qu'elle porte. */
+  const [poserGenre, genreOccupe] = useGeste(async (suivant: GenreDeTenue | null) => {
+    await poserGenreEquipement(db, e.id, suivant)
+    onEcrit()
+  })
+
   const verser = async (f: File) => {
     setSouci(null)
     await verserPhotoEquipement(db, e.id, f)
@@ -521,8 +566,31 @@ function LigneMateriel({ db, e, onEcrit }: {
         + 'à partir d\'elle.')
       return
     }
+    // ⚠ SANS GENRE, ON NE FABRIQUE PAS — ET SURTOUT ON NE DEVINE PAS.
+    // La fabrique a un dessin PAR SUJET : la moto est rendue de profil strict,
+    // le casque et la combinaison en trois-quarts. `equipement.genre` est
+    // nullable et le restera — une glacière n'est ni l'un ni l'autre, et la
+    // migration 20260901000001 le dit — donc une pièce sans genre existe pour
+    // de bon. Deviner « casque » parce que la catégorie vaut 'protection'
+    // appliquerait à une combinaison une consigne d'écran et de mentonnière, et
+    // l'appel serait facturé quand même : 0,16 € pour un rendu inutilisable.
+    //
+    // ⚠ ET LE MESSAGE DÉSIGNE LE GESTE, PARCE QU'IL EXISTE MAINTENANT.
+    // Il n'en désignait aucun dans sa première version, et c'était juste à ce
+    // moment-là : aucun écran ne permettait de dire ce qu'était une pièce, et
+    // désigner un geste absent est la promesse contradictoire que le panneau de
+    // fabrication a déjà payée une fois (Refaire.tsx). Le sélecteur « Ce que
+    // c'est » est juste au-dessus, sur cette même ligne — le refus cesse donc
+    // d'être une impasse polie et redevient ce qu'il doit être : un détour de
+    // deux secondes avant de dépenser.
+    if (!genre) {
+      setSouci("Dis d'abord si c'est un casque ou une combinaison, juste au-dessus. "
+        + "La fabrique dessine l'un ou l'autre et ne devine pas : un portrait payé sur le "
+        + "mauvais dessin ne se rattrape pas. Rien n'est parti, et rien n'a été décompté.")
+      return
+    }
     setEnCours(true); setSouci(null); setCandidat(null)
-    const issue = await genererPortrait(db, { equipementId: e.id }, f)
+    const issue = await genererPortrait(db, { equipementId: e.id, genre }, f)
     setEnCours(false)
     if (issue.ok) setCandidat(issue.sprite)
     else setSouci(issue.message)
@@ -573,6 +641,27 @@ function LigneMateriel({ db, e, onEcrit }: {
           {e.cout_centimes ? formaterEuros(e.cout_centimes) : ''}
           {e.note ? ` · ${e.note}` : ''}
         </span>
+      )}
+
+      {e.categorie === 'protection' && (
+        <div className="pile mini-espace">
+          <span className="libelle">Ce que c'est · facultatif</span>
+          <div className="rang puces">
+            {GENRES_DE_TENUE.map(([g, mot]) => (
+              <button key={g} type="button" className="puce" disabled={genreOccupe}
+                      data-actif={genre === g ? '1' : '0'} aria-pressed={genre === g}
+                      onClick={() => void poserGenre(genre === g ? null : g)}>
+                {mot}
+              </button>
+            ))}
+          </div>
+          {/* Ce que ça change, dit une fois et sans promettre plus : le genre ne
+              sert qu'à deux choses, et aucune n'est une obligation. */}
+          <span className="libelle faible">
+            Une pièce nommée peut être portée sur une journée, et son portrait est
+            dessiné pour ce qu'elle est.
+          </span>
+        </div>
       )}
 
       <input ref={fichier} type="file" accept="image/*" hidden

@@ -1,5 +1,6 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { jeton } from '../db/compte'
+import type { GenreDeTenue } from '../db/equipement'
 import { reduire } from '../db/photos'
 import { spritifier, type Sprite } from './spritifier'
 import { GRILLE } from './reglages'
@@ -45,6 +46,12 @@ const MOTS: Record<string, string> = {
   photo_trop_lourde: "Cette image est trop lourde pour partir. "
     + 'Une photo prise au téléphone passe sans difficulté.',
   sans_photo: "Aucune image n'est partie.",
+  /* Il faudrait un client et un serveur en désaccord sur les sujets connus pour
+     le lire — donc un redéploiement à moitié fait. La phrase le dit sans jargon
+     et sans accuser le pilote, et surtout elle affirme le seul fait qui compte
+     ici : rien n'a été prélevé, le refus part avant la réservation. */
+  sujet_inconnu: "La fabrique n'a pas reconnu ce qu'elle avait à dessiner. "
+    + "Rien n'est parti et rien n'a été décompté.",
   modele: "Le modèle d'image n'a rien rendu cette fois. Rien n'a été décompté.",
   aucune_image: "Le modèle n'a rendu aucune image. Rien n'a été décompté.",
   reseau: 'Le serveur est resté injoignable. Rien n\'a été décompté, et la photo est intacte.',
@@ -61,10 +68,30 @@ const dire = (motif: string) => MOTS[motif] ?? "La fabrique de portraits n'a pas
  * chaînes se confondent, et cette confusion a déjà coûté une intervention
  * écartée définitivement côté serveur — un identifiant de machine passé là où
  * un identifiant de roulage était attendu.
+ *
+ * ⚠ LE GENRE EST OBLIGATOIRE SUR UN ÉQUIPEMENT, ET LE TYPE L'EXIGE. Le serveur
+ * a un prompt PAR SUJET — la moto est rendue de PROFIL STRICT, le casque et la
+ * combinaison en TROIS-QUARTS — et il ne devine rien. Tant que le genre ne
+ * voyageait pas, un casque partait avec `machineId: null` et recevait la
+ * consigne « c'est CETTE moto » : le rendu était faux, et il était payé.
+ * Rendre `genre` facultatif rouvrirait exactement ce trou, en silence.
+ *
+ * ⚠ ET UN `string` NU N'EST PLUS ACCEPTÉ, alors qu'il l'était. Il valait
+ * « machine », donc `genererPortrait(db, uneCleDEquipement, photo)` compilait
+ * et facturait un prompt de moto sur un casque. Un raccourci d'appel qui ne
+ * ferme pas la porte au seul geste qui dépense ne vaut pas les deux appelants
+ * qu'il épargne (Garage.tsx, Budget.tsx).
+ *
+ * ⚠ LE GENRE VIENT DE `db/equipement.ts`, IL N'EST PAS REDÉCLARÉ ICI. C'est le
+ * même fait — ce qu'une pièce EST — que celui qui alimente le sélecteur de tenue
+ * du jour. Deux unions égales dans deux fichiers finissent par diverger, et
+ * celle-ci a déjà deux porteurs hors de portée du compilateur : la contrainte
+ * `equipement_genre_connu` en base, et la liste des sujets connus du serveur. Un
+ * porteur de moins est un désaccord de moins.
  */
 export type Sujet =
-  | { machineId: string; equipementId?: never }
-  | { equipementId: string; machineId?: never }
+  | { machineId: string; equipementId?: never; genre?: never }
+  | { equipementId: string; genre: GenreDeTenue; machineId?: never }
 
 /**
  * ⚠ CE QUI AUTORISE UNE FABRICATION, LU EN UN SEUL ENDROIT.
@@ -94,11 +121,14 @@ export const fabriqueOuverte = async (): Promise<boolean> =>
   (await jetonDeFabrique()) !== null
 
 export const genererPortrait = async (
-  _db: PowerSyncDatabase, sujet: Sujet | string, photo: Blob, piloteEnSelle = false,
+  _db: PowerSyncDatabase, sujet: Sujet, photo: Blob, piloteEnSelle = false,
 ): Promise<Issue> => {
-  // Un `string` reste accepté pour les appels existants : c'est une machine.
-  const s: Sujet = typeof sujet === 'string' ? { machineId: sujet } : sujet
-  const machineId = s.machineId ?? null
+  const machineId = sujet.machineId ?? null
+  /** Ce que le serveur choisira comme prompt. `'machine'` est aussi ce qu'il
+   *  suppose quand le champ manque (compatibilité des clients déjà installés) —
+   *  raison de plus pour que ce soit le TYPE, et non ce calcul, qui garantisse
+   *  qu'un équipement ne parte jamais sans genre. */
+  const quoi: 'machine' | GenreDeTenue = sujet.genre ?? 'machine'
   const base = import.meta.env.VITE_SUPABASE_URL
   const jwt = await jetonDeFabrique()
   if (!jwt) return { ok: false, motif: 'sans_compte', message: dire('sans_compte') }
@@ -121,7 +151,10 @@ export const genererPortrait = async (
       // `machineId` sert au serveur à rattacher la ligne de `generation` : il
       // reste nul pour un équipement, et la génération est alors comptée sans
       // machine — le quota, lui, porte sur le PILOTE, pas sur l'objet.
-      body: JSON.stringify({ photo: b64, machineId, piloteEnSelle }),
+      // `sujet` choisit le PROMPT, et c'est autre chose : il n'est jamais nul,
+      // et il ne se déduit pas de `machineId` côté serveur — un équipement et
+      // une machine sans rattachement ont tous deux `machineId: null`.
+      body: JSON.stringify({ photo: b64, machineId, sujet: quoi, piloteEnSelle }),
     })
   } catch { return { ok: false, motif: 'reseau', message: dire('reseau') } }
 

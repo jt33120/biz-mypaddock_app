@@ -62,7 +62,7 @@ export const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'ch
  */
 export const DEPENDANCES: Readonly<Record<string, readonly string[]>> = {
   machine: [], equipement: [], budget_saison: [], mesure: [], plan_si_alors: [],
-  roulage: ['machine'],
+  roulage: ['machine', 'equipement'],   // la tenue du jour : casque_id, combinaison_id
   session: ['roulage'],
   tour: ['session'],
   chute: ['roulage'],

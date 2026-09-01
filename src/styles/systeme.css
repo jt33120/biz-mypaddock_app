@@ -478,6 +478,87 @@ body {
   font-weight: 600; color: var(--encre); margin-bottom: 4px;
 }
 
+/* ─── LA TENUE DU JOUR — MOTO, CASQUE, COMBINAISON EN UNE SEULE IMAGE ───────
+   « faire des genre de skin comme un jeux vidéo » — Julian, 1er septembre 2026.
+
+   ⚠ UNE GRILLE, PAS TROIS VIGNETTES. Trois cadres autonomes posés côte à côte
+   se lisent comme trois objets rangés dans une caisse. Une seule grille, un
+   seul filet de séparation, une seule respiration : c'est ce qui fait passer
+   l'ensemble de « mon matériel » à « ma tenue », et c'est la demande.
+
+   ⚠ AUCUNE JAUGE, AUCUNE PASTILLE, AUCUN PALIER, et aucune place n'est teintée
+   selon qu'elle est remplie. Trois cases alignées appellent un compteur plus
+   fort que n'importe quel autre écran de ce produit — le refus est donc écrit
+   ici comme dans le composant. Une place vide n'est pas un manque à combler,
+   c'est une pièce dont le pilote n'a rien dit.
+
+   Le bloc vit à l'identique sur le bilan et sur l'écran de préparation : il
+   n'appartient donc à aucun des deux, et ne porte le nom d'aucun écran. */
+.tenue { display: flex; flex-direction: column; gap: 14px; }
+
+/* Le filet passe en FOND et les cellules le recouvrent : un `gap` de 1 px fait
+   toutes les séparations d'un coup, là où quatre bordures se doubleraient à
+   chaque rencontre — c'est le même montage que les trois chiffres du garage. */
+.tenue-scene {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  background: var(--filet);
+}
+.tenue-piece {
+  background: var(--surface); padding: 10px;
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+/* La moto prend la rangée entière, et ce n'est pas une hiérarchie : son sprite
+   est LARGE là où le casque et la combinaison sont hauts. Comprimée à 150 px
+   sur un écran de 375, elle devient une tache.
+
+   ⚠ AUCUNE LIGNE D'HORIZON ICI, à la différence de la scène du garage. Elle a
+   été essayée et retirée : posée en `::after` sur la cellule, elle se peint
+   PAR-DESSUS le sprite — au garage, c'est le sprite qui passe au-dessus parce
+   que la ligne appartient au conteneur, pas à la case. Un décor qui barre le
+   sujet ne se rattrape pas par un `z-index` de plus : la grille et son filet
+   suffisent à faire tenir les trois places ensemble. */
+.tenue-piece[data-place="moto"] { grid-column: 1 / -1; }
+/* `pixelated` est ce qui rend le sprite légitime : agrandi au plus proche
+   voisin il reste net, un lissage le trahirait en photo floue.
+   `contain` dans un cadre de ratio fixe est l'autre moitié — une combinaison
+   haute et un casque carré cohabitent sans qu'aucun des deux soit rogné, et
+   les deux places gardent la même hauteur quelles que soient les images. */
+.tenue-sprite {
+  width: 100%; aspect-ratio: 1 / 1; object-fit: contain;
+  display: block; image-rendering: pixelated;
+}
+/* Une place vide occupe EXACTEMENT le cadre d'un portrait : sans ça, déclarer
+   un casque ferait sauter toute la page, et le geste ressemblerait à une casse.
+   Les hachures sont celles de la silhouette du garage — même absence, même
+   dessin — et le mot est toujours écrit par-dessus : la couleur ne porte jamais
+   le sens seule. */
+.tenue-absente {
+  width: 100%; aspect-ratio: 1 / 1;
+  display: grid; place-items: center; text-align: center; padding: 8px;
+  /* Ce texte est le SEUL porteur du sens de la case : il se lit à la même
+     force qu'un libellé, pas à celle d'une note de bas de page. */
+  font-size: 11px; line-height: 1.35; color: var(--encre-faible);
+  background: repeating-linear-gradient(-45deg, var(--surface-haute) 0 6px, transparent 6px 12px);
+}
+.tenue-piece[data-place="moto"] .tenue-sprite,
+.tenue-piece[data-place="moto"] .tenue-absente { aspect-ratio: 16 / 9; }
+/* Le nom de la PLACE d'abord, la pièce ensuite. `anywhere` parce qu'un nom
+   d'équipement n'a pas de limite connue — « Combinaison Ixon Vortex 3 » sort
+   par la droite d'une colonne de 150 px, et une lettre qui dépasse d'un écran
+   de 375 est un défaut déjà payé une fois sur la ligne d'équipement. */
+.tenue-nom {
+  font-size: 12px; line-height: 1.35; color: var(--encre-faible);
+  overflow-wrap: anywhere;
+}
+.tenue-nom b {
+  display: block; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase;
+  font-weight: 600; color: var(--encre-tenue);
+}
+/* Même raison, et elle vaut pour les puces du choix : les noms d'équipement
+   sont bien plus longs que « CBR 1000 RR », et une puce d'un seul mot très
+   long refuse de se réduire sous sa largeur intrinsèque. */
+.tenue .puce { max-width: 100%; overflow-wrap: anywhere; }
+
 .garage .chiffres {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--filet);
 }

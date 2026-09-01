@@ -21,7 +21,26 @@
  * dire au pilote. Aucun chemin ne dépense sans un jeton vérifié.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { GRILLE, entreePx, modele, prompt, version } from './v6.ts'
+import * as moto from './v6.ts'
+import * as tenue from './tenue.ts'
+
+/* ⚠ LE SUJET DÉCIDE DU PROMPT, ET C'EST LE SERVEUR QUI TRANCHE.
+ *
+ * Avant, un seul prompt partait : celui de la MOTO. Un casque envoyé depuis
+ * l'écran d'équipement recevait donc littéralement « c'est CETTE moto, pas une
+ * moto » et « l'angle est un PROFIL STRICT » — et l'appel était payé quand même.
+ *
+ * `'machine'` est le DÉFAUT en l'absence de champ, et ce n'est pas de la
+ * complaisance : une version de l'application déjà installée continue d'envoyer
+ * un corps sans `sujet`, et elle n'envoie que des motos. Sans ce défaut, la
+ * fonction refuserait les clients déjà déployés le jour de son redéploiement.
+ *
+ * Un sujet INCONNU est refusé, jamais replié sur un défaut : se replier ferait
+ * dessiner une moto à la place d'une combinaison, et l'appel serait facturé. Le
+ * refus part AVANT la réservation — donc sans consommer de créneau de quota — et
+ * a fortiori avant le moindre octet envoyé au modèle. */
+const SUJETS = ['machine', 'casque', 'combinaison'] as const
+type SujetDemande = typeof SUJETS[number]
 
 /* Le prix unitaire et le plafond global vivent EN BASE (table `plafond`), pas
    ici : `reserver_generation` les lit, les applique et écrit le coût dans la
@@ -70,11 +89,25 @@ Deno.serve(async (req) => {
     return repondre({ refus: 'cle_absente', quota, reste: Math.max(0, quota - (count ?? 0)) }, 503)
   }
 
-  let charge: { photo?: string; machineId?: string; piloteEnSelle?: boolean }
+  let charge: { photo?: string; machineId?: string; piloteEnSelle?: boolean; sujet?: string }
   try { charge = await req.json() } catch { return repondre({ refus: 'corps_illisible' }, 400) }
   const b64 = (charge.photo ?? '').replace(/^data:[^,]+,/, '')
   if (!b64) return repondre({ refus: 'sans_photo' }, 400)
   if (b64.length > CHARGE_MAX) return repondre({ refus: 'photo_trop_lourde' }, 413)
+
+  // ── LE SUJET, LU AVANT TOUTE DÉPENSE ────────────────────────────────────
+  const demande = charge.sujet ?? 'machine'
+  if (!(SUJETS as readonly string[]).includes(demande)) {
+    return repondre({ refus: 'sujet_inconnu', sujet: String(demande).slice(0, 40) }, 400)
+  }
+  const sujet = demande as SujetDemande
+  // La fabrique tout entière — prompt, grille, version, modèle — vient d'un
+  // seul module. Prendre la grille d'un module et le prompt de l'autre ferait
+  // spritifier sur une grille que le modèle n'a jamais reçue.
+  const fabrique = sujet === 'machine' ? moto : tenue
+  const consigne = sujet === 'machine'
+    ? moto.prompt({ pilote_present: charge.piloteEnSelle === true })
+    : tenue.prompt(sujet)
 
   // ── RÉSERVER AVANT D'APPELER, ET EN UNE SEULE TRANSACTION ───────────────
   //
@@ -103,13 +136,13 @@ Deno.serve(async (req) => {
 
   try {
     const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${fabrique.modele}:generateContent`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cle },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [
-            { text: prompt({ pilote_present: charge.piloteEnSelle === true }) },
+            { text: consigne },
             { inlineData: { mimeType: 'image/jpeg', data: b64 } },
           ] }],
           // Température 0 : le prompt est le code, il doit se rejouer.
@@ -130,8 +163,11 @@ Deno.serve(async (req) => {
     return repondre({
       image: `data:image/png;base64,${img.inlineData.data}`,
       // La grille voyage AVEC l'image : c'est ce qui interdit à la
-      // spritification de travailler sur une autre grille que le prompt.
-      grille: GRILLE, entreePx, version, modele,
+      // spritification de travailler sur une autre grille que le prompt. Elle
+      // vient du module CHOISI — les deux prompts n'ont aucune obligation de
+      // partager leur grille, même s'ils le font aujourd'hui.
+      grille: fabrique.GRILLE, entreePx: fabrique.entreePx,
+      version: fabrique.version, modele: fabrique.modele, sujet,
       reste: reserve.reste, quota: reserve.quota,
     })
   } catch (e) {
