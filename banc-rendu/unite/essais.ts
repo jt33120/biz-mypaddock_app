@@ -106,6 +106,47 @@ import FEUILLE from '../../src/styles/systeme.css?raw'
 import {
   appelleUneDestruction, boutonsDe, detruit, ditLaDestruction, gestesDestructifs,
 } from '../destructif.mjs'
+/**
+ * ─── LA FABRIQUE DE PORTRAITS, LUE DES DEUX FAÇONS POSSIBLES ───────────────
+ *
+ * `tenue.ts` s'IMPORTE POUR DE VRAI, et c'est un choix : c'est du TypeScript
+ * effaçable, sans un seul appel Deno, donc il se charge ici tel quel. Le faire
+ * RENDRE vaut infiniment mieux que de le lire — un `FICHES` où les deux clés
+ * pointeraient la même fiche passerait n'importe quelle lecture de texte, et se
+ * verrait à la première comparaison de sorties. Au passage il entre dans le
+ * programme de `tsc -b`, qui ne le voyait pas : `tsconfig.app.json` n'inclut que
+ * `src` et `banc-rendu/unite`, et RIEN ne type-vérifiait ce fichier.
+ *
+ * `v6.ts` et `index.ts` se lisent comme du TEXTE, pour la raison déjà écrite
+ * plus haut à propos de `manuel/index.ts` : `index.ts` importe
+ * `jsr:@supabase/supabase-js`, qu'aucun navigateur ne résout. Et lire v6 en
+ * texte a une seconde vertu — l'essai qui l'oppose à la tenue ne dépend pas de
+ * la signature de son `prompt`, qui prend un cadre là où la tenue prend un mot.
+ */
+import * as TENUE from '../../supabase/functions/sprite/tenue.ts'
+import SPRITE_MOTO from '../../supabase/functions/sprite/v6.ts?raw'
+import SPRITE_SERVEUR from '../../supabase/functions/sprite/index.ts?raw'
+/**
+ * ─── LE BANC LUI-MÊME, LU COMME DU TEXTE ───────────────────────────────────
+ *
+ * Trente-deux scripts Node que RIEN ne relie au produit : ni type, ni import,
+ * ni bundler. Ils ne cassent pas quand ils divergent — ils refusent simplement
+ * de démarrer, et seulement sur la machine qui n'a pas d'`/Applications`,
+ * c'est-à-dire jamais sur le poste où on les écrit.
+ */
+const BANC = import.meta.glob('../*.mjs',
+  { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+/**
+ * ─── CE QUI MONTE CHEZ L'HÉBERGEUR, ET CE QUE GIT CACHE ────────────────────
+ *
+ * Ces deux fichiers disent la même chose à deux outils qui ne se parlent pas,
+ * et `.vercelignore` REMPLACE `.gitignore` au lieu de s'y ajouter (son propre
+ * en-tête l'explique). Un chemin ignoré d'un seul côté est donc invisible dans
+ * `git status` ET téléversé : c'est la forme exacte du défaut de `graft/`, dont
+ * 4,5 Mo de cache contenaient les prompts en texte brut.
+ */
+import VERCELIGNORE from '../../.vercelignore?raw'
+import GITIGNORE from '../../.gitignore?raw'
 
 type Resultat = { titre: string; ok: boolean; detail: string }
 const resultats: Resultat[] = []
@@ -161,6 +202,14 @@ const estPrimaire = (className: string): boolean =>
  *  `https://` : sans lui, la moitié d'une URL passe pour un commentaire. */
 const sansCommentaires = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+
+/** UN FICHIER DU PRODUIT, PAR LA FIN DE SON CHEMIN. Le motif était réécrit à la
+ *  main dans une trentaine d'essais ; il rend `''` quand le fichier n'existe
+ *  pas, et chaque appelant DOIT le dire — un texte vide traverse toutes les
+ *  gardes par la négative, ce qui est la façon la plus discrète d'avoir un
+ *  témoin muet. */
+const fichierDe = (biblio: Record<string, string>, fin: string): string =>
+  Object.entries(biblio).find(([c]) => c.endsWith(fin))?.[1] ?? ''
 
 /**
  * ─── LES REQUÊTES DU DÉPÔT, LUES COMME DU TEXTE — récit 17.1 ────────────────
@@ -3031,12 +3080,30 @@ const essais = [
        garde qui empêche le jeu de se rouvrir icône par icône — la manière exacte
        dont un assemblage se reconstitue. Deux exceptions déclarées : `Icones.tsx`
        qui EST le jeu, et `Courbe.tsx`, qui n'est pas une icône mais un tracé de
-       données à l'échelle de l'écran. */
+       données à l'échelle de l'écran.
+
+       ⚠ ET L'EXCEPTION EST ANCRÉE SUR LE CHEMIN COMPLET, PAS SUR LE NOM. Elle
+       s'écrivait `/\/(Icones|Courbe)\.tsx$/`, donc elle absolvait un fichier
+       PARCE QU'IL S'APPELLE Courbe. Un `src/analyses/Courbe.tsx` créé demain —
+       et les vues d'analyse arrivent — aurait hérité du droit de poser un <svg>
+       sans qu'une seule ligne d'essai change, ni que personne ait décidé quoi
+       que ce soit. L'exception d'UN tracé ne doit pas devenir l'exception de
+       tous par accident : ce sont ces deux fichiers-là, à cette place-là. */
+    const TRACES = ['src/ecrans/Icones.tsx', 'src/ecrans/Courbe.tsx']
+    const dansSrc = (chemin: string) => chemin.replace(/^.*\/src\//, 'src/')
     for (const [chemin, brut] of Object.entries(ECRANS)) {
-      if (/\/(Icones|Courbe)\.tsx$/.test(chemin)) continue
+      if (TRACES.includes(dansSrc(chemin))) continue
       vrai(!/<svg\b/.test(sansCommentaires(brut)),
-        `${chemin.split('/').pop()} dessine un <svg> à lui : le jeu d'icônes se rouvre`)
+        `${dansSrc(chemin)} dessine un <svg> à lui : le jeu d'icônes se rouvre`)
     }
+    /* Et les deux exceptions désignent encore quelque chose. Une exception qui
+       pointe un fichier absent ne protège plus rien : elle ne s'applique
+       simplement jamais, et le déplacement qui l'a vidée ne fait rougir personne
+       — sauf ici. C'est l'autre moitié de l'ancrage : nommer un chemin oblige à
+       le tenir à jour, nommer un fichier n'obligeait à rien. */
+    for (const t of TRACES)
+      vrai(Object.keys(ECRANS).some((c) => dansSrc(c) === t),
+        `${t} a bougé : l'exception au <svg> ne désigne plus aucun fichier`)
   }),
 
   doit('20.2 — un tracé, jamais un emoji', () => {
@@ -3810,6 +3877,562 @@ const essais = [
     // Et l'écran DIT que les deux compteurs ne se parlent pas.
     vrai(/convertit pas/.test(ecran),
       'l\'écran laisse croire que les kilomètres du manuel et les roulages se convertissent')
+  }),
+
+  /* ═══ LA FABRIQUE PAR SUJET — « un casque n'est pas une moto » ════════════
+     Julian, 1er septembre 2026 : « L'image de chaque casque générée par Gemini
+     doit être dans le même angle (trois quart profil) ».
+
+     LE DÉFAUT D'ORIGINE, dans sa forme exacte : la fonction serveur n'avait
+     qu'un seul prompt, celui de la MOTO. Une photo de casque partie depuis
+     l'écran d'équipement recevait donc « c'est CETTE moto, pas une moto » et
+     « L'ANGLE est un PROFIL STRICT » — et l'appel était facturé au prix plein.
+     Le rendu n'était pas raté, il était HORS SUJET, et rien dans le produit ne
+     pouvait le dire : ni le type, ni le quota, ni le banc.
+
+     Ces essais tiennent les deux moitiés : que les deux prompts DIVERGENT là où
+     ils doivent diverger (l'angle, le vocabulaire, le budget), et qu'ils
+     restent IDENTIQUES là où la collection l'exige (la grille, le fond, le
+     contour, le zéro-lettre). Une seule des deux moitiés se satisferait d'un
+     produit cassé : deux prompts identiques passent la seconde, deux prompts
+     sans rien de commun passent la première. */
+
+  doit('un casque et une moto ne reçoivent JAMAIS le même dessin', () => {
+    const casque = TENUE.prompt('casque'), combinaison = TENUE.prompt('combinaison')
+    vrai(casque.length > 500 && combinaison.length > 500, 'un prompt de tenue est vide')
+    /* ⚠ LA COMPARAISON DE SORTIES, ET PAS UNE LECTURE DE SOURCE. Une table de
+       fiches dont les deux clés pointeraient le même objet — un copier-coller
+       d'une ligne, exactement le genre de faute qu'on ne relit pas — traverse
+       n'importe quelle garde de texte et se voit ici, immédiatement. */
+    vrai(casque !== combinaison,
+      'le casque et la combinaison partent avec le MÊME texte : une pièce sur deux sera hors sujet')
+
+    // Le témoin sait reconnaître la consigne de la moto : sans cette ligne, les
+    // deux gardes du dessous ne prouveraient rien d'autre qu'une faute de frappe.
+    vrai(/PROFIL STRICT/.test(SPRITE_MOTO) && /ramènes?[^.]*au profil/i.test(SPRITE_MOTO),
+      'v6 ne dit plus « profil strict » : le témoin ne reconnaît plus ce dont la tenue doit différer')
+
+    for (const sujet of ['casque', 'combinaison'] as const) {
+      const p = TENUE.prompt(sujet)
+      vrai(/TROIS-QUARTS/.test(p), `le prompt du ${sujet} n'impose plus d'angle`)
+      /* Un casque de profil est un ovale sans écran ni mentonnière, une
+         combinaison de profil est une manche devant une jambe. La consigne de la
+         moto, recopiée ici, rendrait deux pièces méconnaissables. */
+      vrai(!/ramènes?[^.]*au profil/i.test(p),
+        `le prompt du ${sujet} ramène le sujet au profil : c'est la consigne de la MOTO`)
+      // Et il ne décrit pas une machine. C'est ce vocabulaire-là qui partait sur
+      // un casque au temps du prompt unique, et il se lit à l'œil nu.
+      for (const mot of ['jante', 'carénage', 'échappement', 'guidon', 'roues'])
+        vrai(!new RegExp(mot, 'i').test(p),
+          `le prompt du ${sujet} parle de « ${mot} » : c'est une moto qu'on décrit`)
+    }
+    // Chacun nomme SA pièce en toutes lettres, et jamais celle de l'autre.
+    vrai(casque.includes('CASQUE intégral') && !casque.includes('COMBINAISON de moto'),
+      'le prompt du casque ne nomme pas exactement la pièce à dessiner')
+    vrai(combinaison.includes('COMBINAISON de moto') && !combinaison.includes('CASQUE intégral'),
+      'le prompt de la combinaison ne nomme pas exactement la pièce à dessiner')
+  }),
+
+  doit('l\'angle de la tenue est une MESURE, pas un adjectif', () => {
+    /* ⚠ « TROIS-QUARTS » TOUT SEUL EST UN ADJECTIF, et un adjectif se
+       réinterprète à chaque photo. Ce que la demande exige n'est pas un bel
+       angle, c'est LE MÊME angle d'une pièce à l'autre : deux casques rendus
+       sous deux angles ne se comparent plus, on croit voir deux formes
+       différentes là où seule la déco change. Un seuil chiffré se vérifie sur le
+       rendu ; un adjectif ne se vérifie pas du tout. */
+    for (const sujet of ['casque', 'combinaison'] as const) {
+      const p = TENUE.prompt(sujet)
+      vrai(/DEUX TESTS/.test(p), `le prompt du ${sujet} n'offre plus rien à vérifier sur le rendu`)
+      vrai((p.match(/\d+\s*%/g) ?? []).length >= 2, `le prompt du ${sujet} ne chiffre plus son cadrage`)
+      /* Les deux bords, nommés : un seuil qui ne dit que « trop » ne dit pas de
+         quel côté corriger, et se corrige donc une fois sur deux à l'envers.
+         ⚠ `\s+` ET PAS UNE ESPACE : le prompt est un gabarit REPLIÉ à la main,
+         et « tu es trop \n DE PROFIL » traverse une coupe de ligne. Une garde
+         qui exige l'espace unique éprouve la mise en page du fichier, pas la
+         consigne — et rougirait au premier reformatage. */
+      vrai(/trop\s+DE\s+FACE/.test(p) && /trop\s+DE\s+PROFIL/.test(p),
+        `le prompt du ${sujet} ne dit plus de quel côté il a dérapé`)
+    }
+  }),
+
+  doit('un casque et une moto ont EXACTEMENT le même carré de pixel', () => {
+    /* ⚠ CE N'EST PAS DE LA PARESSE, C'EST UNE CONTRAINTE DE COLLECTION. Les
+       trois portraits se posent sur la MÊME scène, côte à côte. 1024 / 128 = 8 :
+       le carré logique fait 8 px des deux côtés. Une grille plus fine pour la
+       tenue rendrait le casque « mieux dessiné » que la machine — et c'est
+       précisément ce qui casse une collection, sans qu'aucun des deux sprites
+       soit raté. */
+    const grilleMoto = Number(SPRITE_MOTO.match(/export const GRILLE = (\d+)/)?.[1])
+    vrai(grilleMoto > 0, 'la grille de la moto est introuvable dans v6.ts')
+    egal(TENUE.GRILLE, grilleMoto, 'la tenue et la moto ne se dessinent plus sur la même grille')
+    egal(TENUE.entreePx % TENUE.GRILLE, 0,
+      'la grille ne divise plus l\'image : le carré logique cesse d\'être un carré')
+    // Et le prompt ANNONCE la grille qu'il renvoie. C'est tout l'objet du
+    // voyage de `grille` avec l'image : spritifier sur une autre grille que
+    // celle demandée au modèle rend une bouillie que rien ne signale.
+    for (const sujet of ['casque', 'combinaison'] as const)
+      vrai(TENUE.prompt(sujet).includes(`${TENUE.GRILLE} × ${TENUE.GRILLE}`),
+        `le prompt du ${sujet} annonce une grille différente de celle qu'il renvoie`)
+  }),
+
+  doit('la tenue ne porte AUCUNE lettre, et se détache comme la moto', () => {
+    /* Le zéro-lettre est plus dur ici que sur la machine : un casque porte la
+       marque au front, celle de l'écran sur la platine, l'homologation sur la
+       jugulaire, et le modèle SAIT lire ces marques. Le fond et le contour, eux,
+       doivent rester ceux de v6 — c'est le programme qui détache le vert, et
+       c'est la scène de l'application qui reçoit les trois sprites. */
+    for (const sujet of ['casque', 'combinaison'] as const) {
+      const p = TENUE.prompt(sujet)
+      vrai(/AUCUNE lettre de l'alphabet/.test(p), `le prompt du ${sujet} a perdu le zéro-lettre`)
+      vrai(/homologation/.test(p), `le prompt du ${sujet} n'écarte plus l'étiquette d'homologation`)
+      for (const teinte of ['#00E000', '#1A0A2E']) {
+        vrai(p.includes(teinte), `le prompt du ${sujet} a perdu ${teinte}`)
+        vrai(SPRITE_MOTO.includes(teinte),
+          `v6 n'emploie plus ${teinte} : les trois sprites cessent de se détacher pareil`)
+      }
+    }
+  }),
+
+  doit('un sujet inconnu est refusé AVANT la moindre dépense', () => {
+    /* ⚠ SE REPLIER SUR UN DÉFAUT SERAIT PIRE QUE REFUSER : le serveur
+       dessinerait une moto à la place d'une combinaison, et l'appel serait
+       facturé. Le refus part donc avant `reserver_generation` — donc sans
+       consommer de créneau de quota — et a fortiori avant le premier octet
+       envoyé au modèle. L'ordre dans le fichier EST l'invariant. */
+    const refus = SPRITE_SERVEUR.indexOf("refus: 'sujet_inconnu'")
+    const reserve = SPRITE_SERVEUR.indexOf("rpc('reserver_generation'")
+    const modele = SPRITE_SERVEUR.indexOf('generativelanguage.googleapis.com')
+    vrai(refus > 0, 'le serveur ne refuse plus un sujet inconnu : il dessinerait une moto à la place')
+    vrai(reserve > 0 && modele > 0, 'la réservation ou l\'appel au modèle est introuvable')
+    vrai(refus < reserve,
+      'le refus passe APRÈS la réservation : un créneau de quota est brûlé pour rien')
+    vrai(refus < modele, 'le refus passe après l\'appel au modèle : la génération est facturée')
+    // Et c'est une demande refusée, pas une panne : le client doit pouvoir le dire.
+    vrai(/,\s*400\)/.test(SPRITE_SERVEUR.slice(refus, SPRITE_SERVEUR.indexOf('\n', refus))),
+      'le refus d\'un sujet inconnu ne rend pas 400 : le pilote lirait une panne de serveur')
+
+    const liste = SPRITE_SERVEUR.match(/const SUJETS = \[([^\]]*)\]/)?.[1] ?? ''
+    egal([...liste.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort(),
+      ['casque', 'combinaison', 'machine'], 'les sujets connus du serveur')
+    /* ⚠ ET UN CORPS SANS `sujet` RESTE UNE MOTO. Ce n'est pas de la complaisance :
+       une version déjà installée sur le téléphone d'un pilote envoie un corps
+       sans ce champ, et n'envoie que des motos. Sans ce défaut, le redéploiement
+       refuserait tous les clients déjà déployés. */
+    vrai(/charge\.sujet \?\? 'machine'/.test(SPRITE_SERVEUR),
+      'le défaut « machine » a disparu : le redéploiement casse les clients déjà installés')
+  }),
+
+  doit('la grille qui redescend est celle du module qui a vraiment dessiné', () => {
+    /* La grille voyage AVEC l'image parce que c'est elle qui interdit à la
+       spritification de travailler sur une autre grille que le prompt. Prendre
+       la grille d'un module et la consigne de l'autre remettrait ce trou-là en
+       place, cette fois sans qu'aucune constante ne soit fausse. */
+    for (const module of ['moto', 'tenue'])
+      vrai(new RegExp(`import \\* as ${module} from`).test(SPRITE_SERVEUR),
+        `la fonction n'importe plus le module « ${module} »`)
+    for (const champ of ['GRILLE', 'entreePx', 'version', 'modele'])
+      vrai(new RegExp(`fabrique\\.${champ}\\b`).test(SPRITE_SERVEUR),
+        `la réponse renvoie \`${champ}\` d'un module fixe : on peut spritifier sur une grille que le modèle n'a jamais reçue`)
+    vrai(/\bsujet,/.test(SPRITE_SERVEUR),
+      'la réponse ne dit plus quel sujet a été dessiné : le pilote ne sait pas ce qu\'il a payé')
+  }),
+
+  doit('le client NOMME ce qu\'il fait dessiner, il n\'envoie plus un identifiant nu', () => {
+    /* ⚠ LE `string` NU VALAIT « machine », ET C'ÉTAIT LA SEULE PORTE QUI DÉPENSE.
+       `genererPortrait(db, uneCleDEquipement, photo)` compilait sans un mot et
+       facturait un prompt de moto sur un casque. Un raccourci d'appel qui laisse
+       ouverte la porte de la dépense ne vaut pas les deux appelants qu'il
+       épargne. Le TYPE porte désormais l'obligation : `{ equipementId }` seul ne
+       type plus, et c'est `tsc -b` qui le dit, pas cet essai. */
+    const brut = fichierDe(SOURCES, 'pixel/portrait.ts')
+    vrai(brut.length > 0, 'portrait.ts introuvable')
+    const source = sansCommentaires(brut)
+    vrai(/equipementId: string; genre: GenreDeTenue/.test(source),
+      'un équipement peut repartir sans genre : le serveur lui dessinerait une moto')
+    vrai(!/sujet: Sujet \| string/.test(source),
+      '`genererPortrait` accepte de nouveau une chaîne nue : elle vaut « machine » et facture un prompt de moto sur un casque')
+    vrai(/JSON\.stringify\(\{[^}]*\bsujet:/.test(source), 'le corps POST ne porte plus le sujet')
+    // Et le refus du serveur a une phrase : un motif brut à l'écran n'est pas
+    // une phrase, et celui-ci parle d'argent.
+    vrai(/sujet_inconnu:/.test(brut), 'le refus « sujet_inconnu » n\'a aucune phrase pour le pilote')
+
+    // Les deux seuls appelants nomment leur sujet, chacun le sien.
+    const garage = sansCommentaires(fichierDe(ECRANS, '/Garage.tsx'))
+    vrai(garage.length > 0, 'Garage.tsx introuvable')
+    vrai(/genererPortrait\(db, \{ machineId:/.test(garage),
+      'le garage envoie de nouveau un identifiant nu : le serveur ne sait plus si c\'est une moto')
+    const budget = sansCommentaires(fichierDe(ECRANS, '/Budget.tsx'))
+    vrai(budget.length > 0, 'Budget.tsx introuvable')
+    vrai(/genererPortrait\(db, \{ equipementId: [^,]+, genre \}/.test(budget),
+      'l\'inventaire fabrique un portrait d\'équipement sans dire ce qu\'est la pièce')
+  }),
+
+  doit('une pièce sans genre ne fait partir AUCUNE génération payante', () => {
+    /* `equipement.genre` est NULLABLE et le restera : une glacière n'est ni un
+       casque ni une combinaison (migration 20260901000001). Une pièce sans genre
+       existe donc pour de bon, et deviner « casque » parce que la catégorie vaut
+       'protection' appliquerait à une combinaison une consigne d'écran et de
+       mentonnière — 0,16 € pour un rendu inutilisable, et rien pour le dire. */
+    const source = sansCommentaires(fichierDe(ECRANS, '/Budget.tsx'))
+    vrai(source.length > 0, 'Budget.tsx introuvable')
+    const refus = source.indexOf('if (!genre)')
+    const appel = source.indexOf('await genererPortrait(')
+    vrai(refus > 0, 'la fabrique dessine de nouveau une pièce dont personne n\'a dit ce qu\'elle est')
+    vrai(appel > refus, 'le refus arrive APRÈS l\'appel : le portrait est payé avant qu\'on y renonce')
+    const message = source.slice(refus, appel)
+    vrai(/casque/.test(message) && /combinaison/.test(message),
+      'le refus ne dit pas ce qui manque à la pièce')
+    vrai(/décompté|prélevé/.test(message),
+      'le refus ne dit pas que rien n\'a été prélevé : le pilote croira avoir payé')
+    /* ⚠ ET IL NE DÉSIGNE AUCUN GESTE. Il serait naturel d'écrire « déclare-le
+       ici » — sauf que RIEN n'écrit `equipement.genre` aujourd'hui, dans aucun
+       écran. Désigner un geste qui n'existe pas est la promesse contradictoire
+       que ce produit a déjà payée une fois (Refaire.tsx) : le message dit ce qui
+       manque et ce qui n'a pas été prélevé, rien de plus. */
+    vrai(!/bouton|ci-dessous|ci-dessus|touche/i.test(message),
+      'le refus désigne un geste : si ce geste n\'existe pas, la phrase promet ce qu\'elle ne tient pas')
+  }),
+
+  /* ═══ LA TENUE DU JOUR — moto, casque, combinaison ════════════════════════
+     « on peut lier à la journée de roule 1) la moto quand il y en a plusieurs,
+       2) le casque 3) la combi », puis « faire des genre de skin comme un jeux
+     vidéo ». — Julian, 1er septembre 2026. */
+
+  doit('la tenue se déclare la veille ET se corrige le soir', () => {
+    /* ⚠ LA PORTE QUI SE SERAIT REFERMÉE EN SILENCE, une septième fois. On
+       déclare sa tenue sur l'écran de préparation ; à la PREMIÈRE trace saisie,
+       `sePrepare` bascule et cet écran-là cède la place au bilan. Montée dans le
+       seul `<Journee>`, la tenue devenait INDÉCLARABLE et INCORRIGIBLE le soir
+       même — or c'est en relisant sa journée qu'on se souvient de noter sa
+       combinaison. C'est mot pour mot la classe de défaut des six chemins de
+       17.2, et elle ne se rouvre qu'en composant le nœud UNE FOIS dans App.tsx.
+       Un second `<Tenue>` monté dans l'écran de préparation aurait divergé du
+       premier à la première correction. */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const journee = sansCommentaires(fichierDe(ECRANS, '/Journee.tsx'))
+    vrai(app.length > 0 && journee.length > 0, 'App.tsx ou Journee.tsx introuvable')
+    egal((app.match(/<Tenue\b/g) ?? []).length, 1,
+      'montages de <Tenue> dans App.tsx — deux nœuds divergeront à la première correction')
+    egal((app.match(/tenue=\{gestesDeLaJournee\.tenue\}/g) ?? []).length, 2,
+      'écrans qui reçoivent la tenue — il en faut DEUX : la préparation et le bilan')
+    vrai(/\{\s*tenue\s*\}/.test(journee), 'l\'écran de préparation ne rend plus la tenue')
+    vrai(!journee.includes('<Tenue'),
+      '<Tenue> est monté une seconde fois dans Journee.tsx au lieu d\'être reçu')
+
+    /* ⚠ ET LA LECTURE PREND TOUT LE TEMPS, y compris ce qui n'a pas eu lieu. La
+       tenue se déclare AVANT de partir, sur une journée future : filtrée par
+       `A_EU_LIEU`, elle serait invisible exactement au moment où elle sert
+       (récit 17.1). C'est le seul endroit du produit où `TOUTES_JOURNEES` est
+       une exigence et non une tolérance. */
+    const sql = gabaritsSql()
+      .find((q) => q.fichier.endsWith('db/equipement.ts') && /r\.casque_id/.test(q.sql))?.sql ?? ''
+    vrai(sql.length > 0, 'la lecture de la tenue a disparu de db/equipement.ts')
+    vrai(/FROM roulage r \$\{TOUTES_JOURNEES\}/.test(sql),
+      'la tenue ne se prononce plus sur le futur, ou le fait trop loin de son `FROM roulage`')
+    vrai(!/A_EU_LIEU/.test(sql),
+      'la tenue ne se lit que sur les journées passées : on ne peut plus la déclarer la veille')
+  }),
+
+  doit('aucun compteur, aucune complétude, aucun palier sur la tenue', () => {
+    /* ⚠ LA TENTATION EST PLUS FORTE ICI QU'AILLEURS, et c'est pour ça que la
+       garde existe : trois places alignées appellent un compteur, « 2 sur 3 »
+       s'écrit tout seul. Une pièce non déclarée n'est pas une case vide à
+       remplir — c'est une pièce dont le pilote n'a rien dit, et le produit ne
+       relance JAMAIS personne pour compléter un carnet (AD-2, FR-31).
+
+       ⚠ ON LIT SANS LES COMMENTAIRES. Le composant ET la feuille de style CITENT
+       « 2 sur 3 » et « tenue complète » pour dire qu'ils les refusent : un témoin
+       qui lit le texte brut accuse la mémoire du défaut au lieu du défaut. C'est
+       le même piège que partout ailleurs dans ce banc. */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const debut = app.indexOf('function PieceDeLaTenue')
+    vrai(debut > 0, 'le bloc de la tenue a disparu d\'App.tsx')
+    const bloc = app.slice(debut)
+    vrai(!/\b\d+\s*(?:sur|\/)\s*\d+\b/.test(bloc),
+      'la tenue affiche un compte sur un total : une journée devient un objectif à moitié rempli')
+    const INTERDITS = ['complèt', 'complet', 'palier', 'badge', 'score', 'jauge', 'pastille',
+      'progress', 'manque', 'barre']
+    for (const mot of INTERDITS)
+      vrai(!new RegExp(mot, 'i').test(bloc), `la tenue porte « ${mot} » : elle s'est mise à juger`)
+
+    /* La feuille tient l'autre moitié : un compteur peut très bien n'exister
+       QUE dans le dessin — une place teintée selon qu'elle est remplie dit « il
+       en manque une » sans écrire un seul mot, et la couleur seule ne porte
+       jamais le sens dans ce produit (UX-DR8). Le motif chiffré n'est pas
+       appliqué ici : `aspect-ratio: 1 / 1` est un rapport de cadre, pas un
+       score. */
+    const style = FEUILLE.replace(/\/\*[\s\S]*?\*\//g, ' ')
+    const i = style.indexOf('.tenue {')
+    vrai(i > 0, 'le bloc `.tenue` a disparu de la feuille')
+    const dessin = style.slice(i, style.indexOf('.garage .chiffres', i))
+    vrai(dessin.length > 0, 'le bloc `.tenue` ne se referme plus avant le garage')
+    for (const mot of INTERDITS)
+      vrai(!new RegExp(mot, 'i').test(dessin), `la feuille dessine « ${mot} » sur la tenue`)
+    // Et aucune couleur de verdict : ce sont les jetons du mieux, du plus lent,
+    // du record et de l'alerte — ils disent tous « c'est bien » ou « c'est mal ».
+    for (const jeton of ['--mieux', '--plus-lent', '--record', '--alerte'])
+      vrai(!dessin.includes(jeton),
+        `la tenue emprunte ${jeton} : une place se met à valoir mieux qu'une autre`)
+  }),
+
+  doit('retirer une pièce n\'efface pas les journées où elle a été portée', () => {
+    /* ⚠ VENDRE SON CASQUE NE DOIT PAS EFFACER SES JOURNÉES. `on delete set null`
+       et jamais `cascade` : la journée a eu lieu, elle reste — la même règle que
+       la photo de chute, pour la même raison. Une correction ou une vente ne
+       coûte jamais un fait déjà consigné. */
+    const migration = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('la_tenue_du_jour_se_declare'))?.[1] ?? ''
+    vrai(migration.length > 0, 'la migration de la tenue est introuvable')
+    for (const colonne of ['casque_id', 'combinaison_id'])
+      vrai(new RegExp(`${colonne} uuid[\\s\\S]{0,120}?on delete set null`, 'i').test(migration),
+        `roulage.${colonne} ne se détache plus en douceur : vendre la pièce effacerait les journées`)
+    vrai(!/on delete cascade/i.test(migration),
+      'la tenue emporte la journée avec elle : une vente détruirait un fait consigné')
+
+    /* ⚠ ET LE LIEN SURVIT AU GENRE. La jointure résout la pièce par son
+       IDENTIFIANT et rien d'autre : si elle vérifiait `genre = 'casque'`,
+       corriger ou retirer le genre d'une pièce effacerait de l'écran toutes les
+       journées où elle a été portée. Le genre décide de ce qu'on PROPOSE, jamais
+       de ce qui a eu lieu. */
+    const sql = gabaritsSql()
+      .find((q) => q.fichier.endsWith('db/equipement.ts') && /r\.casque_id/.test(q.sql))?.sql ?? ''
+    vrai(sql.length > 0, 'la lecture de la tenue a disparu de db/equipement.ts')
+    for (const colonne of ['casque_id', 'combinaison_id'])
+      vrai(new RegExp(`LEFT JOIN equipement \\w+ ON \\w+\\.id = r\\.${colonne}`).test(sql),
+        `la tenue ne résout plus ${colonne} par son seul identifiant`)
+    vrai(!/genre/i.test(sql),
+      'la tenue portée se filtre sur le genre : corriger le genre d\'une pièce effacerait ses journées')
+  }),
+
+  doit('le lien de tenue est FACULTATIF, et rien ne le pose d\'office', () => {
+    /* ⚠ LA DIFFÉRENCE AVEC LA MACHINE, ET ELLE EST ENTIÈRE. `creerRoulage` lie
+       d'office la moto unique du garage : la question n'a alors qu'une réponse
+       possible, et le formulaire perdrait l'information sans le dire. Un casque
+       lié d'office, lui, affirmerait un FAIT que personne n'a déclaré — « j'ai
+       porté celui-ci ce jour-là ». Une journée sans tenue n'est pas une tenue
+       absente : c'est une tenue dont on n'a rien dit (AD-2). */
+    const migration = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('la_tenue_du_jour_se_declare'))?.[1] ?? ''
+    vrai(migration.length > 0, 'la migration de la tenue est introuvable')
+    for (const colonne of ['casque_id', 'combinaison_id']) {
+      /* ⚠ ON LIT LA SEULE INSTRUCTION QUI POSE LA COLONNE. Chercher « not null »
+         dans toute la migration accuse à tort : l'index partiel s'écrit
+         `where casque_id is not null`, et c'est exactement le contraire d'une
+         contrainte — il ne range que les journées qui ONT déclaré une pièce. */
+      const ajout = migration.match(new RegExp(`add column if not exists ${colonne}[^;]*`, 'i'))?.[0] ?? ''
+      vrai(ajout.length > 0, `roulage.${colonne} n'est plus posée par la migration`)
+      vrai(!/not null/i.test(ajout),
+        `roulage.${colonne} est devenue obligatoire : une journée sans tenue déclarée serait refusée`)
+    }
+
+    const depot = sansCommentaires(fichierDe(SOURCES, 'db/depot.ts'))
+    vrai(depot.length > 0, 'depot.ts introuvable')
+    const creation = depot.slice(depot.indexOf('INSERT INTO roulage'),
+      depot.indexOf('INSERT INTO roulage') + 400)
+    for (const colonne of ['casque_id', 'combinaison_id'])
+      vrai(!creation.includes(colonne),
+        `la création d'une journée écrit ${colonne} : elle affirme une tenue que personne n'a déclarée`)
+
+    /* ⚠ ET LE MÊME TAP DÉLIE. `equipementId` à nul est un appel PLEIN, pas un cas
+       d'erreur : sans lui, le sélecteur est une porte à sens unique et il ne
+       reste que la suppression de la journée pour corriger un casque déclaré par
+       erreur. C'est exactement le défaut qu'a payé `modifierRoulage`. */
+    vrai(/equipementId: string \| null/.test(depot),
+      'poser une pièce de tenue n\'accepte plus le nul : le sélecteur devient une porte à sens unique')
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    vrai(/portee\?\.id === p\.id \? null : p\.id/.test(app),
+      'taper la pièce active ne la retire plus : la déclaration devient irréversible')
+  }),
+
+  doit('poser une pièce n\'écrit QUE sa colonne, et son nom ne vient pas de l\'appelant', () => {
+    /* Une interpolation dans une requête est la faute par défaut de ce fichier —
+       sauf quand elle ne peut porter que deux valeurs écrites ici même.
+       `COLONNE_DE_TENUE` a exactement deux clés, `genre` est une union de deux
+       littéraux : le compilateur refuse la troisième, et rien de ce que
+       l'appelant fournit n'atteint le SQL. */
+    const brut = fichierDe(SOURCES, 'db/depot.ts')
+    vrai(brut.length > 0, 'depot.ts introuvable')
+    const source = sansCommentaires(brut)
+    const table = source.match(/COLONNE_DE_TENUE = \{([^}]*)\}/)?.[1] ?? ''
+    vrai(table.length > 0, 'la table fermée des colonnes de tenue a disparu')
+    egal([...table.matchAll(/(\w+):\s*'(\w+)'/g)].map((m) => `${m[1]}=${m[2]}`),
+      ['casque=casque_id', 'combinaison=combinaison_id'],
+      'la table des colonnes de tenue ne dit plus exactement ce qu\'elle doit dire')
+    vrai(/as const/.test(source.slice(source.indexOf('COLONNE_DE_TENUE'),
+      source.indexOf('COLONNE_DE_TENUE') + 160)),
+      'la table des colonnes n\'est plus figée : un troisième nom de colonne devient interpolable')
+
+    /* ⚠ ET L'ÉCRITURE NE TOUCHE QU'UNE COLONNE. Poser une combinaison qui
+       effacerait le casque, ou la moto de la journée, serait une perte que rien
+       ne rattrape et que rien n'annonce. */
+    const requete = source.match(/UPDATE roulage SET [^`]*/)?.[0] ?? ''
+    vrai(requete.length > 0, 'l\'écriture de la tenue a disparu')
+    // On ne compte QUE ce qui est posé — entre `SET` et `WHERE`. Compter les
+    // `=` de la requête entière en trouverait deux dès le premier jour, celui
+    // du `WHERE id = ?`, et la garde se satisferait alors de n'importe quoi.
+    const pose = requete.slice(requete.indexOf('SET') + 3, requete.indexOf('WHERE'))
+    egal((pose.match(/=/g) ?? []).length, 1,
+      'l\'écriture de la tenue pose plus d\'une valeur : elle emporte une autre colonne de la journée')
+    egal((pose.match(/,/g) ?? []).length, 0,
+      'l\'écriture de la tenue enchaîne plusieurs colonnes dans un seul geste')
+    for (const colonne of ['machine_id', 'date_jour', 'etat', 'crash_statut'])
+      vrai(!requete.includes(colonne),
+        `poser une pièce de tenue réécrit ${colonne} : un geste en touche un autre`)
+    // Et c'est une saisie, pas un réglage : le témoin de sauvegarde le sait.
+    const corps = source.slice(source.indexOf('poserPieceDeTenue'))
+    vrai(/marquerSaisie\(db\)/.test(corps.slice(0, 600)),
+      'déclarer sa tenue ne marque plus la journée comme saisie')
+  }),
+
+  doit('deux absences, deux phrases — et jamais la photo à la place du sprite', () => {
+    /* ⚠ ELLES NE DISENT PAS LA MÊME CHOSE, et les confondre dans un même cadre
+       gris ferait croire à un lien manquant là où il y en a un : « rien de
+       déclaré » (aucune pièce liée) et « pas de portrait pixel » (la pièce est
+       là, son portrait n'existe pas). Le mot porte le sens, la couleur ne le
+       porte jamais seule (UX-DR8) — même règle que la silhouette du garage. */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const debut = app.indexOf('function PieceDeLaTenue')
+    vrai(debut > 0, 'le bloc de la tenue a disparu d\'App.tsx')
+    const bloc = app.slice(debut)
+    vrai(bloc.includes('rien de déclaré'), 'l\'absence de lien ne se dit plus')
+    vrai(bloc.includes('pas de portrait pixel'), 'l\'absence de portrait ne se dit plus')
+    vrai(!/rien de déclaré[\s\S]{0,40}rien de déclaré/.test(bloc),
+      'les deux absences se sont confondues en une seule phrase')
+    // Le mot de la place est rendu même sur une place vide : sans lui, un cadre
+    // hachuré ne se distingue pas d'une image qui n'a pas chargé.
+    vrai(/<b>\{place\}<\/b>/.test(bloc), 'une place vide ne dit plus de quoi elle parle')
+
+    /* ⚠ ET PAS DE REPLI SUR LA PHOTO RÉELLE, contrairement au garage
+       (sprite → photo → silhouette). Les trois pièces doivent se lire comme UNE
+       image : une photo de casque à côté de deux sprites ne compose plus rien,
+       elle se lit comme un montage raté. La photo garde sa place sur la fiche de
+       la pièce, là où le portrait se fabrique à partir d'elle. */
+    for (const repli of ['photoEquipement', 'photoUrl', 'TRACE_EQUIPEMENT'])
+      vrai(!bloc.includes(repli),
+        `la tenue retombe sur ${repli} : les trois places cessent de composer une image`)
+  }),
+
+  doit('la tenue se tait tant qu\'elle ne sait pas, et n\'existe pas quand il n\'y a rien à dire', () => {
+    /* ⚠ TROIS SILENCES DISTINCTS, et chacun a coûté quelque part dans ce produit.
+
+       ① « Je ne sais pas encore » ≠ « il n'y a rien ». Annoncer « rien de
+         déclaré » le temps d'une requête écrirait un fait faux à chaque
+         ouverture — récit 17.2, sur l'écran dont tout le propos est de n'énoncer
+         que ce qu'il sait.
+       ② Le bloc parle de la TENUE, et la moto seule n'en est pas une. Sans cette
+         sortie, le pilote qui ne tient pas son équipement verrait à chaque
+         journée un portrait de moto qu'il a déjà au garage, sous un titre qui
+         lui rappelle ce qu'il n'a pas saisi : une relance déguisée (AD-2).
+       ③ Le sélecteur d'un genre disparaît à zéro pièce — il proposerait sinon
+         une liste vide, c'est-à-dire une question sans réponse possible. */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const bloc = app.slice(app.indexOf('function PieceDeLaTenue'))
+    vrai(bloc.length > 0, 'le bloc de la tenue a disparu d\'App.tsx')
+
+    const tait = bloc.indexOf('if (!tenue) return null')
+    const vide = bloc.indexOf('if (sansTenue) return null')
+    const rendu = bloc.indexOf('<section className="bloc tenue">')
+    vrai(tait > 0, 'la tenue affirme quelque chose avant que la base ait répondu')
+    vrai(vide > tait, 'la sortie du bloc vide passe avant celle de l\'ignorance, ou a disparu')
+    vrai(rendu > vide, 'le bloc se rend avant d\'avoir décidé qu\'il a quelque chose à dire')
+    // ② se lit sur sa condition : ni pièce portée, ni pièce à choisir — la moto
+    //   n'y entre pas, sinon le bloc existerait sur toutes les journées.
+    vrai(/sansTenue = !tenue\.casque && !tenue\.combinaison/.test(bloc),
+      'la moto suffit à faire exister le bloc : il devient une relance sur toutes les journées')
+    vrai(!/sansTenue[^\n]*tenue\.machine/.test(bloc),
+      'la moto est entrée dans la condition d\'existence du bloc')
+    // ③ un seul casque suffit à ouvrir le choix — la plupart des pilotes n'en
+    //   ont qu'un, et un seuil à deux le rendrait indéclarable pour eux.
+    vrai(/if \(pieces\.length === 0\) return null/.test(bloc),
+      'le sélecteur exige plus d\'une pièce, ou s\'affiche sur une liste vide')
+  }),
+
+  /* ═══ LE BANC ET LE TÉLÉVERSEMENT — deux défauts qu'aucun écran ne montre ══ */
+
+  doit('le banc entier démarre ailleurs que sur le poste de Julian', () => {
+    /* ⚠ CE DÉFAUT NE FAIT ROUGIR PERSONNE, IL EMPÊCHE DE DÉMARRER. Trente
+       fumées clouaient `/Applications/Google Chrome.app/…` : sur le poste de
+       travail tout marche, et c'est là qu'on les écrit. Ailleurs — un conteneur
+       d'intégration, une revue à distance — la seule façon de lancer le banc est
+       de modifier les fichiers, et une modification locale finit par partir dans
+       un commit.
+
+       La garde part de `BOUT_EN_BOUT`, la liste que le lanceur exécute vraiment :
+       une fumée ajoutée demain sans échappatoire y est nommée le jour même. */
+    const lanceur = BANC['../essais.mjs'] ?? ''
+    vrai(lanceur.length > 0, 'banc-rendu/essais.mjs introuvable')
+    const i = lanceur.indexOf('const BOUT_EN_BOUT')
+    vrai(i > 0, 'la liste des essais de bout en bout a disparu du lanceur')
+    const noms = [...lanceur.slice(i, lanceur.indexOf(']', i)).matchAll(/'([\w-]+)'/g)]
+      .map((m) => m[1])
+    vrai(noms.length >= 25, `seulement ${noms.length} fumées lues : la lecture du lanceur est cassée`)
+
+    const DEFAUT = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    /* `photo-essai.mjs` EXPORTE l'échappatoire, et `planches.mjs` l'importe déjà
+       plutôt que de la réécrire. Les deux formes sont donc légitimes, et la
+       garde doit accepter les deux : sinon elle interdirait la seule
+       factorisation raisonnable de ces trente lignes identiques. */
+    const empruntee = (src: string) =>
+      /import \{[^}]*\bCHROME\b[^}]*\} from '\.\/photo-essai\.mjs'/.test(src)
+    // `unite` et `photo-essai` ne sont pas dans la liste — ils sont lancés à
+    // part par le même script — et ils ouvrent Chrome comme les autres.
+    for (const nom of [...noms, 'unite', 'photo-essai']) {
+      const src = BANC[`../${nom}.mjs`] ?? ''
+      vrai(src.length > 0, `banc-rendu/${nom}.mjs est lancé par le banc et n'existe pas`)
+      // ① Aucun chemin de Chrome écrit en dur. C'est le défaut lui-même.
+      egal([...src.matchAll(/executablePath:\s*'[^']*'/g)].map((m) => m[0]), [],
+        `${nom}.mjs cloue le chemin de Chrome : le banc redevient macOS-only sans que rien ne le dise`)
+      /* ② Tout lancement DÉCLARE son chemin. La garde du dessus se satisferait
+         d'un second `chromium.launch()` nu, ajouté plus tard — il prendrait
+         alors le Chromium de Playwright, que ce dépôt n'installe pas, et
+         l'échec ressemblerait à une panne de banc. */
+      egal((src.match(/chromium\.launch\(/g) ?? []).length,
+        (src.match(/executablePath/g) ?? []).length,
+        `${nom}.mjs : lancements de Chrome vs chemins déclarés`)
+      // ③ L'échappatoire existe, en propre ou empruntée.
+      vrai(/process\.env\.CHROME/.test(src) || empruntee(src),
+        `${nom}.mjs n'a plus d'échappatoire : poser CHROME= ne l'atteint plus`)
+      /* ④ ET LE DÉFAUT MACOS NE BOUGE PAS. `CHROME` est une échappatoire, pas un
+         déménagement : le poste de travail reste le cas nominal, et personne n'a
+         à poser une variable pour lancer le banc chez soi. */
+      vrai(src.includes(DEFAUT) || empruntee(src),
+        `${nom}.mjs a perdu le défaut macOS : le poste de travail cesse d'être le cas nominal`)
+    }
+  }),
+
+  doit('rien de ce que git cache ne monte chez l\'hébergeur', () => {
+    /* ⚠ `graft/` PARTAIT EN PRODUCTION : 5,4 Mo, dont 4,5 Mo de `graft/.cache/`
+       où dorment les prompts en texte brut. Il n'apparaissait NULLE PART — pas
+       dans `git status`, puisque `.gitignore` le cache ; pas dans une revue de
+       diff, puisqu'il n'est pas versionné — et rien ne l'aurait signalé avant le
+       jour du téléversement depuis un poste.
+
+       La règle est mécanique et elle vaut pour la classe entière : ce fichier-ci
+       REMPLACE `.gitignore` chez Vercel au lieu de s'y ajouter, donc tout ce que
+       git cache doit y être redit. C'est l'essai qui aurait attrapé `graft/`
+       avant ce lot, et qui attrapera le suivant. */
+    vrai(VERCELIGNORE.length > 0 && GITIGNORE.length > 0,
+      'un des deux fichiers d\'exclusion ne se lit plus : le témoin est muet')
+    const lignes = (f: string) => f.split('\n')
+      .map((l) => l.replace(/#.*$/, '').trim()).filter(Boolean)
+    // On compare des CHEMINS, pas des lignes : `/graft/`, `graft/` et
+    // `graft/.cache/` désignent le même endroit sous trois écritures.
+    const net = (l: string) => l.replace(/^\//, '').replace(/\/\*$/, '').replace(/\/$/, '')
+    const chezVercel = lignes(VERCELIGNORE).filter((l) => !l.startsWith('!')).map(net)
+    const oublies = lignes(GITIGNORE).filter((l) => !l.startsWith('!')).map(net)
+      .filter((g) => !chezVercel.some((v) => g === v || g.startsWith(`${v}/`)))
+    egal(oublies, [],
+      'chemins que git cache et que Vercel téléverserait quand même')
+
+    /* ⚠ ET LA CLAUSE DES SECRETS NE PEUT PAS DISPARAÎTRE D'UN REVERT DISTRAIT.
+       C'est la raison d'être du fichier : `.env` et `.env.local` n'étaient
+       protégés QUE par `.gitignore`, et le jour où l'on déploie depuis un poste
+       ils monteraient avec le reste — MISTRAL_API_KEY, POWERSYNC_TOKEN, le mot
+       de passe Postgres. Le témoin ci-dessus ne les verrait pas partir : il
+       compare les DEUX fichiers, et un secret retiré des deux passe. */
+    for (const clause of ['.env', '.env.*', '!.env.example'])
+      vrai(lignes(VERCELIGNORE).includes(clause),
+        `.vercelignore a perdu « ${clause} » : les secrets remonteraient au premier déploiement depuis un poste`)
   }),
 ]
 
