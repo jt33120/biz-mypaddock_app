@@ -78,6 +78,12 @@ const chute = new Table({
 // C'est l'invariant qui rend l'axe atelier atteignable sans migration.
 const roulage = new Table({
   machine_id: column.text,
+  /** LA TENUE PORTÉE CE JOUR-LÀ. Facultative, comme la machine l'est déjà : une
+   *  journée sans tenue déclarée est un état valide et le reste (AD-2). Le
+   *  serveur met ces liens à `null` quand la pièce est vendue — la journée a eu
+   *  lieu, elle ne s'efface pas avec l'équipement qu'on n'a plus. */
+  casque_id: column.text,
+  combinaison_id: column.text,
   // Le circuit SE SAISIT. `circuit_nom` fait foi ; la référence au référentiel
   // est la normalisation que la récolte posera plus tard, et reste nulle jusque-là.
   // Écrire le nom dans la référence — ce que faisait la v0 — rendait toute
@@ -188,6 +194,16 @@ const equipement = new Table({
    *  un remplacement destructif » ne serait vrai que dans le texte. */
   sprite: column.text,
   photo_chemin: column.text,
+  /** ⚠ CE QUE LA PIÈCE EST, distinct de ce dans quoi on RANGE SA DÉPENSE.
+   *  `categorie` vaut 'protection' pour un casque comme pour une combinaison,
+   *  des gants et une dorsale : elle ne peut donc pas alimenter deux sélecteurs
+   *  séparés. `genre` le peut — 'casque' | 'combinaison' — et il est nul pour
+   *  tout le reste, qui est la majorité : une glacière n'a pas de genre.
+   *
+   *  Le NOM compte : un `check (categorie in …)` posé dans une migration plus
+   *  récente serait comparé aux catégories de la CHECKLIST par un essai qui
+   *  retient la dernière contrainte de ce motif, toutes tables confondues. */
+  genre: column.text,
 })
 
 // Ce que le pilote S'ÉTAIT FIXÉ — la seule grandeur du coût qui ne se dérive pas.
