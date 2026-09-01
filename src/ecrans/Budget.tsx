@@ -3,16 +3,15 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import {
   CATEGORIES_EQUIPEMENT, coutEquipement, declarerEquipement, depenserSur,
   EXEMPLE_EQUIPEMENT, EXEMPLE_POSTE, listerEquipement, NOM_EQUIPEMENT, NOM_POSTE,
-  jourDansLAnnee, nomMois, oublierEquipement, parMois, parPoste, poserGenreEquipement,
+  jourDansLAnnee, nomMois, oublierEquipement, parPoste, poserGenreEquipement,
   poserSpriteEquipement,
   POSTES, repereMensuel,
-  type CategorieEquipement, type Equipement as Materiel, type LigneMois, type LignePoste,
+  type CategorieEquipement, type Equipement as Materiel, type LignePoste,
   type Poste,
 } from '../db/budget'
 import { GENRES_DE_TENUE, piecesDeGenre, type GenreDeTenue } from '../db/equipement'
 import { photoEquipement, verserPhotoEquipement } from '../db/photos'
 import { Icone, type Nom } from './Icones'
-import { Barres, type Barre } from './Barres'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import {
@@ -42,6 +41,28 @@ import { aujourdhui } from '../db/vecu'
  *     X € ». Un budget qui se vide sous les yeux est un compteur à rebours, et
  *     un compteur à rebours sur de l'argent produit exactement ce qu'il prétend
  *     éviter : on cesse de saisir pour ne plus le voir descendre.
+ *
+ * ⚠ LES DEUX TRACÉS ONT QUITTÉ CE MODULE — 1er septembre 2026. « Par poste » et
+ * « par mois » y étaient rendus en barres, et les deux étaient VERROUILLÉS SUR
+ * L'ANNÉE COURANTE aux deux points de montage : `<Budget annee={anneeSaison(
+ * aujourdhui())}>` au garage, dans la branche avec machine comme dans celle sans.
+ * L'argent était donc le seul chiffre du produit qu'on ne pouvait regarder sur
+ * aucune autre année — le bilan de saison, lui, a ses puces d'années depuis
+ * FR-55. Les deux tracés vivent maintenant dans l'écran d'analyse, où ils
+ * gagnent une PÉRIODE et se croisent aussi avec la journée, la moto et l'année.
+ *
+ * Ce qui reste ici : les huit postes avec leur champ de saisie, les montants
+ * déjà notés poste par poste, et le repère mensuel dérivé du plafond. Le module
+ * a perdu sa moitié « regarder » et gardé sa moitié « noter » — c'est un gain net
+ * sur le défilement du garage, pas seulement un déplacement.
+ *
+ * ⚠ ET LE PLAFOND N'EST PAS POSÉ ICI, il n'y est que LU (`budgetDeclare`). Le
+ * seul champ qui l'écrit vit dans `BlocCout` (App.tsx), sur le bilan d'une
+ * journée — « au premier coût affiché, jamais à la création du compte » (FR-24).
+ * C'est écrit noir sur blanc parce que le repère mensuel s'affiche ici sans que
+ * rien n'y mène : un pilote qui n'a pas encore de journée vécue ne peut pas
+ * poser de plafond, donc ne voit jamais ce repère. Ce n'est pas ce lot qui l'a
+ * fait, et ce n'est pas ce lot qui le corrige.
  */
 const ceMois = () => aujourdhui().slice(0, 7)
 
@@ -54,16 +75,23 @@ export function Budget({ db, annee, machineId, onEcrit }: {
   onEcrit: () => void
 }) {
   const [lignes, setLignes] = useState<LignePoste[]>([])
-  const [mois, setMois] = useState<LigneMois[]>([])
   /** Le PLAFOND de la saison, tel que le pilote l'a posé — jamais dérivé, jamais
    *  reconduit tout seul. `null` est un état parfaitement normal (FR-24). */
   const [plafond, setPlafond] = useState<number | null>(null)
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState<Poste | null>(null)
 
+  /* ⚠ `parMois` N'EST PLUS LU ICI, ET IL N'EST PLUS LU NULLE PART. Il
+     n'alimentait que le tracé parti à l'analyse (voir la tête du fichier), et
+     ce module était son seul appelant. Le GROUPEMENT, lui, survit et sert :
+     `argentParMois` (src/db/analyse.ts) appelle `grouperParMois` tel quel — la
+     fonction pure que le banc fait déjà rougir. C'est la lecture SQL qui
+     l'enveloppait, et elle seule, qui n'a plus d'appelant. Une requête gardée
+     « au cas où » est une requête que personne ne regarde et que personne ne
+     corrige : `parMois` est donc à retirer de `db/budget.ts`, qui n'est pas ce
+     fichier-ci. */
   const charger = useCallback(async () => {
     setLignes(await parPoste(db, annee))
-    setMois(await parMois(db, annee))
     setPlafond(await budgetDeclare(db, annee))
   }, [db, annee])
   useEffect(() => { void charger() }, [charger])
@@ -81,11 +109,38 @@ export function Budget({ db, annee, machineId, onEcrit }: {
           titre au-dessus ne suffit pas — on lit le nombre, pas l'en-tête. Le mot
           « année » est donc collé à chaque somme de ce module, ici comme au
           bilan de la journée (App.tsx) et au bilan de saison (Saison.tsx). */}
+      {/* ⚠ L'EN-TÊTE A ÉTÉ RÉÉCRIT LE JOUR OÙ LE TRACÉ EST PARTI, et il disait
+          faux de DEUX façons, pas d'une.
+
+          ① Il promettait une LECTURE : « ce que l'année entière a coûté, poste
+            par poste » est ce qu'on lit d'un tracé, pas ce qu'on fait dans un
+            formulaire. Replié, ce sous-titre est tout ce que le pilote voit du
+            module ; il l'ouvrait pour regarder la forme de sa saison et tombait
+            désormais sur huit champs de saisie. Un en-tête qui annonce ce qui
+            n'est plus derrière est un panneau qui indique une route coupée.
+
+          ② Il annonçait une TOTALITÉ que ce total n'a jamais eue. `parPoste`
+            n'additionne que la table `depense` — la seule des trois sources
+            d'argent qui porte un poste. `intervention.cout_centimes` (l'atelier,
+            FR-43) et `equipement.cout_centimes` n'en portent aucun, donc ils ne
+            sont pas dans ce chiffre, et ils ne l'ont jamais été. « Ce que l'année
+            entière a coûté » était donc sous-compté depuis que cet écran existe.
+            Le sous-titre nomme maintenant exactement ce qu'il additionne : les
+            dépenses NOTÉES. C'est la même clause que l'emport, « un emport qui
+            ment sur ses trous est pire qu'un emport incomplet » — et l'écran
+            d'analyse, lui, chiffre les trous (`argentNonCompte`).
+
+          ⚠ ET LE MOT « ANNÉE » RESTE COLLÉ AU MONTANT — récit 19.1 ci-dessus, ce
+          n'est pas ce paragraphe qui le lève. */}
       <button className="rang atelier-tete" onClick={() => setOuvert(!ouvert)}>
         <span className="pile" style={{ gap: 1 }}>
           <span className="libelle">Budget · année {annee}</span>
+          {/* Le sous-titre NOMME LE NOMBRE qui est à côté de lui, et il ne nomme
+              que lui. Le repère mensuel se lit en clair une fois le module
+              ouvert : le faire voyager dans l'en-tête y mettrait un second
+              montant, et c'est précisément la confusion que 19.1 a fermée. */}
           <span className="sous-titre">
-            ce que l'année entière a coûté, poste par poste
+            les dépenses que tu as notées, poste par poste
           </span>
         </span>
         <span className="chiffre hud-16">{total ? formaterEuros(total) : '—'}</span>
@@ -100,37 +155,22 @@ export function Budget({ db, annee, machineId, onEcrit }: {
             </p>
           )}
 
-          {/* ─── LE TRACÉ PAR POSTE — récit 19.4 ──────────────────────────
-              Les huit postes étaient déjà calculés et n'existaient qu'en liste
-              de texte. Ils portent maintenant leur longueur, et la longueur est
-              ce qu'on lit d'un coup d'œil : « en quoi ma saison est partie ».
+          {/* ⚠ LE TRACÉ PAR POSTE ÉTAIT ICI, ET IL EST PARTI — 1er septembre
+              2026. Ce qu'il faisait exactement, pour que le déplacement soit
+              écrit et non subi : il rendait les huit postes en barres, triés du
+              plus gros au plus petit, échelle sur le plus gros poste, « Sans
+              poste » en teinte atténuée au bout.
 
-              ⚠ CE N'EST PAS UNE JAUGE — l'échelle est le PLUS GROS POSTE, jamais
-              le plafond de la saison. Mesurée contre un plafond, une barre
-              devient un compteur à rebours, et « dépasser son budget n'est pas
-              une faute ». Le raisonnement complet est dans Barres.tsx.
+              Il était verrouillé sur `annee` — et `annee` vaut
+              `anneeSaison(aujourdhui())` aux deux points de montage du garage.
+              La forme d'une saison passée était donc INATTEIGNABLE, sur le seul
+              chiffre du produit qui se reporte d'une année à l'autre (FR-56). Il
+              vit maintenant dans l'écran d'analyse, sous FINANCE · POSTE, avec
+              une rangée de périodes.
 
-              ⚠ ET IL VIENT AVANT LA LISTE, pas après. La liste sert à SAISIR —
-              chaque ligne ouvre son champ ; le tracé sert à LIRE. Mettre le
-              tracé en dessous obligerait à faire défiler huit champs de saisie
-              pour voir la forme de sa saison. */}
-          <Barres titre="Par poste"
-                  description={"Ce que l'année a coûté, en quoi. La longueur compare les postes "
-                    + "entre eux — jamais à ton plafond."}
-                  barres={[
-                    ...POSTES.map((p) => ({ p, l: trouve(p) }))
-                      .filter((x): x is { p: Poste; l: LignePoste } => !!x.l)
-                      .sort((a, b) => b.l.total - a.l.total)
-                      .map(({ p, l }): Barre => ({
-                        nom: NOM_POSTE[p], centimes: l.total,
-                        detail: `${l.n} dépense${l.n > 1 ? 's' : ''}`,
-                      })),
-                    ...(sansPoste ? [{
-                      nom: 'Sans poste', centimes: sansPoste.total, incertain: true,
-                      detail: 'saisies avant que les postes existent',
-                    } satisfies Barre] : []),
-                  ]} />
-
+              ⚠ ET LA LISTE QUI SUIT N'A PAS CHANGÉ DE PLACE. Elle sert à SAISIR
+              — chaque ligne ouvre son champ — et c'est désormais la première
+              chose du module, ce qui est exactement ce qu'il est devenu. */}
           {POSTES.map((p) => {
             const l = trouve(p)
             return (
@@ -181,55 +221,38 @@ export function Budget({ db, annee, machineId, onEcrit }: {
             </div>
           )}
 
-          {/* ─── PAR MOIS — récit 19.2, moitié « le mois existe » ──────────────
-              Ce qui est montré : ce que chaque mois a coûté, et de quoi il était
-              fait. Ce qui ne l'est JAMAIS, et la tentation est ici :
-                · aucun mois ne se compare au précédent, aucun « + 40 % » ;
-                · aucune couleur sur un mois cher — un mois cher est un mois où
-                  l'on a roulé, pas une faute ;
-                · aucune barre qui se remplit vers un plafond du mois : une jauge
-                  mensuelle transformerait un repère en compteur à rebours, et
-                  c'est exactement ce que les deux clauses d'argent refusent ;
-                · aucun « à ce rythme » — les douze mois d'une saison de piste ne
-                  se ressemblent pas, et une droite tirée sur avril ne dit rien
-                  de janvier. */}
-          {!!mois.length && (
-            <div className="pile" style={{ gap: 6 }}>
-              <span className="sous-titre">Par mois</span>
+          {/* ⚠ LE TRACÉ PAR MOIS ÉTAIT ICI, ET IL EST PARTI AVEC L'AUTRE —
+              1er septembre 2026. Ce qu'il faisait : un panier par mois, dans
+              L'ORDRE DU CALENDRIER et jamais trié par montant (un classement de
+              dépenses est un verdict), « Sans mois » en teinte atténuée au bout,
+              et le détail des postes sous chaque mois.
 
-              {/* LE REPÈRE MENSUEL — « un plafond annuel ET un repère mensuel »,
-                  décision de Julian du 25 août 2026. Il se DÉRIVE du plafond
-                  (÷ 12) au lieu de se saisir : deux montants saisis séparément
-                  finissent par se contredire, et un second champ rouvrirait la
-                  confusion même que 19.1 vient de fermer. Il est dit une fois,
-                  en toutes lettres, et aucune ligne de mois ne s'y mesure. */}
-              {repere != null && plafond != null && (
-                <p className="note">
-                  Repère du mois · {formaterEuros(repere)} — c'est le plafond que tu as posé
-                  pour l'année {annee}, {formaterEuros(plafond)}, divisé par douze. Un repère,
-                  rien de plus : aucun mois ne s'y compare, et un mois au-dessus n'est pas
-                  une faute.
-                </p>
-              )}
+              Il portait la même serrure que celui des postes : `annee` figée sur
+              l'année courante. Il vit maintenant sous FINANCE · MOIS, où il est
+              devenu une SUITE — des paniers mensuels reliés par des segments
+              droits, ce que ce module ne pouvait pas faire sans poser un `<svg>`
+              (voir le ④ de Barres.tsx, et la levée du 1er septembre).
 
-              {/* ⚠ LES MOIS GARDENT L'ORDRE DU CALENDRIER, ET LES BARRES AUSSI.
-                  Les trier par montant ferait un classement — « le mois le plus
-                  cher » — et un classement de dépenses est un verdict. Les
-                  dépenses d'avant la colonne restent DITES, en retrait, jamais
-                  rangées au hasard : leur attribuer un mois ferait croire qu'un
-                  choix a été fait. */}
-              <Barres titre="" description={"Ce que chaque mois a coûté, dans l'ordre du "
-                        + "calendrier, et de quoi il était fait."}
-                      barres={mois.map((m): Barre => ({
-                        nom: m.mois ? nomMois(m.mois) : 'Sans mois',
-                        centimes: m.total,
-                        incertain: !m.mois,
-                        detail: m.mois
-                          ? m.postes.map((p) => p.poste ? NOM_POSTE[p.poste].toLowerCase() : 'sans poste')
-                            .join(' · ')
-                          : 'saisies avant que la dépense porte son jour',
-                      }))} />
-            </div>
+              ⚠ CE QUI RESTE ICI EST LE REPÈRE MENSUEL, ET IL RESTE POUR UNE
+              RAISON : il ne se lit pas d'un tracé, il se DÉRIVE DU PLAFOND, et
+              le plafond se pose ici. Il a d'ailleurs cessé de dépendre des mois
+              — il était rendu à l'intérieur du `{!!mois.length}` du tracé, donc
+              un pilote qui avait posé son plafond sans avoir encore noté une
+              seule dépense ne voyait pas le repère qu'il venait de se donner. */}
+
+          {/* LE REPÈRE MENSUEL — « un plafond annuel ET un repère mensuel »,
+              décision de Julian du 25 août 2026. Il se DÉRIVE du plafond (÷ 12)
+              au lieu de se saisir : deux montants saisis séparément finissent par
+              se contredire, et un second champ rouvrirait la confusion même que
+              19.1 vient de fermer. Il est dit une fois, en toutes lettres, et
+              rien ne s'y mesure. */}
+          {repere != null && plafond != null && (
+            <p className="note">
+              Repère du mois · {formaterEuros(repere)} — c'est le plafond que tu as posé
+              pour l'année {annee}, {formaterEuros(plafond)}, divisé par douze. Un repère,
+              rien de plus : aucun mois ne s'y compare, et un mois au-dessus n'est pas
+              une faute.
+            </p>
           )}
         </>
       )}

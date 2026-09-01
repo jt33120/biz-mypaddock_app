@@ -18,7 +18,17 @@ import { formaterChrono, formaterEuros } from '../db/depot'
  * chrono est fausse deux fois : elle divise par le mauvais nombre, et elle
  * présente comme une mesure ce qui est une estimation.
  */
-export function Saison({ db }: { db: PowerSyncDatabase }) {
+export function Saison({ db, onArgentParPoste }: {
+  db: PowerSyncDatabase
+  /** LA PORTE VERS L'ANALYSE, PRÉ-RÉGLÉE SUR FINANCE · POSTE — 1er septembre
+   *  2026. Ce bilan dit « dépensé : 2 180 € » et s'arrête là ; la composition de
+   *  ces 2 180 € vivait au fond du garage, verrouillée sur l'année courante.
+   *  C'est le lien qui manquait entre le chiffre et sa forme.
+   *
+   *  `null` quand rien n'est saisi : App.tsx le retire plutôt que de laisser un
+   *  lien qui ouvre un écran sans matière. */
+  onArgentParPoste: (() => void) | null
+}) {
   const [annees, setAnnees] = useState<number[]>([])
   const [annee, setAnnee] = useState<number | null>(null)
   const [b, setB] = useState<Bilan | null>(null)
@@ -109,6 +119,30 @@ export function Saison({ db }: { db: PowerSyncDatabase }) {
           {repereDuMois != null && <>{' '}· soit un repère de {formaterEuros(repereDuMois)} par mois</>}
           {' '}· dépensé sur l'année {formaterEuros(b.depenseCentimes)}
         </p>
+      )}
+
+      {/* ⚠ UN LIEN, ET IL SUIT LE CHIFFRE QU'IL EXPLIQUE. Il est posé après tout
+          ce que ce bilan dit de l'argent — le « dépensé » des chiffres, puis le
+          plafond quand il y en a un — parce que c'est là qu'on se demande « en
+          quoi ? ». En tête d'écran il serait passé avant le chiffre qu'il
+          commente, donc avant la question.
+
+          ⚠ ET IL NE PROMET AUCUNE ANNÉE. Les puces de ce bilan choisissent une
+          saison ; le raccourci, lui, ne tourne que les DEUX PREMIÈRES molettes de
+          l'analyse — domaine et axe — et la période là-bas vaut la saison la plus
+          récente, comme partout ailleurs. Écrire « ta saison 2025 » sur ce lien
+          alors qu'il ouvre 2026 serait exactement le défaut que ce produit paie
+          le plus cher : une phrase qui contredit ce qu'elle montre. La période se
+          retape en une puce une fois là-bas.
+
+          ⚠ ET AUCUN CHIFFRE DESSUS. Un total posé sur un lien serait un cinquième
+          montant dans un écran qui en compte déjà quatre, et il ne se rattacherait
+          à rien — c'est l'argument qui a sorti « ce qu'elle a coûté » des trois
+          cases du garage, mot pour mot (Garage.tsx). */}
+      {onArgentParPoste && b.depenseCentimes > 0 && (
+        <button className="lien" onClick={onArgentParPoste}>
+          Cet argent, poste par poste
+        </button>
       )}
 
       {report && (

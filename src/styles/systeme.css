@@ -1223,3 +1223,42 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
    réagit au doigt invite à taper dessus, et taper dessus voudrait dire
    « atteint ». */
 .objectifs .ligne-atelier { align-items: center; }
+
+/* ─── L'ANALYSE — LES TROIS RANGÉES QUI FONT LA PHRASE ─────────────────────
+   Domaine, axe, période : trois rangées de `.puce` qui se lisent de haut en bas
+   comme une phrase de trois mots. L'écart ENTRE les rangées est plus grand que
+   l'écart entre les puces d'une même rangée (8 px dans `.puces`) — sans ça,
+   trois rangées se lisent comme UNE rangée qui aurait débordé, et le pilote
+   croit choisir dans un seul jeu.
+
+   Le filet du bas sépare CE QU'ON CHOISIT de CE QU'ON LIT. Sans lui, la rangée
+   des saisons et le titre du tracé se suivent au même écart, et le titre a l'air
+   d'une quatrième rangée. L'écran retire le cadre entier quand les trois rangées
+   se sont tues, pour ne pas dessiner un trait au-dessus de rien.
+
+   ⚠ AUCUNE CLASSE DE TRACÉ ICI, et c'est délibéré. Les barres portent
+   `barre-argent`, la suite emprunte le `.courbe .trace` qui existe déjà : la
+   feuille garde donc UN SEUL endroit qui règle la taille d'un tracé, et `.trace`
+   n'est jamais déclarée au premier niveau. `.vignette` puis `.barre` ont coûté
+   deux défauts de ce genre en deux jours, dont un qui plaquait chaque barre
+   par-dessus la barre de navigation.
+
+   `.puces` enveloppe déjà (`flex-wrap`) : à 375 px la rangée du domaine tient
+   sur deux lignes quand ses trois mots sont là, et c'est la seule mise en page
+   qui n'en coupe aucun. La cible reste celle de `.puce` — `--cible-min`, 52 px,
+   au-delà des 44 px exigés. */
+.analyse-choix {
+  gap: 12px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--filet);
+}
+
+/* ⚠ `.note` N'EXISTE PAS AU PREMIER NIVEAU DE CETTE FEUILLE : elle n'est
+   habillée que sous un écran — `.garage .note`, `.compte .note`, `.depense
+   .note`. Une note posée hors de ces trois-là retombe sur le corps de texte,
+   16 px en `--encre`, c'est-à-dire aussi forte que ce qu'elle commente. Or
+   l'analyse en pose quatre sortes — la complétude, l'argent non compté, la note
+   du croisement, la légende de l'axe — et ce sont précisément les phrases qui
+   doivent se lire sans couvrir le tracé. Mêmes deux propriétés que les trois
+   autres écrans, au mot près : c'est un quatrième cas du même motif, pas un
+   réglage propre à l'analyse. */
+.analyse-ecran .note { color: var(--encre-tenue); font-size: 13px; }
