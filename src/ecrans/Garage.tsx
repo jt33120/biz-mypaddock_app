@@ -104,7 +104,10 @@ export function Garage({ db, onEcrit }: {
       return
     }
     setEnCours(true); setSouci(null); setCandidat(null)
-    const issue = await genererPortrait(db, machine.id, f)
+    // Le sujet est NOMMÉ, il n'est plus un `string` nu : le serveur choisit
+    // désormais son prompt d'après lui, et un identifiant tout seul ne dit pas
+    // s'il désigne une moto ou un casque.
+    const issue = await genererPortrait(db, { machineId: machine.id }, f)
     setEnCours(false)
     if (issue.ok) setCandidat(issue.sprite)
     else setSouci(issue.message)

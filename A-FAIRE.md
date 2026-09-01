@@ -25,6 +25,99 @@ inventées · le fond vert se détache-t-il sans frange.
 
 ---
 
+## 1bis · Le premier rendu du CASQUE et de la COMBINAISON — la manip est prête
+
+**Ce qui attend :** trois générations réelles, à lancer **le jour où les crédits sont
+rechargés**, et pas avant. Le prompt de la tenue (`supabase/functions/sprite/tenue.ts`,
+version `v7-tenue`) **n'a jamais tourné**, exactement comme v6 en son temps : il est écrit,
+relu et déployable, il n'est pas éprouvé. Aucun appel n'a été fait pour l'écrire — ni depuis
+le banc, ni depuis la fonction.
+
+**Pourquoi c'est bloqué :** les mêmes crédits que le §1, épuisés le 19 août 2026
+(`429 · prepayment credits are depleted`).
+
+**Ce que ça débloque :** le casque et la combinaison en portrait pixel — « la combinaison
+c'est comme un skin, et le casque aussi ». Jusqu'ici un casque partait avec le prompt de la
+MOTO : il recevait littéralement « c'est CETTE moto » et « l'angle est un PROFIL STRICT ».
+Le serveur choisit désormais son prompt d'après un champ `sujet`, et l'angle de la tenue est
+l'INVERSE de celui de la moto — trois-quarts, pour montrer l'écran et la mentonnière.
+
+**Ce que ça coûtera :** ≈ 0,16 € la pièce, ≈ 0,48 € pour les trois. C'est exactement le quota
+par défaut : ces trois-là le consomment en entier. Relève-le d'abord si tu veux pouvoir
+recommencer (`update pilote set quota_sprites = 10 …`, A-BRANCHER §4).
+
+### La manip, dans l'ordre
+
+**① Le secret.** `GEMINI_IMAGE` dans Supabase → Project Settings → Edge Functions → Secrets
+(§1 ci-dessus). S'il est déjà posé, rien à faire.
+
+**② Redéployer la fonction.** Elle porte maintenant deux fichiers de prompt, et la version
+actuellement en ligne ignore le champ `sujet` — elle dessinerait une moto :
+
+    supabase functions deploy sprite --no-verify-jwt
+
+`--no-verify-jwt` n'est pas un confort : l'authentification est faite **dans le corps** de la
+fonction pour distinguer « sans compte » de « quota atteint » et le dire au pilote. Sans ce
+drapeau, la porte de plateforme rejette avec un corps opaque et le produit n'a plus rien à
+dire.
+
+**③ Vérifier les refus AVANT de dépenser.** Ces deux appels ne coûtent rien, et ce sont eux
+qui protègent la suite. Sans jeton :
+
+    curl -s -X POST "$SUPABASE_URL/functions/v1/sprite"      → {"refus":"sans_compte"}
+
+Avec ton jeton, mais un sujet que la fonction ne connaît pas — le refus doit tomber **avant**
+la réservation, donc sans consommer de créneau :
+
+    curl -s -X POST "$SUPABASE_URL/functions/v1/sprite" \
+      -H "Authorization: Bearer <ton jeton>" -H 'Content-Type: application/json' \
+      -d '{"photo":"AAAA","sujet":"gants"}'                  → {"refus":"sujet_inconnu"}
+
+Si cette seconde ligne répond autre chose que `sujet_inconnu`, **arrête-toi là** : la garde ne
+tient pas, et tout ce qui suit dépense. (Ne remplace pas `"gants"` par `"machine"` pour
+« voir » : celui-là, lui, part et se paie.)
+
+**④ Les trois pièces, dans cet ordre : casque, combinaison NOIRE, combinaison colorée.**
+L'ordre n'est pas arbitraire. Le casque porte la demande — c'est son angle qui est en jeu. La
+combinaison noire est le cas le plus facile à rater : sans les trois gris froids, elle revient
+en silhouette pleine, illisible. La colorée vient en dernier et ne sert qu'à confirmer que ses
+bandes passent le budget de 3 carrés.
+
+Pour chacune : **Garage → Équipement → la pièce** — elle doit porter son **genre**
+(casque ou combinaison), sinon l'écran le dit et **n'appelle pas** → « Photographier » →
+« En faire un portrait pixel » → « Lancer la fabrication ».
+
+**⑤ Le verdict, dans cet ordre. Ce qui fait REFUSER :**
+
+1. **l'angle** — trois-quarts avant, ouverture d'écran vers la gauche. Un casque de profil
+   strict (une forme d'œuf) ou vu de face est à refuser : c'est l'exigence même de la demande.
+2. **la stabilité** — pose les deux premiers casques côte à côte. S'ils ne sont pas sous le
+   même angle, à la même hauteur d'écran et à la même taille, le prompt a échoué **même si
+   chaque image est jolie prise seule**. C'est le critère qui compte, et c'est le seul qui ne
+   se voit pas sur une image isolée.
+3. **les lettres** — la marque au front, sur la platine d'écran, sur la jugulaire, sur la
+   poitrine. Une seule lettre inventée = refus. Une suite de petits blocs alignés comme un mot
+   = refus aussi, c'est encore du faux texte.
+4. **le noir** — la combinaison noire garde ses arêtes et reste FROIDE. Silhouette pleine, ou
+   noir viré violet, ou noir éclairci en gris moyen = refus.
+5. **le fond vert** — aucune frange verte au contour, et aucun vert dans les creux : col,
+   poignets, bas de jambes, intérieur de l'ouverture d'écran. C'est ce qui se voit après
+   spritification, pas avant.
+6. **personne dedans** — aucune tête, aucun visage, aucune main, aucun mannequin, aucun
+   cintre, aucun socle, aucune ombre portée.
+
+**⑥ Ce qu'on fait d'un refus.** On ne relance pas au hasard : chaque relance se paie et
+consomme un créneau. Le prompt se corrige dans `supabase/functions/sprite/tenue.ts`, il se
+rejoue **au banc** sur les mêmes photos, et seulement ensuite on redéploie :
+
+    node banc-rendu/generer.mjs prompts/v7-tenue.js
+
+Le banc lit le sujet dans un fichier posé à côté de la photo — `casque.jpg.cadre.json`
+contenant `{"genre":"casque"}`. Sans lui il refuse la photo au lieu de deviner, et il refuse
+**avant** l'appel : une photo mal étiquetée ne coûte rien.
+
+---
+
 ## 2 · SMTP personnalisé — bloqué par le domaine
 
 **Ce qui attend :** la checklist complète est dans `A-BRANCHER.md` §2. En résumé : un domaine
