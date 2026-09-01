@@ -148,10 +148,19 @@ verifier('   la journée reçoit aussi la réparation une seule fois',
   coutJournee.includes('123,45 €') && !coutJournee.includes('246,90 €'), coutJournee)
 await onglet('GARAGE')
 await page.waitForSelector('.atelier.budget .atelier-tete', { timeout: 20_000 })
-await page.waitForFunction(() =>
-  document.querySelector('.atelier.budget .atelier-tete')?.textContent.includes('123,45 €'),
-null, { timeout: 20_000 })
-const budget = await texte('.atelier.budget .atelier-tete')
+/* ⚠ LA LECTURE SE FAIT DANS L'ATTENTE, PAS APRÈS ELLE — 1er septembre 2026.
+   Attendre le montant puis le relire dans un second appel laisse un intervalle,
+   et le module de budget passe par un état VIDE à chaque montage : `charger()`
+   part de `lignes = []`, donc d'un total à zéro, donc du tiret. Sous la charge
+   du banc complet cet état dure assez longtemps pour tomber entre les deux
+   appels — l'attente réussissait, la relecture lisait « — », et l'essai rougissait
+   deux fois sur trois AU BANC en restant vert seul. Un essai qui dépend de la
+   machine qui le fait tourner est un essai qu'on finit par ne plus croire.
+   L'attente rend donc le texte qu'elle a vu, et c'est celui-là qu'on éprouve. */
+const budget = (await (await page.waitForFunction(() => {
+  const t = document.querySelector('.atelier.budget .atelier-tete')?.textContent
+  return t && t.includes('123,45 €') ? t : null
+}, null, { timeout: 20_000 })).jsonValue()).replace(/\s+/g, ' ')
 verifier('⑤ le budget reçoit la dépense une seule fois',
   budget.includes('123,45 €') && !budget.includes('246,90 €'), budget)
 await page.click('button.atelier:has-text("Bricoles")')

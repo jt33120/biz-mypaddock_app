@@ -161,7 +161,7 @@ export const moisDuJour = (jour: string | null | undefined): string | null => {
  * ⚠ LE JOUR D'UNE DÉPENSE NE SORT PAS DE L'ANNÉE QUE LE BUDGET MONTRE.
  *
  * `saison_annee` se dérive du jour à la saisie et ne bouge plus (AD-18), et les
- * DEUX lectures du budget — `parPoste`, `parMois` — filtrent sur une seule
+ * La lecture du budget — `parPoste` — filtre sur une seule
  * année : celle que le garage affiche, l'année en cours. Un jour corrigé vers
  * décembre dernier fabriquait donc une ligne parfaitement écrite, parfaitement
  * envoyée, et VISIBLE NULLE PART — pendant que le raccourci de l'accueil
@@ -251,15 +251,6 @@ export const grouperParMois = (lignes: DepenseDatee[]): LigneMois[] => {
     // ferait du mois le plus cher une tête de liste, donc un verdict.
     .sort((a, b) => (a.mois === null ? 1 : b.mois === null ? -1 : a.mois < b.mois ? -1 : 1))
 }
-
-/** Ce que chaque mois d'une saison a coûté. La requête ne groupe rien : elle
- *  sort les trois colonnes, et le groupement — donc la règle — vit dans une
- *  fonction pure qu'un essai peut faire rougir. */
-export const parMois = async (
-  db: PowerSyncDatabase, annee: number,
-): Promise<LigneMois[]> => grouperParMois(
-  await db.getAll<DepenseDatee>(
-    `SELECT date_jour, poste, montant_centimes FROM depense WHERE saison_annee = ?`, [annee]))
 
 /**
  * LE REPÈRE MENSUEL — la décision de Julian du 25 août, moitié « mois ».

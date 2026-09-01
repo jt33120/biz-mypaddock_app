@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
-import { anneesSaisies } from '../db/bilan'
 import type { Courbe as Chrono } from '../db/courbe'
 import {
+  anneesAvecMatiere,
   courbesDesCircuits, domainesDe, formeRendue, tracesDisponibles, tracesDuDomaine,
   NOM_DOMAINE, TOUTES_ANNEES, type Axe, type Domaine, type Trace,
 } from '../db/analyse'
@@ -77,7 +77,22 @@ import { Courbe, Suite } from './Courbe'
  * dérivation retombe sur le premier domaine et le premier axe VIVANTS. Une porte
  * ne peut donc jamais ouvrir sur du vide.
  */
-export type DepartAnalyse = { domaine: Domaine; axe: Axe }
+export type DepartAnalyse = {
+  domaine: Domaine
+  axe: Axe
+  /** ⚠ LA PÉRIODE VOYAGE AVEC LA PORTE, et sans elle la porte ouvrait ailleurs
+   *  qu'où elle promettait. Les faits qui décident d'OFFRIR une porte sont
+   *  mesurés sur toutes les saisons (`aDeQuoiAnalyser`, src/App.tsx) ; ouvrir sur
+   *  la saison la plus récente faisait porter le garde et le contenu sur deux
+   *  périodes différentes. Un pilote qui a acheté des pneus en 2025 et rien en
+   *  2026 voyait la porte au garage, tapait, et atterrissait sur une saison sans
+   *  matière — indistinguable d'un lien cassé.
+   *
+   *  Chaque porte dit donc la sienne, et elle n'est pas la même partout : le
+   *  garage annonce « saison par saison » et ouvre sur TOUTES ; le bilan d'une
+   *  saison ouvre sur CETTE saison, parce que c'est celle qu'on regardait. */
+  periode?: readonly number[]
+}
 
 /**
  * ⚠ LE CHOIX ET SA LECTURE SONT UN SEUL OBJET, et c'est ce qui interdit au titre
@@ -103,13 +118,19 @@ export function Analyse({ db, depart }: {
   const [chronos, setChronos] = useState<readonly Chrono[]>([])
 
   useEffect(() => {
-    // La période démarre sur la saison la plus récente : `anneesSaisies` les rend
-    // décroissantes, et c'est la convention de `Saison.tsx`. Sans année saisie —
-    // une machine et des gestes d'atelier, pas encore de roulage — elle vaut
-    // « toutes », qui ne filtre rien.
-    void anneesSaisies(db).then((l) => {
+    // ⚠ LES ANNÉES VIENNENT DE `anneesAvecMatiere`, PAS DE `anneesSaisies`. La
+    // seconde ne lit que la table `roulage` — juste pour le bilan de saison, qui
+    // parle de journées, faux ici : une année qui porte de l'argent ou des gestes
+    // sans aucune journée vécue n'aurait eu aucune puce, donc aucun moyen d'être
+    // atteinte, alors que la porte de l'onglet, elle, l'avait vue.
+    //
+    // ⚠ ET UNE PORTE PRÉ-RÉGLÉE IMPOSE SA PÉRIODE — voir `DepartAnalyse`. Sans
+    // elle, la porte ouvrait sur la saison la plus récente alors que les faits
+    // qui l'ont offerte étaient mesurés sur toutes : le garde et le contenu
+    // portaient sur deux périodes différentes.
+    void anneesAvecMatiere(db).then((l) => {
       setAnnees(l)
-      setPeriode(l.length ? [l[0]] : TOUTES_ANNEES)
+      setPeriode(depart?.periode ?? (l.length ? [l[0]] : TOUTES_ANNEES))
     })
   }, [db])
 
@@ -144,12 +165,14 @@ export function Analyse({ db, depart }: {
   const duDomaine = domaineChoisi ? tracesDuDomaine(traces, domaineChoisi) : []
   const trace = duDomaine.find((t) => t.croisement.axe === axe) ?? (duDomaine[0] ?? null)
 
-  // ⚠ LA FORME EST CELLE DE LA TABLE, REPOSÉE SUR LE NOMBRE DE LIGNES
-  // RÉELLEMENT RENDUES. `lire` la tranche sur les lignes BRUTES, et le comblage
-  // des mois retire ensuite la ligne « Sans mois » : trois brutes — deux mois et
-  // une dépense sans date — n'en laissent que deux, et `Suite` refuserait de
-  // tracer une droite entre deux points. L'écran n'invente aucune règle, il rend
-  // à `formeRendue` le compte final ; le remède de fond est dans `lire`.
+  // ⚠ LA FORME EST CELLE DE LA TABLE, REPOSÉE SUR LE NOMBRE DE LIGNES RENDUES.
+  // `lire` a DÉJÀ tranché sur les pas réellement placés — elle comble les mois et
+  // sort les orphelines AVANT d'appeler `formeRendue`, et son propre commentaire
+  // le dit. On la repose ici parce que c'est idempotent et qu'un écran qui
+  // vérifie ne doit pas pouvoir se tromper, pas parce que `lire` aurait tort.
+  // (Une version de ce commentaire accusait `lire` de trancher sur les lignes
+  //  brutes. C'était faux, et un commentaire qui envoie « réparer » du code juste
+  //  coûte plus qu'un commentaire absent.)
   const forme = trace ? formeRendue(trace.forme, trace.lignes.length) : null
 
   useEffect(() => {
@@ -165,7 +188,7 @@ export function Analyse({ db, depart }: {
 
   const { croisement } = trace
   const lecture = croisement.phrase(lu.periode)
-  const description = croisement.note ?? ''
+  const description = croisement.note
 
   // ⚠ LE CADRE DU CHOIX DISPARAÎT AVEC SES RANGÉES. Il porte le filet qui sépare
   // ce qu'on choisit de ce qu'on lit : le garder quand les trois rangées se sont
@@ -206,8 +229,16 @@ export function Analyse({ db, depart }: {
 
           {/* LA PÉRIODE N'APPARAÎT QU'À PARTIR DE DEUX SAISONS, exactement la
               règle de `Saison.tsx`. En 2026 elle coûte zéro pixel au pilote qui
-              vient de commencer : il n'a pas à choisir entre une seule chose. */}
-          {annees.length > 1 && (
+              vient de commencer : il n'a pas à choisir entre une seule chose.
+
+              ⚠ ET ELLE DISPARAÎT SOUS LE CHRONO. La progression se lit sur toute
+              son histoire — `courbesDesCircuits` n'a aucun paramètre d'année et
+              `lire` court-circuite la période pour cette forme. La rangée y
+              restait pourtant affichée : le pilote tapait une saison, la puce
+              s'allumait, et le dessin ne bougeait pas d'un pixel. Un bouton qui
+              appelle le doigt et ne fait rien est exactement ce que les deux
+              autres rangées s'interdisent en disparaissant sous un seul choix. */}
+          {annees.length > 1 && forme !== 'chrono' && (
             <div className="puces" role="group" aria-label="Période">
               {annees.map((a) => (
                 <button key={a} className="puce"
@@ -257,22 +288,18 @@ export function Analyse({ db, depart }: {
 }
 
 /**
- * ⚠ LA SEULE CONVERSION DE CET ÉCRAN, ET ELLE N'A PAS VOCATION À SURVIVRE.
+ * ⚠ LA SEULE CONVERSION DE CET ÉCRAN, ET CE QU'ELLE FAIT EXACTEMENT.
  *
- * `Suite` reçoit les `LigneAnalyse` telles quelles. `Barres`, elle, date du tracé
- * de l'argent : sa `Barre` porte `centimes` et écrit la valeur avec
- * `formaterEuros`. Or trois croisements de la table comptent des GESTES et des
- * JOURNÉES, pas des euros — trois interventions y sortiraient « 0,03 € », avec
- * l'aplomb d'un montant. C'est précisément pour ça que `LigneAnalyse` porte
- * `libelle`, la valeur DÉJÀ ÉCRITE par la seule couche qui connaisse l'unité
- * (src/db/analyse.ts) : le tracé n'a rien à formater, donc rien à formater de
- * travers.
+ * `Suite` reçoit les `LigneAnalyse` telles quelles. `Barres` vient du tracé de
+ * l'argent : sa `Barre` mesure la longueur sur `centimes`, un nom qui dit son
+ * origine. La ligne passe donc ENTIÈRE — `cle` comprise, qui la clef —, avec
+ * `centimes` recopié depuis `valeur` pour cette longueur-là.
  *
- * La ligne passe donc ENTIÈRE, avec `centimes` en plus pour la `Barre`
- * d'aujourd'hui. Le jour où `Barres` lit `libelle` au lieu d'appeler
- * `formaterEuros` — un champ dans un type, une ligne dans le rendu, ses trois
- * props inchangées —, cette fonction se supprime sans rien réécrire ici.
- * Jusque-là, seuls les croisements en euros disent vrai : ce commentaire est la
- * mémoire de la marche manquante, pas son excuse.
+ * Ce qui NE se convertit pas, c'est le TEXTE de la valeur : `Barres` lit
+ * `libelle` et ne formate rien quand il est fourni. Trois croisements comptent
+ * des GESTES et des JOURNÉES, pas des euros ; sans ce champ ils sortiraient
+ * « 0,03 € » pour trois interventions, avec l'aplomb d'un montant. La seule
+ * couche qui connaisse l'unité l'écrit (src/db/analyse.ts), et le tracé n'a rien
+ * à deviner.
  */
 const enBarres = (trace: Trace) => trace.lignes.map((l) => ({ ...l, centimes: l.valeur }))

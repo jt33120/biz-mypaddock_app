@@ -81,15 +81,13 @@ export function Budget({ db, annee, machineId, onEcrit }: {
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState<Poste | null>(null)
 
-  /* ⚠ `parMois` N'EST PLUS LU ICI, ET IL N'EST PLUS LU NULLE PART. Il
-     n'alimentait que le tracé parti à l'analyse (voir la tête du fichier), et
-     ce module était son seul appelant. Le GROUPEMENT, lui, survit et sert :
-     `argentParMois` (src/db/analyse.ts) appelle `grouperParMois` tel quel — la
-     fonction pure que le banc fait déjà rougir. C'est la lecture SQL qui
-     l'enveloppait, et elle seule, qui n'a plus d'appelant. Une requête gardée
-     « au cas où » est une requête que personne ne regarde et que personne ne
-     corrige : `parMois` est donc à retirer de `db/budget.ts`, qui n'est pas ce
-     fichier-ci. */
+  /* ⚠ CE MODULE NE LIT PLUS QUE LES POSTES. Le tracé des mois est parti à
+     l'analyse (voir la tête du fichier), et `parMois` — la lecture SQL qui
+     l'alimentait — a été retirée de `db/budget.ts` au même commit : elle n'avait
+     plus aucun appelant, et une requête gardée « au cas où » est une requête que
+     personne ne regarde et que personne ne corrige. Le GROUPEMENT, lui, survit
+     et sert : `argentParMois` (src/db/analyse.ts) appelle `grouperParMois` tel
+     quel — la fonction pure que le banc fait déjà rougir. */
   const charger = useCallback(async () => {
     setLignes(await parPoste(db, annee))
     setPlafond(await budgetDeclare(db, annee))
@@ -273,7 +271,7 @@ function Ajouter({ db, poste, machineId, annee, onFini, onAnnuler }: {
   db: PowerSyncDatabase; poste: Poste; machineId: string | null
   /** ⚠ L'ANNÉE QUE L'APPELANT MONTRE, et la seule où le jour ait le droit de
    *  tomber. Ce n'est pas une préférence d'ergonomie : les deux lectures du
-   *  budget (`parPoste`, `parMois`) filtrent `WHERE saison_annee = ?` sur cette
+   *  budget (`parPoste`) filtre `WHERE saison_annee = ?` sur cette
    *  année-là, et le garage ne montre jamais que l'année en cours. Une facture
    *  de décembre retrouvée en janvier et datée de décembre partait donc dans une
    *  saison qu'AUCUN écran du produit n'affiche — pendant que le raccourci de

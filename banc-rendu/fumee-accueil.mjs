@@ -111,8 +111,25 @@ await page.click('.atelier-tete:has-text("Budget ·")')
 const budget = (await page.textContent('.atelier.budget')).replace(/\s+/g, ' ')
 console.log('   la ligne écrite porte son poste :',
   /Engagement[^€]*230 €/.test(budget) ? 'oui' : 'NON')
+// ⚠ LE MOIS NE SE LIT PLUS DANS LE BUDGET — 1er septembre 2026, le tracé des
+// mois est parti à l'écran d'analyse. Ce qu'on vérifie ici n'a pas changé : que
+// la dépense notée depuis L'ACCUEIL porte bien son jour, donc son mois, jusqu'à
+// l'endroit où le mois se rend. Une dépense sans jour existait, et elle
+// s'affichait sous « Sans mois ».
+await onglet('ANALYSE')
+await page.waitForSelector('.analyse-ecran', { timeout: 20_000 })
+// La rangée des domaines se tait tant qu'un seul a de la matière : on ne clique
+// dessus que si elle est là.
+const fin = page.locator('.analyse-choix .puces[aria-label="Domaine"] .puce:has-text("FINANCE")')
+if (await fin.count()) await fin.first().click()
+await page.click('.analyse-choix .puces[aria-label="Selon quoi"] .puce:has-text("Mois")')
+await page.waitForFunction(() => {
+  const n = document.querySelector('.analyse-ecran .sous-titre')
+  return !!n && n.textContent.includes('mois après mois')
+}, null, { timeout: 20_000 })
+const parMois = (await page.textContent('.analyse-ecran')).replace(/\s+/g, ' ')
 console.log('   la ligne écrite porte son mois :',
-  new RegExp(`${moisCourant}[^€]*230 €`).test(budget) ? 'oui' : 'NON — le jour a été jeté à l\'écriture')
+  new RegExp(`${moisCourant}[^€]*230 €`).test(parMois) ? 'oui' : 'NON — le jour a été jeté à l\'écriture')
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/acc.png', fullPage: true })
 await nav.close()

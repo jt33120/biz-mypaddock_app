@@ -152,10 +152,18 @@ const ROULAGES_A_ANALYSER = 3
  * n'a pas posée.
  */
 const aDeQuoiAnalyser = async (db: Db): Promise<Porte> => ({
-  poste: (await argentParPoste(db, TOUTES_ANNEES)).length > 0,
-  moto: (await argentParMoto(db, TOUTES_ANNEES)).length > 0,
+  // ⚠ SEULES LES LIGNES NON INCERTAINES COMPTENT, et c'est la règle de
+  // `tracesDisponibles` recopiée ici plutôt que contredite. Elle refuse un tracé
+  // fait UNIQUEMENT d'incertain — « une puce Mois qui n'ouvre que sur une barre
+  // Sans mois promet un découpage que la donnée ne porte pas ». Le garde, lui,
+  // comptait toutes les lignes : une seule dépense sans poste ET sans jour — une
+  // ligne d'avant le récit 19.2, ou restaurée d'une vieille sauvegarde — ouvrait
+  // donc l'onglet sur un écran que `tracesDisponibles` rendait vide. Le pilote
+  // tapait ANALYSE et tombait sur un blanc, ce qui se lit comme un plantage.
+  poste: (await argentParPoste(db, TOUTES_ANNEES)).some((l) => !l.incertain),
+  moto: (await argentParMoto(db, TOUTES_ANNEES)).some((l) => !l.incertain),
   journees: (await journeesVecues(db, TOUTES_ANNEES)).length,
-  gestes: (await gestesParMoto(db, TOUTES_ANNEES)).length > 0,
+  gestes: (await gestesParMoto(db, TOUTES_ANNEES)).some((l) => !l.incertain),
 })
 
 /** L'onglet : une dépense, ou trois journées vécues, ou un geste consigné.
@@ -617,8 +625,12 @@ export default function App() {
                                             onNouveau={() => setEcran('nouveau')}
                                             onEcrit={() => void rafraichir(db)}
                                             onArgentParPoste={porte.poste
-                                              ? () => {
-                                                setDepartAnalyse({ domaine: 'finance', axe: 'poste' })
+                                              ? (annee) => {
+                                                // La porte ouvre sur LA saison qu'on regardait, pas
+                                                // sur celle que l'analyse choisirait par défaut.
+                                                setDepartAnalyse({
+                                                  domaine: 'finance', axe: 'poste', periode: [annee],
+                                                })
                                                 setEcran('analyse')
                                               }
                                               : null} />}
@@ -735,7 +747,20 @@ export default function App() {
                      s'il y a de l'argent à répartir. `null` la retire : Garage
                      ne rend rien du tout, plutôt qu'un lien gris. */
                   onArgentParMoto={porte.moto
-                    ? () => { setDepartAnalyse({ domaine: 'finance', axe: 'moto' }); setEcran('analyse') }
+                    ? () => {
+                        // ⚠ ELLE OUVRE SUR TOUTES LES SAISONS, ET SON LIBELLÉ NE NOMME
+                        // AUCUNE ANNÉE : « ce que chaque moto t'a coûté » se lit sur la
+                        // vie de la machine, pas sur l'exercice en cours, et le garage
+                        // lui-même n'est découpé par aucune saison. C'est aussi la seule
+                        // période sur laquelle l'écran a de la matière À COUP SÛR : le
+                        // garde qui a offert cette porte a été mesuré sur toutes
+                        // (`aDeQuoiAnalyser`), et ouvrir sur la saison la plus récente
+                        // pouvait donc tomber sur un écran vide.
+                        setDepartAnalyse({
+                          domaine: 'finance', axe: 'moto', periode: TOUTES_ANNEES,
+                        })
+                        setEcran('analyse')
+                      }
                     : null} />
         )}
         {/* ⚠ L'ÉCRAN NE SE MONTE QUE SI L'ONGLET EXISTE, et ce n'est pas une
@@ -1267,7 +1292,7 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit, onArgen
   onNouveau: () => void; onEcrit: () => void
   /** La porte du bilan de saison vers l'analyse — FINANCE · POSTE. `null` quand
    *  aucune dépense n'est saisie : le bilan ne montre alors rien à ouvrir. */
-  onArgentParPoste: (() => void) | null
+  onArgentParPoste: ((annee: number) => void) | null
 }) {
   const groupes = classerRoulages(liste)
   return (

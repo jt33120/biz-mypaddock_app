@@ -4,7 +4,7 @@ import { formaterEuros } from '../db/depot'
  * LE TRACÉ DE L'ARGENT — récit 19.4.
  *
  * « Des graphiques par poste et par mois. » — Julian, 25 août. Les huit postes
- * étaient déjà calculés (`parPoste`) et les mois aussi (`parMois`) : ils
+ * étaient déjà calculés (`parPoste`) et les mois aussi : ils
  * n'existaient qu'en liste de texte, repliée derrière un tap.
  *
  * ⚠ ET IL NE TRACE PLUS SEULEMENT DE L'ARGENT — 1er septembre 2026. L'écran
@@ -22,11 +22,14 @@ import { formaterEuros } from '../db/depot'
  *   Mesurée contre la plus grosse part, elle dit une COMPOSITION : voilà en quoi
  *   ta saison est partie. Le portefeuille énonce, la jauge jugerait.
  *
- *   C'est pour ça que le type de ce fichier n'a que trois champs de données et
- *   qu'aucun appelant ne peut passer un sommet : rien dans le type ne
+ *   C'est pour ça qu'AUCUN champ de `Barre`, ni aucune des trois props de
+ *   `Barres`, ne peut porter un sommet : rien dans un nombre venu du dehors ne
  *   distinguerait « le plus gros de l'autre moto » d'un maximum à ne pas
  *   dépasser, et le second EST la jauge. Le sommet se calcule DEDANS, ou il
- *   n'existe pas.
+ *   n'existe pas. (Cette phrase a compté « trois champs de données » un temps ;
+ *   `Barre` en portait déjà quatre, et l'invariant n'a jamais été un compte —
+ *   c'est ce qu'un champ a le droit de contenir. Un nombre qui vieillit à chaque
+ *   ajout affaiblit la règle qu'il prétend garder.)
  *
  * ⚠ ② AUCUNE COULEUR NE DISTINGUE LES PARTS, et ce n'est pas un manque
  *   d'ambition. La palette du produit a quatre teintes utiles, et l'une d'elles
@@ -120,6 +123,17 @@ export type Barre = {
    *  mois ». Il s'affiche en retrait, jamais absent : les ranger d'office
    *  ferait croire qu'un choix a été fait. */
   incertain?: boolean
+  /** ⚠ CE QUI IDENTIFIE LA LIGNE, QUAND SON NOM NE SUFFIT PAS — et son nom ne
+   *  suffit pas. `LigneAnalyse` (src/db/analyse.ts) le dit noir sur blanc :
+   *  « `cle` EST UNIQUE, `nom` NE L'EST PAS ». Deux motos du même modèle au
+   *  garage produisent deux barres homonymes — `nomMachine` rend le modèle SEUL —
+   *  et React réconciliait alors deux lignes sur la même clé : avertissement en
+   *  console, et deux barres qui peuvent s'échanger quand la période change.
+   *  `Suite` se clait déjà sur `cle` ; ce champ met les deux tracés d'accord.
+   *
+   *  ⚠ ET IL NE PEUT PORTER NI ÉCHELLE NI CIBLE : c'est une chaîne d'identité,
+   *  jamais un nombre. L'invariant « ce n'est pas une jauge » tient. */
+  cle?: string
 }
 
 export function Barres({ titre, barres, description }: {
@@ -138,9 +152,9 @@ export function Barres({ titre, barres, description }: {
   return (
     <div className="pile trace-argent">
       <span className="sous-titre">{titre}</span>
-      <p className="note">{description}</p>
+      {description && <p className="note">{description}</p>}
       {barres.map((b) => (
-        <div className="pile barre-argent-ligne" key={b.nom}>
+        <div className="pile barre-argent-ligne" key={b.cle ?? b.nom}>
           <div className="rang">
             <span className={b.incertain ? 'texte faible' : 'texte'}>{b.nom}</span>
             <span className={b.incertain ? 'chiffre hud-16 faible' : 'chiffre hud-16'}>

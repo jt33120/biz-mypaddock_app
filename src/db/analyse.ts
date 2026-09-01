@@ -43,6 +43,7 @@
  */
 
 import type { PowerSyncDatabase } from '@powersync/web'
+import { anneesSaisies } from './bilan'
 import { estCategorieIntervention, NOM_CATEGORIE } from './atelier'
 import {
   grouperParMois, moisDuJour, nomMois, NOM_POSTE, type DepenseDatee, type Poste,
@@ -135,6 +136,24 @@ export type LigneAnalyse = {
    *  pour de l'argent c'est le nombre de dépenses additionnées. C'est lui qui
    *  fait la phrase de complétude — « 2 dépenses sans poste ». */
   n: number
+  /** DE QUOI CETTE LIGNE ÉTAIT FAITE, en clair et déjà écrit — « engagement ·
+   *  entretien · pneus » sous un mois. Facultatif, et il l'est vraiment : la
+   *  plupart des croisements n'ont rien à composer sous une part.
+   *
+   *  ⚠ IL NE PORTE JAMAIS UN PLAFOND, UN RANG NI UN ÉCART, et c'est la seule
+   *  chose qu'on lui interdise. Un champ de texte libre sous une part est
+   *  exactement l'endroit par où « + 40 % » et « il te reste X € » arrivent par
+   *  distraction ; un essai unitaire relit d'ailleurs la liste des champs de ce
+   *  type pour cette raison-là.
+   *
+   *  ⚠ ET SEULE LA COMPOSITION LE REND. `Suite` ne le lit pas : douze points
+   *  reliés n'ont pas de place où écrire douze compositions, et l'y forcer
+   *  ferait du tracé une liste. La composition d'un mois se voit donc quand la
+   *  forme EST une composition — sous trois mois (`formeRendue`), ou sous un
+   *  croisement qui n'est pas une suite. C'est une perte assumée sur le tracé
+   *  des mois, héritée du 1er septembre 2026 : le budget en montrait une, la
+   *  suite n'en montre plus, et elle est notée dans A-FAIRE.md. */
+  detail?: string
   /** `true` pour ce que le produit ne sait pas ranger : « Sans poste », « Sans
    *  mois », « Sans moto ». Rendu en teinte atténuée par `Barres`, jamais absent
    *  et jamais rangé d'office dans « autre » — les ranger ferait croire qu'un
@@ -319,8 +338,9 @@ export const CROISEMENTS: readonly Croisement[] = [
     domaine: 'finance', axe: 'roulage', mot: 'Journée',
     phrase: (a) => `Ce que ${saisonDite(a)} ${saisonAccorde(a)} coûté, journée par journée.`,
     forme: 'suite', unite: 'euros', grain: DEPENSE,
-    note: "Un pas par journée vécue, dans l'ordre du calendrier. Une journée sans dépense "
-      + "saisie vaut zéro : c'est une journée, pas un trou.",
+    note: "Seulement ce qui désigne une journée : l'engagement, l'essence, ce que tu as "
+      + "noté sur place. Une assurance de saison ou un train de pneus ne se rangent sous "
+      + "aucune journée. Une journée sans dépense vaut zéro : c'est une journée, pas un trou.",
   },
   {
     domaine: 'finance', axe: 'moto', mot: 'Moto',
@@ -624,8 +644,17 @@ export const argentParMois = async (
   const b = bornes('saison_annee', annees, 'entier')
   const l = await db.getAll<DepenseDatee>(
     `SELECT date_jour, poste, montant_centimes FROM depense${b.seule}`, b.params)
-  return grouperParMois(l).map((m) => euros(
-    m.mois ?? '', m.mois ? nomMois(m.mois) : 'Sans mois', m.total, m.n, m.mois === null))
+  return grouperParMois(l).map((m) => ({
+    ...euros(m.mois ?? '', m.mois ? nomMois(m.mois) : 'Sans mois',
+             m.total, m.n, m.mois === null),
+    // « CE QUE CHAQUE MOIS A COÛTÉ, ET DE QUOI IL ÉTAIT FAIT » — récit 19.2, sa
+    // seconde moitié. Elle vivait dans le budget jusqu'au 1er septembre 2026 ;
+    // elle voyage avec le tracé plutôt que de disparaître avec lui. L'ordre est
+    // celui de `grouperParMois` — le plus gros d'abord, une composition et pas
+    // un palmarès — et on ne le retrie pas ici.
+    detail: m.postes.map((x) => x.poste ? NOM_POSTE[x.poste].toLowerCase() : 'sans poste')
+      .join(' · '),
+  }))
 }
 
 /**
@@ -646,9 +675,20 @@ export const argentParJournee = async (
 ): Promise<LigneAnalyse[]> => {
   const journees = await journeesVecues(db, annees, jour)
   if (!journees.length) return []
+  // ⚠ LE FILTRE D'ANNÉE PORTE SUR LA SOUS-REQUÊTE AUSSI, et il manquait.
+  // `saison_annee` est l'année du PAIEMENT, fixée à la saisie et jamais rebougée
+  // (AD-18) ; `Depense.tsx` borne d'ailleurs le jour saisi à l'année en cours.
+  // Noter en janvier 2026 l'engagement d'une journée de décembre 2025 écrit donc
+  // `saison_annee = 2026` sur une dépense rattachée à un roulage de 2025 — et
+  // sans cette clause, ces 220 € entraient dans « saison 2025, journée par
+  // journée » tout en restant dans « saison 2026, poste par poste ». Deux tracés
+  // sous la même phrase « Ce que ta saison X a coûté » ne totalisaient pas la
+  // même chose, à un tap d'écart. C'est exactement le défaut de comptes
+  // divergents que `journeesVecues` a été écrite pour ne pas rejouer.
+  const bd = bornes('saison_annee', annees, 'entier')
   const sommes = await db.getAll<{ roulage_id: string; total: number | null; n: number }>(
     `SELECT roulage_id, sum(montant_centimes) AS total, count(*) AS n
-       FROM depense WHERE roulage_id IS NOT NULL GROUP BY roulage_id`)
+       FROM depense WHERE roulage_id IS NOT NULL${bd.et} GROUP BY roulage_id`, bd.params)
   const par = new Map<string, { total: number | null; n: number }>(
     sommes.map((s) => [s.roulage_id, s]))
   return journees.map((j) => {
@@ -900,9 +940,16 @@ export const circuitsChronometres = async (
  * ⚠ ET L'ÉQUIPEMENT SANS DATE D'ACHAT FAIT SA PROPRE CLAUSE. `achete_le` est
  * nullable — c'est un MOIS, et souvent on ne s'en souvient pas : le ranger dans
  * la saison choisie l'attribuerait à une année au hasard, l'omettre le ferait
- * disparaître. Il se dit donc à part, comme « Sans mois » se dit à part. Sous
- * « toutes les saisons » il n'y a rien à mettre à part : tout est dedans, daté ou
- * non, et la clause ne s'écrit pas.
+ * disparaître. Il se dit donc à part, comme « Sans mois » se dit à part.
+ *
+ * ⚠ ET SOUS « TOUTES LES SAISONS », LA CLAUSE DE DATE SE RETIRE — ce n'est pas
+ * la même chose que de la laisser sans filtre d'année. La version précédente
+ * gardait `WHERE achete_le IS NOT NULL` en toutes circonstances et
+ * court-circuitait la somme des orphelins : une combinaison de 620 € achetée à
+ * une date oubliée s'annonçait bien sous « ta saison 2026 », puis DISPARAISSAIT
+ * dès qu'on tapait TOUTES — c'est-à-dire dès qu'on choisissait la période qui ne
+ * filtre rien. Le tracé se remettait alors à ressembler à un total, ce que cette
+ * fonction existe précisément pour empêcher.
  */
 export const argentNonCompte = async (
   db: PowerSyncDatabase, annees: readonly number[],
@@ -913,9 +960,15 @@ export const argentNonCompte = async (
       WHERE etat = 'faite' AND depense_id IS NULL${bi.et}`, bi.params)
 
   const be = bornes('substr(achete_le, 1, 4)', annees, 'texte')
+  // Sous une saison choisie : seulement l'équipement daté de cette saison, et les
+  // sans-date se disent à part. Sous TOUTES : une seule somme, datée ou non — il
+  // n'y a plus rien à mettre à part quand aucune année n'est écartée.
   const equipe = await db.get<{ total: number | null }>(
-    `SELECT sum(cout_centimes) AS total FROM equipement
-      WHERE achete_le IS NOT NULL${be.et}`, be.params)
+    annees.length
+      ? `SELECT sum(cout_centimes) AS total FROM equipement
+          WHERE achete_le IS NOT NULL${be.et}`
+      : `SELECT sum(cout_centimes) AS total FROM equipement`,
+    be.params)
 
   const orphelin = annees.length
     ? await db.get<{ total: number | null }>(
@@ -991,24 +1044,77 @@ const lignesDe = (
   return gestesParMois(db, annees)
 }
 
+/**
+ * LES ANNÉES QUI PORTENT QUELQUE CHOSE — et pas seulement celles qui ont roulé.
+ *
+ * ⚠ `anneesSaisies` (src/db/bilan.ts) NE LIT QUE LA TABLE `roulage`, et c'est
+ * juste pour elle : le bilan de saison parle de journées. Ici c'est faux, et le
+ * défaut est atteignable dès février.
+ *
+ * Le pilote n'a encore aucune journée 2027 au carnet, mais il a payé son
+ * assurance et consigné six gestes d'atelier. `anneesSaisies` rend [2026] : une
+ * seule année, donc la rangée des périodes ne s'affiche même pas, donc la
+ * période reste verrouillée sur 2026 — et les 800 € de 2027 sont dans la base,
+ * l'onglet ANALYSE est bien là parce que la porte les a vus, et AUCUN TAP ne
+ * permet de les atteindre. Un écran qui ne montre pas ce qu'il a.
+ *
+ * L'union se fait donc sur les TROIS sources que l'analyse sait lire : la
+ * journée vécue, l'année de paiement d'une dépense (`saison_annee`, fixée à la
+ * saisie — AD-18), et le jour d'un geste d'atelier. Le seuil « à partir de deux »
+ * se conserve tel quel sur cette union.
+ */
+export const anneesAvecMatiere = async (
+  db: PowerSyncDatabase, jour = aujourdhui(),
+): Promise<number[]> => {
+  const [roulees, payees, ateliers] = await Promise.all([
+    anneesSaisies(db, jour),
+    db.getAll<{ a: number }>(
+      `SELECT DISTINCT saison_annee AS a FROM depense WHERE saison_annee IS NOT NULL`),
+    db.getAll<{ a: string }>(
+      `SELECT DISTINCT substr(date_jour, 1, 4) AS a FROM intervention
+        WHERE date_jour IS NOT NULL AND etat = 'faite'`),
+  ])
+  const toutes = new Set<number>(roulees)
+  for (const x of payees) if (Number.isFinite(x.a)) toutes.add(Number(x.a))
+  for (const x of ateliers) {
+    const n = Number(x.a)
+    if (Number.isFinite(n)) toutes.add(n)
+  }
+  // Décroissantes, comme `anneesSaisies` et comme les puces de `Saison.tsx` :
+  // la saison la plus récente d'abord, parce que c'est celle qu'on regarde.
+  return [...toutes].sort((a, b) => b - a)
+}
+
 /** Les croisements d'argent dont le tracé ne voit QUE la table `depense` — donc
  *  ceux qui doivent dire l'atelier et l'équipement. L'axe MOTO en est exclu : il
  *  additionne déjà les interventions, et répéter la phrase là-bas annoncerait
- *  comme manquant un argent qui est dans la barre. */
-const SOUS_COMPTE: readonly Axe[] = ['poste', 'mois', 'roulage', 'annee']
+ *  comme manquant un argent qui est dans la barre.
+ *
+ *  ⚠ ET L'AXE JOURNÉE EN EST SORTI, pour la raison INVERSE de celle de l'axe
+ *  MOTO. Il y était, et sa phrase mentait deux fois : elle annonçait l'atelier et
+ *  l'équipement comme le seul argent hors du tracé, alors qu'une journée ne voit
+ *  que les dépenses portant un `roulage_id` — une assurance de saison, un train
+ *  de pneus, un plein d'essence de cible `saison` en sont dehors AUSSI. Et sa
+ *  justification tombait à faux : cet argent-là porte parfaitement un poste, il
+ *  n'a simplement aucune journée où se ranger. Un tracé qui prétend énumérer ses
+ *  trous et n'en cite qu'un tiers est la clause de l'emport retournée contre
+ *  elle-même. La note du croisement dit maintenant ce qu'il montre. */
+const SOUS_COMPTE: readonly Axe[] = ['poste', 'mois', 'annee']
 
 /**
  * LIRE UN CROISEMENT — la composition des décisions, en un seul endroit.
  *
- * ⚠ ET LE TROU CONNU DE CETTE CHAÎNE, ÉCRIT ICI POUR QU'IL SE VOIE. `Barres`
- * écrit chaque valeur avec `formaterEuros`. Les croisements dont l'unité est
- * `decompte` et la forme `composition` — les gestes par moto, par catégorie, les
- * journées par moto, et tout mois qui retombe en barres sous trois pas — y
- * afficheraient donc « 0,03 € » pour trois gestes. Le champ `libelle` de chaque
- * ligne porte déjà la valeur JUSTE (« 3 gestes ») ; il ne manque qu'un `Barres`
- * qui la préfère à son formateur quand elle est fournie. Rien ici ne peut le
- * faire, et surtout pas multiplier un décompte par cent pour « tomber juste » en
- * euros : ce serait un écran qui ment, ce qui est pire qu'un écran incomplet.
+ * ⚠ CHAQUE LIGNE ÉCRIT SA PROPRE VALEUR, ET C'EST CE QUI TIENT LES UNITÉS.
+ * `Barres` reçoit `libelle` et le PRÉFÈRE à son formateur d'euros
+ * (src/ecrans/Barres.tsx) : les croisements en `decompte` — gestes par moto, par
+ * catégorie, journées par moto, et tout mois qui retombe en barres sous trois
+ * pas — sortent donc « 3 gestes » et non « 0,03 € ». Toute unité neuve DOIT
+ * écrire `libelle`, sinon elle sortira en euros, et elle le verra à l'écran sur
+ * sa première ligne.
+ *
+ * Ce qui reste interdit ici et le restera : multiplier un décompte par cent pour
+ * « tomber juste » en euros. Ce serait un écran qui ment, ce qui est pire qu'un
+ * écran incomplet.
  */
 export const lire = async (
   db: PowerSyncDatabase, c: Croisement, annees: readonly number[], jour = aujourdhui(),

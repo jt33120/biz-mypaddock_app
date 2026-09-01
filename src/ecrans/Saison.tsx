@@ -27,7 +27,9 @@ export function Saison({ db, onArgentParPoste }: {
    *
    *  `null` quand rien n'est saisi : App.tsx le retire plutôt que de laisser un
    *  lien qui ouvre un écran sans matière. */
-  onArgentParPoste: (() => void) | null
+  /** Reçoit l'année REGARDÉE : la porte ouvre sur la saison qu'on quitte,
+   *  pas sur celle que l'analyse choisirait par défaut. */
+  onArgentParPoste: ((annee: number) => void) | null
 }) {
   const [annees, setAnnees] = useState<number[]>([])
   const [annee, setAnnee] = useState<number | null>(null)
@@ -140,7 +142,7 @@ export function Saison({ db, onArgentParPoste }: {
           à rien — c'est l'argument qui a sorti « ce qu'elle a coûté » des trois
           cases du garage, mot pour mot (Garage.tsx). */}
       {onArgentParPoste && b.depenseCentimes > 0 && (
-        <button className="lien" onClick={onArgentParPoste}>
+        <button className="lien" onClick={() => onArgentParPoste(b.annee)}>
           Cet argent, poste par poste
         </button>
       )}
