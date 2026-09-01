@@ -442,3 +442,23 @@ Sinon, c'est un bouton dans Settings → General → Change visibility.
 
 *(Les dates de la saison 2026 sont sorties de cette liste : tu les saisis dans l'application.
 Le bouton « Reprendre la saison 2026 » du garage reste, comme raccourci d'essai.)*
+
+---
+
+## 12 · Une perte assumée du 1er septembre 2026, à trancher quand tu l'auras vue
+
+**La composition d'un mois ne se lit plus dès qu'il y a trois mois.** Le tracé des mois a
+quitté le budget pour l'écran d'analyse — il y gagne une rangée de périodes, alors qu'il était
+verrouillé sur l'année courante et donc muet sur toute saison passée. Mais il y devient une
+**suite** (des points reliés, la forme que tu as choisie pour les évolutions), et douze points
+reliés n'ont aucun endroit où écrire douze compositions.
+
+Concrètement : « septembre 2026 · 716,30 € · pneus · engagement · essence » se lit encore sous
+trois mois, où la forme reste une composition ; au-delà, il ne reste que le montant du mois.
+La moitié « de quoi il était fait » du récit 19.2 est donc **rendue par intermittence**.
+
+Ce n'est pas un oubli, c'est un arbitrage entre deux clauses qui se contredisent ici, et il
+t'appartient : soit la suite gagne une manière de dire la composition d'un point (une ligne
+sous le tracé, qui suivrait le point touché), soit FINANCE · MOIS redevient une composition et
+perd sa ligne continue, soit on s'en tient à ce qu'il y a. Rien ne presse — mais rien ne doit
+non plus l'oublier, d'où cette ligne.

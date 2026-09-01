@@ -13,11 +13,11 @@
  */
 import { UpdateType } from '@powersync/web'
 import {
-  anneeSaison, classerRoulages, coutDuRoulage, creerDepense, enCentimes, formaterChrono,
+  anneeSaison, aplati, classerRoulages, coutDuRoulage, creerDepense, enCentimes, formaterChrono,
   formaterEcart, formaterEuros, supprimerRoulage,
 } from '../../src/db/depot'
 import {
-  grouperParMois, jaugeBudget, jourDansLAnnee, moisDuJour, repereMensuel,
+  grouperParMois, jaugeBudget, jourDansLAnnee, moisDuJour, nomMois, repereMensuel,
 } from '../../src/db/budget'
 import { accepterMesures, instantDeLId, ouverture, SEUIL_H } from '../../src/db/mesures'
 import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
@@ -55,6 +55,24 @@ import { AppSchema, REFERENTIEL } from '../../src/db/schema'
 import REGLES_DE_SYNCHRO from '../../powersync/sync-config.yaml?raw'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
+/**
+ * ─── L'ANALYSE, IMPORTÉE POUR DE VRAI ──────────────────────────────────────
+ *
+ * La table des croisements et les trois décisions pures s'IMPORTENT plutôt que
+ * de se lire en texte, et ce n'est pas une commodité : une table lue au texte
+ * prouve qu'un mot est écrit quelque part, jamais qu'il sort de la fonction
+ * qu'on croit. Les phrases de lecture sont des FONCTIONS — elles se rendent
+ * pour zéro, une et plusieurs saisons — et c'est ce qu'elles RENDENT qui
+ * s'affiche sous le doigt du pilote.
+ *
+ * Ce qui se lit encore au texte, plus bas, est ce qui n'a aucune valeur de
+ * retour : une requête SQL, une convention d'axe, un commentaire abrogé.
+ */
+import {
+  cequiManque, comblerLesMois, croisementDe, CROISEMENTS, domainesDe, formeRendue,
+  NOM_DOMAINE, TOUTES_ANNEES, tracesDuDomaine,
+  type Domaine, type LigneAnalyse, type Trace,
+} from '../../src/db/analyse'
 import { niveauDuGroupe } from '../../src/db/usure'
 import { dateCivileLocale, sePrepare } from '../../src/db/vecu'
 import { direLaCompletude, memeTache } from '../../src/db/preparation'
@@ -4433,6 +4451,750 @@ const essais = [
     for (const clause of ['.env', '.env.*', '!.env.example'])
       vrai(lignes(VERCELIGNORE).includes(clause),
         `.vercelignore a perdu « ${clause} » : les secrets remonteraient au premier déploiement depuis un poste`)
+  }),
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     L'ANALYSE — le cinquième onglet, onze croisements derrière trois rangées.
+
+     ⚠ CES ESSAIS NE VÉRIFIENT PAS QUE L'ÉCRAN S'AFFICHE. La fumée le fait, et
+     elle l'a fait. Ils tiennent les REFUS — c'est-à-dire les seules choses qu'un
+     écran qui marche ne signale jamais. Un chrono moyenné par mois rend un
+     nombre parfaitement plausible ; une jauge ressemble trait pour trait à une
+     composition ; un verbe figé au singulier se relit trois fois sans se voir.
+     Aucun de ces trois défauts ne fait rougir quoi que ce soit : ils rendent un
+     écran, simplement le mauvais.
+
+     ⚠ ET LA TABLE DES CROISEMENTS S'IMPORTE, ELLE NE SE LIT PAS. Ses phrases
+     sont des FONCTIONS de la période : lire leur gabarit dans le fichier
+     prouverait qu'un mot est écrit quelque part, jamais qu'il sort. On les fait
+     donc RENDRE, pour les trois périodes qu'un pilote peut avoir.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  doit('l\'analyse — un chrono ne s\'agrège jamais sans son circuit', () => {
+    /* « 1'38 à Pau-Arnos » et « 1'38 à Nogaro » ne se comparent pas. Un chrono
+       agrégé par mois, par année ou par moto n'est pas une information
+       imprécise : c'est une information FAUSSE, et fausse en flattant — le
+       pilote y lit une progression qu'aucun tour ne porte, sur le seul chiffre
+       du produit auquel il tient vraiment.
+
+       La table est le seul endroit d'où un tel croisement peut naître, puisque
+       c'est elle qui porte la forme. C'est donc elle qu'on interroge, et pas
+       l'écran : un écran se corrige, une table mal remplie se recopie. */
+    vrai(CROISEMENTS.length > 0, 'la table des croisements est vide : le témoin est muet')
+    for (const c of CROISEMENTS) {
+      if (c.forme === 'chrono')
+        egal(c.axe, 'circuit',
+          `un chrono se lit « par ${c.mot} » : deux circuits différents tombent dans le même temps`)
+      if (c.axe !== 'circuit')
+        vrai(c.forme !== 'chrono',
+          `« ${NOM_DOMAINE[c.domaine]} · ${c.mot} » agrège des temps au tour hors de leur circuit`)
+      /* ⚠ ET LA TROISIÈME UNITÉ N'EXISTE PAS. Deux valeurs seulement — de
+         l'argent, un décompte — et le chrono n'est ni l'une ni l'autre : le
+         croisement du circuit compte des JOURNÉES chronométrées, jamais un
+         temps. Une unité « chrono » dans cette table serait la porte par
+         laquelle un temps entrerait dans une barre mesurée depuis zéro. */
+      vrai(c.unite === 'euros' || c.unite === 'decompte',
+        `« ${c.mot} » porte une troisième unité : un temps au tour peut y entrer`)
+      // L'argent ne vit que dans FINANCE. Un décompte de gestes passé au
+      // formateur d'euros afficherait « 0,03 € » pour trois interventions.
+      egal(c.unite === 'euros', c.domaine === 'finance',
+        `« ${NOM_DOMAINE[c.domaine]} · ${c.mot} » : l'unité ne suit plus son domaine`)
+    }
+    egal(CROISEMENTS.filter((c) => c.forme === 'chrono').length, 1,
+      'le chrono a gagné ou perdu un croisement : le seul qui tienne est le circuit')
+    // Et la couche de lecture ne sait pas écrire un temps. Rien n'y appelle le
+    // formateur du chrono : ce qui en porte un le rend à `Courbe`, tel quel.
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    vrai(an.length > 0, 'src/db/analyse.ts ne se lit plus : le témoin est muet')
+    vrai(!/formaterChrono/.test(an),
+      'la lecture de l\'analyse écrit un temps au tour : elle en a donc agrégé un')
+  }),
+
+  doit('l\'analyse — la suite ne reçoit jamais un chrono, et les deux planchers restent opposés', () => {
+    /* LES DEUX TRACÉS VIVENT DANS LE MÊME FICHIER POUR QU'ON LISE LES DEUX
+       RAISONS AVANT D'Y TOUCHER, et leurs conventions sont EXACTEMENT inverses :
+         · `Courbe` porte des CHRONOS — axe INVERSÉ, plancher au meilleur temps
+           MESURÉ. Zéro seconde au tour n'existe pas, et caler sur zéro écraserait
+           quinze roulages dans trois pixels de haut.
+         · `Suite` porte de l'ARGENT et des DÉCOMPTES — axe NORMAL, plancher à
+           ZÉRO. Faire partir la suite de son minimum ferait d'un mois à 180 € et
+           d'un mois à 200 € deux mois que tout sépare.
+
+       Deux conventions opposées à trente lignes l'une de l'autre appellent
+       l'harmonisation, et c'est exactement le geste qu'il ne faut PAS faire : la
+       première courbe MONTAIT à mesure que le pilote progressait, juste au-dessus
+       d'une phrase disant l'inverse. Ce défaut-là a déjà été payé une fois. */
+    const brut = fichierDe(ECRANS, '/Courbe.tsx')
+    vrai(brut.length > 0, 'src/ecrans/Courbe.tsx a disparu : le témoin est muet')
+    const coupe = brut.indexOf('export function Suite')
+    vrai(coupe > 0,
+      'la suite a quitté Courbe.tsx : elle a donc un fichier à elle, donc un <svg> de plus')
+    const courbe = sansCommentaires(brut.slice(0, coupe))
+    const suite = sansCommentaires(brut.slice(coupe))
+
+    const yCourbe = courbe.match(/const y = [^\n]*/)
+    const ySuite = suite.match(/const y = [^\n]*/)
+    vrai(!!yCourbe && !!ySuite, 'un des deux tracés n\'a plus d\'axe vertical : le témoin est muet')
+    vrai(yCourbe![0] !== ySuite![0],
+      'les deux tracés ont pris le même axe : l\'un des deux ment sur sa propre légende')
+    // Le plancher de la courbe est le MINIMUM MESURÉ : elle part de ce que le
+    // pilote a réellement tourné.
+    vrai(/\(v - min\)/.test(yCourbe![0]),
+      'la courbe du chrono ne part plus du meilleur temps mesuré : quinze roulages tiennent dans trois pixels')
+    // Le plancher de la suite est ZÉRO : aucune soustraction, aucun minimum.
+    vrai(/\(v \/ sommet\)/.test(ySuite![0]),
+      'la suite ne part plus de zéro : deux mois presque égaux deviennent deux mois que tout sépare')
+    vrai(!/Math\.min|\bmin\b/.test(suite),
+      'la suite s\'est calée sur son minimum : elle exagère chaque écart sous une légende qui dit encore zéro')
+    // Et son sommet est le PLUS GROS DE CE QU'ELLE MONTRE, comme aux barres :
+    // une suite mesurée contre un plafond est un compteur à rebours.
+    vrai(/Math\.max\(\.\.\.lignes\.map/.test(suite),
+      'l\'échelle de la suite ne vient plus de ce qu\'elle montre : le tracé est devenu une jauge')
+
+    /* ⚠ ET LA SUITE NE FORMATE RIEN, DONC NE PEUT RIEN FORMATER DE TRAVERS. Elle
+       reçoit le texte déjà écrit par la couche qui connaît l'unité. Un appel au
+       formateur du chrono ici serait la preuve qu'un temps y est entré — et un
+       temps dans la suite MONTERAIT à mesure que le pilote progresse, sous une
+       légende disant l'inverse. */
+    vrai(!/formaterChrono/.test(suite),
+      'la suite écrit un temps au tour : le tracé monte quand le pilote progresse')
+    vrai(!/record/.test(suite),
+      'la suite allume le violet du record : il n\'existe aucun record d\'argent ni de décompte')
+    vrai(!/--alerte|--plus-lent/.test(suite),
+      'la suite porte le rouge de l\'alerte ou le jaune du dépassement : un mois y devient une faute')
+
+    /* ⚠ DES SEGMENTS DROITS, ET RIEN D'AUTRE. Relier n'invente qu'un intervalle
+       qu'on n'a pas mesuré ; LISSER invente des valeurs entre les pas ; une
+       DROITE DE TENDANCE invente au-delà du dernier. La levée du 1er septembre
+       porte sur RELIER, jamais sur PROLONGER — et une `<polyline>` ne sait faire
+       que des segments droits, là où un `<path>` ouvre les courbes de Bézier. */
+    vrai(/<polyline/.test(suite),
+      'la suite ne relie plus ses pas par des segments droits')
+    vrai(!/<path\b|curve|smooth|bezier|catmull/i.test(suite),
+      'la suite lisse son tracé : elle passe par des valeurs que personne n\'a mesurées')
+    for (const mot of ['tendance', 'projection', 'à ce rythme', 'prévision', 'moyenne'])
+      vrai(!new RegExp(mot, 'i').test(suite),
+        `la suite porte « ${mot} » : elle prolonge au-delà de ce que le pilote a vécu`)
+
+    /* ⚠ ET AUCUN ÉCRAN NE LUI PASSE UN CHRONO. C'est l'essai NÉGATIF, sur tous
+       les `.tsx` du produit : la garde ne vaut que si personne, nulle part, ne
+       monte la suite sur des temps au tour. */
+    let montages = 0
+    for (const [chemin, source] of Object.entries(ECRANS)) {
+      const nom = chemin.replace(/^.*\/src\//, 'src/')
+      /* La balise OUVRANTE, et elle seule — jusqu'au premier `>` qui ne ferme pas
+         une flèche. Une lecture qui attendrait le `/>` ne trouverait rien du tout
+         le jour où la suite prend des enfants : elle passerait au vert en ne
+         regardant plus rien, ce qui est la façon la plus discrète de perdre un
+         essai. */
+      for (const m of sansCommentaires(source).matchAll(/<Suite\b(?:=>|[^>])*>/g)) {
+        montages++
+        vrai(!/hrono|ourbe|\bms\b/.test(m[0]),
+          `${nom} monte la suite sur un chrono : « 1'38 à Pau-Arnos » et « 1'38 à Nogaro » s'y comparent`)
+      }
+    }
+    vrai(montages >= 1,
+      'plus personne ne monte la suite : la garde du chrono ne regarde plus rien')
+    // Et le chrono garde SA courbe, une par circuit — jamais un tracé de tous.
+    const ecran = sansCommentaires(fichierDe(ECRANS, '/Analyse.tsx'))
+    vrai(ecran.length > 0, 'l\'écran d\'analyse a disparu : le témoin est muet')
+    vrai(/chronos\.map\([^\n]*<Courbe/.test(ecran),
+      'les chronos ne passent plus par la courbe : ils sont partis dans un autre tracé')
+  }),
+
+  doit('l\'analyse — les barres n\'acceptent aucune échelle venue du dehors', () => {
+    /* CE N'EST PAS UNE JAUGE, ET LA DIFFÉRENCE TIENT DANS UNE SEULE LIGNE :
+       l'échelle est LE PLUS GROS DE CE QU'ON MONTRE, calculé DEDANS. Une barre
+       mesurée contre un maximum reçu du dehors est un compteur à rebours — elle
+       dit « il te reste » — et « dépasser son budget n'est pas une faute ».
+
+       ⚠ LA GARDE PORTE SUR LE TYPE, ET C'EST LÀ QU'ELLE MORD. Rien dans un champ
+       nommé `sommet` ne distinguerait « le plus gros de l'autre moto » d'un
+       plafond à ne pas dépasser, et le second EST la jauge. Le sommet se calcule
+       dedans, ou il n'existe pas. */
+    const brut = fichierDe(ECRANS, '/Barres.tsx')
+    vrai(brut.length > 0, 'src/ecrans/Barres.tsx a disparu : le témoin est muet')
+    const source = sansCommentaires(brut)
+
+    const props = source.match(/export function Barres\(\{([^}]*)\}/)
+    vrai(!!props, 'la signature des barres ne se lit plus : le témoin est muet')
+    egal(props![1].split(',').map((s) => s.trim()).filter(Boolean),
+      ['titre', 'barres', 'description'],
+      'les barres ont pris un quatrième réglage : c\'est par là qu\'un plafond entre')
+
+    const type = brut.slice(brut.indexOf('export type Barre'), brut.indexOf('export function Barres'))
+    vrai(type.length > 0, 'le type d\'une barre ne se lit plus : le témoin est muet')
+    /* ⚠ `cle` A ÉTÉ AJOUTÉ APRÈS COUP, ET CE TÉMOIN A FAIT SON TRAVAIL en
+       refusant l'ajout jusqu'à ce qu'il soit décidé. Il est ici parce que `nom`
+       N'EST PAS UNIQUE — `LigneAnalyse` le dit noir sur blanc — et que deux
+       motos du même modèle produisaient deux barres réconciliées sur la même
+       clé React. Il ne peut loger ni sommet ni cible : c'est une chaîne
+       d'identité, jamais un nombre. Tout champ NUMÉRIQUE ajouté ici doit être
+       regardé de très près, car c'est par là qu'un plafond entrerait. */
+    egal([...type.matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]),
+      ['nom', 'centimes', 'libelle', 'detail', 'incertain', 'cle'],
+      'les champs d\'une barre ont bougé : vérifier qu\'aucun ne peut loger une cible')
+
+    const sommet = source.match(/const sommet = [^\n]*/)
+    vrai(!!sommet, 'les barres n\'ont plus d\'échelle : le témoin est muet')
+    vrai(/Math\.max\(\.\.\.barres\.map/.test(sommet![0]),
+      'l\'échelle des barres ne vient plus de ce qu\'elles montrent : le tracé est devenu une jauge')
+
+    /* ⚠ ET LA VALEUR NE SE DEVINE PAS. Ce fichier est né du budget, où tout est
+       en euros ; l'analyse lui envoie aussi des décomptes, et trois gestes
+       d'atelier s'y affichaient « 0,03 € », avec l'aplomb d'un montant. Un tracé
+       ne peut pas savoir si `3` est un décompte ou trois centimes : il devine, et
+       il devine faux une fois sur deux. */
+    vrai(/b\.libelle \?\? formaterEuros\(b\.centimes\)/.test(source),
+      'les barres reformatent la valeur : trois gestes d\'atelier s\'affichent « 0,03 € »')
+    const ecran = sansCommentaires(fichierDe(ECRANS, '/Analyse.tsx'))
+    vrai(/\{ \.\.\.l, centimes: l\.valeur \}/.test(ecran),
+      'l\'écran d\'analyse recompose la barre champ par champ : le libellé déjà écrit se perd en route')
+
+    /* AUCUN MOT DE PLAFOND DANS CE QUI SE REND, ET AUCUN CHAMP OÙ EN LOGER UN
+       DANS CE QUI ARRIVE. Le type est la seule garantie durable : un mot se
+       retire, un champ se remplit. */
+    for (const mot of ['plafond', 'cible', 'objectif', 'maximum', 'quota', 'reste'])
+      vrai(!new RegExp(`\\b${mot}`, 'i').test(source),
+        `les barres portent « ${mot} » : la composition est devenue un compte à rebours`)
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    const ligne = an.slice(an.indexOf('export type LigneAnalyse'), an.indexOf('export type Croisement'))
+    vrai(ligne.length > 0, 'le type d\'une ligne d\'analyse ne se lit plus : le témoin est muet')
+    /* ⚠ `detail` A ÉTÉ AJOUTÉ LE 1er SEPTEMBRE 2026, ET CETTE LISTE A ROUGI —
+       c'est son travail. Il porte la composition d'un mois (« engagement ·
+       pneus »), la seconde moitié du récit 19.2 que le budget rendait avant que
+       le tracé parte à l'analyse. Il est admis parce qu'il ne peut loger aucun
+       des trois interdits : la boucle de mots juste au-dessus relit TOUTE la
+       source de l'écran, plafond compris, et `argentParMois` est le seul à le
+       remplir — avec des noms de postes, jamais un nombre. */
+    egal([...ligne.matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]),
+      ['cle', 'nom', 'valeur', 'libelle', 'n', 'detail', 'incertain'],
+      'une ligne d\'analyse a gagné un champ : vérifier qu\'aucun ne loge un plafond, un rang ni un écart')
+  }),
+
+  doit('l\'analyse — sous trois points une suite se rend en barres, et c\'est la table qui le décide', () => {
+    /* DEUX POINTS NE FONT PAS UNE LIGNE : ils font TOUJOURS une droite, donc
+       toujours une progression ou toujours une chute, et le pilote y lit un
+       mouvement qui n'existe pas. La différence avec la courbe est ce qui se
+       passe ensuite — la courbe n'affiche RIEN sous le seuil, parce qu'un chrono
+       isolé ne dit rien ; deux mois de dépenses, eux, disent quelque chose de
+       parfaitement vrai, simplement pas un mouvement. Ils se rendent donc en
+       BARRES, qui n'affirment aucun sens de lecture entre elles. */
+    egal(formeRendue('suite', POINTS_MINIMUM), 'suite',
+      'une suite refuse de se tracer au seuil : le pilote perd un tracé qu\'il a rempli')
+    egal(formeRendue('suite', POINTS_MINIMUM - 1), 'composition',
+      'deux pas se relient en ligne : le pilote y lit une progression que rien ne porte')
+    egal(formeRendue('suite', 0), 'composition', 'une suite vide se trace encore')
+    egal(formeRendue('composition', 1), 'composition', 'une composition a changé de forme toute seule')
+    // Le chrono ne bascule JAMAIS : `courbeDuCircuit` tient déjà son propre
+    // seuil, et un temps au tour n'a rien à faire dans une barre mesurée depuis
+    // zéro.
+    for (const n of [0, 1, 2, 3, 40])
+      egal(formeRendue('chrono', n), 'chrono',
+        `un chrono à ${n} points se rend en barres : un temps s'y mesurerait depuis zéro`)
+    // La décision est IDEMPOTENTE, pour qu'un écran qui se méfie ne puisse pas se
+    // tromper en la reposant sur ce qu'il rend vraiment.
+    egal(formeRendue(formeRendue('suite', 2), 2), 'composition',
+      'reposer la décision sur ce qui est rendu change la forme : l\'écran et la table divergent')
+
+    /* ⚠ ET AUCUN ÉCRAN NE REDÉCLARE LE SEUIL. L'écran rend à `formeRendue` le
+       compte final, il n'écrit pas sa propre règle : deux seuils à deux endroits
+       sont deux seuils qui divergent, et l'écran est celui des deux qu'on relit
+       le moins. */
+    const ecran = sansCommentaires(fichierDe(ECRANS, '/Analyse.tsx'))
+    vrai(ecran.length > 0, 'l\'écran d\'analyse a disparu : le témoin est muet')
+    vrai(/formeRendue\(/.test(ecran), 'l\'écran d\'analyse a cessé de demander sa forme à la table')
+    vrai(!/POINTS_MINIMUM/.test(ecran),
+      'l\'écran d\'analyse tient un seuil à lui : il divergera de celui de la table')
+    /* ET IL N'OFFRE PAS LA FORME AU DOIGT. Une troisième molette « barres ou
+       courbe » laisserait relier huit postes qui n'ont aucun ordre entre eux. */
+    for (const mot of ['barres ou', 'type de tracé', 'changer de forme'])
+      vrai(!new RegExp(mot, 'i').test(ecran),
+        `l'écran d'analyse offre « ${mot} » au doigt : huit postes sans ordre peuvent être reliés`)
+  }),
+
+  doit('l\'analyse — les mois se comblent entre deux mois vécus, jamais au-delà', () => {
+    /* ⚠ L'AXE DES ABSCISSES EST LE TEMPS, ET C'EST CE QUI RETOURNE LA RÈGLE DES
+       LISTES. `grouperParMois` refuse les mois vides, et il a raison : douze
+       lignes dont neuf à zéro font une grille de cases à remplir. Sur une SUITE,
+       avril, juin et septembre tracés côte à côte à intervalle égal font un
+       dessin où mai, juillet et août n'ont jamais existé — et la pente entre deux
+       pas ment sur la durée qui les sépare.
+
+       Un zéro inséré ENTRE deux mois vécus est une MESURE. Un zéro ajouté APRÈS
+       le dernier serait une PRÉDICTION, et le produit n'en fait aucune. */
+    const l = (cle: string, valeur: number, n = 1): LigneAnalyse =>
+      ({ cle, nom: cle, valeur, libelle: `${valeur}`, n })
+    const ZERO = '0,00 €'
+
+    const comble = comblerLesMois([l('2026-07', 300), l('2026-04', 100)], ZERO)
+    egal(comble.map((x) => x.cle), ['2026-04', '2026-05', '2026-06', '2026-07'],
+      'les mois sans dépense ont disparu de la suite : la pente ment sur le temps qui sépare deux pas')
+    for (const x of comble.slice(1, 3)) {
+      egal(x.valeur, 0, 'un mois comblé porte une valeur que personne n\'a saisie')
+      egal(x.n, 0, 'un mois comblé prétend porter des faits')
+      egal(x.libelle, ZERO, 'un mois comblé n\'écrit pas sa valeur dans l\'unité du tracé')
+      egal(x.nom, nomMois(x.cle), 'un mois comblé porte sa clé au lieu de son nom')
+      vrai(!x.incertain, 'un mois comblé se marque incertain : c\'est une mesure, pas un trou')
+    }
+    // Le passage d'année se fait par le CALENDRIER, jamais par une addition sur
+    // le douzième mois.
+    egal(comblerLesMois([l('2026-11', 10), l('2027-02', 20)], ZERO).map((x) => x.cle),
+      ['2026-11', '2026-12', '2027-01', '2027-02'],
+      'le comblage saute le passage d\'année : décembre et janvier disparaissent du tracé')
+    // JAMAIS AVANT, JAMAIS APRÈS : rien ne se comble jusqu'à décembre, parce que
+    // ce serait annoncer qu'il ne se passera rien en novembre.
+    egal(comblerLesMois([l('2026-05', 10), l('2026-06', 20)], ZERO).map((x) => x.cle),
+      ['2026-05', '2026-06'],
+      'le comblage déborde de ce qui a été vécu : le tracé prédit les mois à venir')
+    egal(comblerLesMois([l('2026-05', 10)], ZERO).map((x) => x.cle), ['2026-05'],
+      'un mois seul se comble tout seul : un tracé naît d\'un seul point')
+
+    /* ⚠ LA LIGNE « SANS MOIS » SORT ICI, ET ELLE N'EST PAS PERDUE. Une dépense
+       sans date n'a aucune place sur un axe du temps — la poser au bout
+       inventerait un treizième mois — et c'est la phrase de complétude qui
+       l'énonce, lue sur les lignes BRUTES. */
+    const orpheline: LigneAnalyse =
+      { cle: '', nom: 'Sans mois', valeur: 5000, libelle: '50,00 €', n: 2, incertain: true }
+    egal(comblerLesMois([l('2026-04', 100), l('2026-06', 100), orpheline], ZERO).map((x) => x.cle),
+      ['2026-04', '2026-05', '2026-06'],
+      'une dépense sans date a été posée sur l\'axe du temps : le tracé invente un treizième mois')
+
+    /* ⚠ ET C'EST POUR ÇA QUE LA FORME SE DÉCIDE SUR LES PAS QUI IRONT VRAIMENT
+       SUR L'AXE. Trois lignes brutes — deux mois et une dépense sans date — n'en
+       laissent que deux : compter les brutes ferait tracer exactement la droite
+       que le seuil existe pour refuser. */
+    const places = comblerLesMois([l('2026-04', 1), orpheline], ZERO)
+    egal(formeRendue('suite', places.length), 'composition',
+      'la forme se décide sur les lignes brutes : un mois plus une orpheline se relient en ligne')
+
+    /* L'ORDRE DES DÉCISIONS VIT DANS LA LECTURE, ET IL EST PIÉGEUX : la
+       complétude se lit sur les lignes BRUTES, et le comblage retire justement
+       cette ligne-là. Composé dans l'autre sens, il ne resterait rien à énoncer,
+       et le trou disparaîtrait en silence. */
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    const lecture = an.slice(an.indexOf('export const lire ='))
+    vrai(lecture.indexOf('cequiManque') > 0
+      && lecture.indexOf('cequiManque') < lecture.indexOf('comblerLesMois'),
+    'ce qui manque se compte après le comblage : le trou disparaît en silence, et c\'est la seule façon de le rater')
+  }),
+
+  doit('l\'analyse — ce qui manque se dit, et jamais « 0 »', () => {
+    /* FR-55 appliqué tel quel : « le bilan ÉNONCE SA COMPLÉTUDE ». Huit barres
+       qui totalisent 1 840 € sur une saison qui en a coûté 2 180 se lisent comme
+       un total — et un tracé qui ne dit pas ce qu'il laisse dehors ment sans
+       qu'un seul de ses chiffres soit faux.
+
+       ⚠ ET JAMAIS « 0 SANS POSTE ». Un zéro énoncé est un compteur de
+       complétude, c'est-à-dire une case à remplir : exactement ce que ce produit
+       refuse d'installer dans un carnet qu'on tient par plaisir. */
+    const c = croisementDe('finance', 'poste')
+    vrai(!!c, 'le croisement de l\'argent par poste a disparu : le témoin est muet')
+    const sans = (n: number): LigneAnalyse =>
+      ({ cle: '', nom: 'Sans poste', valeur: 0, libelle: '', n, incertain: true })
+    const pleine: LigneAnalyse =
+      { cle: 'pneus', nom: 'Pneus', valeur: 12000, libelle: '120,00 €', n: 3 }
+
+    egal(cequiManque(c!, [pleine]), null,
+      'un tracé complet annonce un trou : le pilote cherche une dépense qu\'il a bien saisie')
+    egal(cequiManque(c!, [pleine, sans(0)]), null,
+      'le tracé énonce « 0 sans poste » : un zéro annoncé est une case à remplir')
+    egal(cequiManque(c!, [pleine, sans(1)]), '1 dépense sans poste.',
+      'la phrase de complétude ne s\'accorde pas au singulier')
+    egal(cequiManque(c!, [pleine, sans(2)]), '2 dépenses sans poste.',
+      'la phrase de complétude ne s\'accorde pas au pluriel')
+    // Le grain vient de la table, jamais de l'écran : un décompte de gestes
+    // d'atelier ne s'annonce pas dans le mot de l'argent.
+    const g = croisementDe('maintenance', 'moto')
+    vrai(!!g, 'le croisement des gestes par moto a disparu : le témoin est muet')
+    vrai(/geste/.test(cequiManque(g!, [{ ...sans(2), nom: 'Sans moto' }]) ?? ''),
+      'ce qui manque à l\'atelier s\'annonce en dépenses : le pilote cherche un montant qui n\'existe pas')
+  }),
+
+  doit('l\'analyse — une saison ne se classe pas, et l\'argent d\'une moto ne se compte qu\'une fois', () => {
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    vrai(an.length > 0, 'src/db/analyse.ts ne se lit plus : le témoin est muet')
+    const corps = (nom: string) => {
+      const i = an.indexOf(`export const ${nom} =`)
+      vrai(i > 0, `${nom} a disparu de l'analyse : le témoin est muet`)
+      const j = an.indexOf('\nexport ', i + 10)
+      return an.slice(i, j < 0 ? an.length : j)
+    }
+
+    /* ⚠ LES SAISONS SE RANGENT DANS L'ORDRE DU CALENDRIER, JAMAIS PAR MONTANT.
+       Trier par montant ferait « 2025 en tête », c'est-à-dire un verdict sur une
+       année de la vie du pilote — une saison n'est ni chère ni bon marché. C'est
+       le refus de `grouperParMois` appliqué à l'échelle au-dessus. */
+    const annee = corps('argentParAnnee')
+    vrai(/ORDER BY saison_annee ASC/.test(annee),
+      'les saisons sortent de la base dans un ordre libre : le calendrier n\'est plus garanti')
+    vrai(!/parTaille/.test(annee),
+      'les saisons sont triées par montant : la plus chère prend la tête, donc devient un verdict')
+    const tri = annee.match(/\.sort\(\([\s\S]{0,160}/)
+    vrai(!!tri && !/valeur|total|centimes/.test(tri![0]),
+      'le rang des saisons se calcule sur un montant : c\'est un classement des années du pilote')
+
+    /* ⚠ LA CLAUSE `depense_id IS NULL` EST OBLIGATOIRE PARTOUT OÙ L'ARGENT DE
+       L'ATELIER EST ADDITIONNÉ. Il entre par deux portes — une dépense de cible
+       `machine`, ou le montant porté par l'intervention quand aucune dépense n'a
+       été saisie (FR-43). Les additionner sans condition compterait DEUX FOIS une
+       pièce dont on a fait les deux, et la moto la mieux tenue serait la plus
+       chère, deux fois. */
+    for (const { fichier, sql } of gabaritsSql()) {
+      if (!fichier.endsWith('db/analyse.ts')) continue
+      if (!/FROM intervention/.test(sql) || !/cout_centimes/.test(sql)) continue
+      vrai(/depense_id IS NULL/.test(sql),
+        'une lecture de l\'analyse additionne l\'argent de l\'atelier sans écarter ce qui est déjà compté : la moto la mieux tenue devient la plus chère, deux fois')
+      vrai(/etat = 'faite'/.test(sql),
+        'une lecture de l\'analyse compte l\'argent d\'un geste que personne n\'a fait')
+    }
+    vrai(/depense_id IS NULL/.test(corps('argentParMoto')),
+      'l\'argent par moto a perdu sa clause : une pièce saisie des deux côtés se compte deux fois')
+    vrai(/depense_id IS NULL/.test(corps('argentNonCompte')),
+      'la phrase de l\'argent non compté annonce comme manquant un argent déjà tracé : elle exagère son trou, et on cesse de la lire')
+
+    /* ⚠ ET RIEN N'ARRIVE PAR LES ROULAGES (AD-17). Une machine coûte ce qui la
+       DÉSIGNE : l'engagement d'une journée est une dépense du pilote, et le
+       ranger sous la moto qui a roulé ce jour-là serait une jointure implicite. */
+    vrai(!/roulage_id/.test(corps('argentParMoto')),
+      'l\'argent par moto ramasse l\'engagement des journées : une machine coûte ce qui la désigne, pas ce qui a roulé')
+    // Et l'axe MOTO ne répète pas la phrase de l'argent non compté : il
+    // additionne déjà l'atelier, et l'annoncer manquant serait faux.
+    const sousCompte = an.match(/const SOUS_COMPTE[^\n]*/)
+    vrai(!!sousCompte && !/'moto'/.test(sousCompte![0]),
+      'l\'axe moto annonce comme absent un argent qui est déjà dans ses barres')
+  }),
+
+  doit('l\'analyse — un seul compte de journées, et c\'est celui du bilan de saison', () => {
+    /* ⚠ LE BILAN DE SAISON ANNONCE « 11 ROULAGES » À UN ÉCRAN DE DISTANCE. Une
+       analyse qui en annoncerait 12, parce qu'elle a laissé passer une journée
+       annoncée pour septembre, ferait douter des deux — et c'est le chiffre, pas
+       l'écran, que le pilote cesserait de croire.
+
+       La seule manière de ne pas rejouer « deux comptes qui divergent de 1 à
+       trois centimètres d'écart » est qu'il n'existe qu'UN SEUL compte. */
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    vrai(an.length > 0, 'src/db/analyse.ts ne se lit plus : le témoin est muet')
+    const journees = gabaritsSql()
+      .filter((g) => g.fichier.endsWith('db/analyse.ts') && /\bFROM roulage\b/.test(g.sql))
+    egal(journees.length, 1,
+      'l\'analyse va chercher les journées à deux endroits : les deux comptes divergeront, et le bilan de saison avec')
+    vrai(/A_EU_LIEU\(/.test(journees[0].sql),
+      'l\'analyse compte des journées annoncées pour plus tard : elle en annonce une de plus que le bilan de saison')
+    // Les trois croisements qui comptent des journées partent tous de cette
+    // liste-là, jamais d'une requête chacun.
+    for (const nom of ['argentParJournee', 'journeesParMois', 'journeesParMoto']) {
+      const i = an.indexOf(`export const ${nom} =`)
+      vrai(i > 0, `${nom} a disparu de l'analyse : le témoin est muet`)
+      const j = an.indexOf('\nexport ', i + 10)
+      vrai(/journeesVecues\(/.test(an.slice(i, j < 0 ? an.length : j)),
+        `${nom} s'est écrit son propre compte de journées : il divergera du bilan de saison`)
+    }
+    /* ⚠ ET LE CINQUIÈME ONGLET SE GARDE AVEC LES LECTURES DE L'ANALYSE, pas avec
+       des requêtes écrites pour l'occasion. Un onglet gardé par un compte et
+       rempli par un autre finit par s'ouvrir sur un écran vide — le défaut exact
+       « lu par un écran, écrit par personne ». */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const debut = app.indexOf('const aDeQuoiAnalyser')
+    vrai(debut > 0, 'le test du cinquième onglet a disparu : le témoin est muet')
+    const porte = app.slice(debut, debut + 500)
+    vrai(/journeesVecues\(/.test(porte),
+      'l\'onglet d\'analyse compte les journées à sa façon : il finira par s\'ouvrir sur un écran vide')
+    vrai(!/db\.getAll|db\.get\(/.test(porte),
+      'l\'onglet d\'analyse s\'est écrit ses propres requêtes : le garde et le contenu peuvent diverger')
+  }),
+
+  doit('l\'analyse — rien n\'y touche les chutes, et aucun mot de la table ne juge', () => {
+    /* ⚠ C'EST UNE CLAUSE DE SÉCURITÉ, PAS DE PUDEUR. « 7 roulages sans chute »
+       fabrique une série à ne pas casser, donc une pression à ne pas déclarer la
+       huitième — et une chute non déclarée est une chute non réparée. Aucune
+       lecture de l'analyse ne touche `chute` ni `crash_statut`, et l'écran non
+       plus. */
+    for (const fin of ['db/analyse.ts', 'ecrans/Analyse.tsx']) {
+      const source = sansCommentaires(fichierDe(SOURCES, fin))
+      vrai(source.length > 0, `src/${fin} ne se lit plus : le témoin est muet`)
+      vrai(!/chute|crash_statut/i.test(source),
+        `src/${fin} lit les chutes : une série « sans chute » fait taire la déclaration suivante`)
+    }
+
+    /* ⚠ ET AUCUN MOT DE LA TABLE NE JUGE — mots de puce, phrases de lecture,
+       notes. On les fait RENDRE pour zéro, une et plusieurs saisons : lire leur
+       gabarit dans le fichier prouverait qu'un mot est écrit, jamais qu'il sort.
+
+       ⚠ LES MOTIFS N'ONT AUCUNE FRONTIÈRE `\b` DEVANT UNE LETTRE ACCENTUÉE :
+       `\w` est ASCII en JavaScript, donc `\bécart` ne peut JAMAIS correspondre —
+       c'est une garde qu'on croit tenue et qui ne tient pas, et ce dépôt l'a déjà
+       payée une fois sur `.tracé-argent`. */
+    const dits: string[] = []
+    for (const c of CROISEMENTS) {
+      dits.push(c.mot, c.note)
+      for (const p of [TOUTES_ANNEES, [2026], [2025, 2026]]) dits.push(c.phrase(p))
+    }
+    const tout = dits.join(' § ')
+    for (const mot of ['tendance', 'moyenne', 'projection', 'prévision', 'à ce rythme',
+      '\\bobjectif', '\\brecord', 'classement', 'palier', 'pourcentage', '%',
+      'écart', '\\bsérie\\b', '\\breste\\b', 'il te reste', 'devrait'])
+      vrai(!new RegExp(mot, 'i').test(tout),
+        `l'analyse dit « ${mot.replace(/\\b/g, '')} » : le tracé se met à juger une saison du pilote`)
+
+    /* UN MOT PAR PUCE, ET LA PRÉPOSITION VIT DANS LA PHRASE. « par poste » et
+       « selon le mois » sur cinq puces débordent la ligne à 375 px, et une rangée
+       qui passe à la ligne cesse d'être une rangée. */
+    for (const c of CROISEMENTS) {
+      vrai(!/\s/.test(c.mot),
+        `la puce « ${c.mot} » porte plus d'un mot : la rangée passe à la ligne à 375 px`)
+      vrai(c.mot.length <= 10, `la puce « ${c.mot} » est trop longue pour tenir sa rangée`)
+      vrai(c.note.trim().length > 0,
+        `« ${c.mot} » ne dit pas ce qu'il montre : un lecteur d'écran n'entend qu'une suite de nombres`)
+      for (const p of [TOUTES_ANNEES, [2026]])
+        vrai(c.phrase(p).trim().endsWith('.'),
+          `la lecture de « ${c.mot} » ne se termine pas : ce n'est plus une phrase`)
+    }
+    // Chaque croisement est UNIQUE, et la table est la seule source de son mot.
+    const couples = CROISEMENTS.map((c) => `${c.domaine}·${c.axe}`)
+    egal(couples.length, new Set(couples).size,
+      'deux croisements portent le même couple : une puce en cache une autre, définitivement')
+    for (const c of CROISEMENTS)
+      vrai(croisementDe(c.domaine, c.axe) === c,
+        `« ${c.mot} » ne se retrouve plus par son couple : la puce ouvre sur un autre tracé`)
+  }),
+
+  doit('l\'analyse — le verbe s\'accorde avec le sujet, pour zéro, une et plusieurs saisons', () => {
+    /* ⚠ « CE QUE TOUTES TES SAISONS A COÛTÉ » — VU À L'ÉCRAN, INVISIBLE À LA
+       RELECTURE. La phrase est correcte au singulier, et c'est le singulier qu'on
+       lit en écrivant le code. Le sujet, lui, VARIE : singulier pour une année
+       (« ta saison 2026 »), pluriel pour zéro (« toutes tes saisons ») comme pour
+       plusieurs. Le verbe était figé à côté d'un sujet qui bouge, et il l'était
+       dans les quatre phrases d'argent à la fois.
+
+       ⚠ ET CET ESSAI ÉPROUVE LES PHRASES RENDUES, PAS LA PRÉSENCE D'UNE
+       FONCTION. Chercher `saisonAccorde` dans le fichier prouverait qu'on l'a
+       écrite ; seul le texte rendu prouve qu'elle est APPELÉE, et c'est le texte
+       rendu que le pilote lit au-dessus de son tracé. La garde se règle donc sur
+       les périodes qu'un pilote peut avoir : aucune saison choisie, une seule,
+       plusieurs. */
+    const SUJET = /\b(toutes tes saisons|tes saisons(?:\s\d{4},?)+|ta saison\s\d{4})\s+(\S+)/g
+    const SINGULIERS = ['a', 'coûte', 'porte', 'fait', 'dit', 'vaut']
+    const PLURIELS = ['ont', 'coûtent', 'portent', 'font', 'disent', 'valent']
+    let accords = 0
+    for (const c of CROISEMENTS)
+      for (const p of [TOUTES_ANNEES, [2026], [2025, 2026], [2024, 2025, 2026]]) {
+        const phrase = c.phrase(p)
+        for (const m of phrase.matchAll(SUJET)) {
+          accords++
+          const pluriel = !m[1].startsWith('ta saison')
+          vrai(!(pluriel ? SINGULIERS : PLURIELS).includes(m[2]),
+            `« ${phrase} » : le titre est faux en français, au-dessus du tracé du pilote`)
+        }
+      }
+    /* ⚠ ET LE TÉMOIN N'EST PAS MUET. Une table qui cesserait de nommer la saison
+       ne déclencherait plus aucune vérification, et la garde passerait au vert
+       sur des phrases vidées de leur sujet — c'est la façon la plus discrète de
+       perdre un essai. Les quatre lectures d'argent la nomment, sur quatre
+       périodes. */
+    vrai(accords >= 12,
+      `seules ${accords} phrases nomment une saison : la garde de l'accord ne regarde plus rien`)
+    // Et le sujet lui-même se dit juste : une seule saison n'est pas « toutes ».
+    const argent = croisementDe('finance', 'poste')
+    vrai(!!argent, 'le croisement de l\'argent par poste a disparu : le témoin est muet')
+    vrai(/toutes tes saisons ont/.test(argent!.phrase(TOUTES_ANNEES)),
+      'sans choix de saison, le titre du tracé n\'est pas au pluriel')
+    vrai(/ta saison 2026 a/.test(argent!.phrase([2026])),
+      'sur une seule saison, le titre du tracé n\'est pas au singulier')
+    vrai(/tes saisons 2025, 2026 ont/.test(argent!.phrase([2025, 2026])),
+      'sur plusieurs saisons, le titre du tracé n\'est pas au pluriel')
+  }),
+
+  doit('l\'analyse — cinq onglets, huit caractères, et rien ne se montre à vide', () => {
+    /* ⚠ LA LARGEUR N'EST PAS UNE PRÉFÉRENCE, C'EST UNE MESURE. `.onglet` est
+       `flex: 1` sans marge ni écart, dans une `.barre` en `left: 0; right: 0` :
+       à cinq, chacun fait 75 px sur un écran de 375. Le mot le plus large est
+       ROULAGES — 61,6 px à 12 px de corps, plus 11,5 px d'interlettre à .12em,
+       soit 73,2 px, et il reste 1,8 px. Un sixième onglet, ou un mot de plus de
+       huit caractères, déborde sa case : le pilote lit « ROULAGE », ou tape à
+       côté, et rien ne rougit nulle part. */
+    const app = fichierDe(ECRANS, '/App.tsx')
+    vrai(app.length > 0, 'src/App.tsx ne se lit plus : le témoin est muet')
+    const source = sansCommentaires(app)
+    const debut = source.indexOf('<nav className="barre">')
+    vrai(debut > 0, 'la barre du bas a disparu : le témoin est muet')
+    const barre = source.slice(debut, source.indexOf('</nav>', debut))
+    const mots = [...barre.matchAll(/className="onglet"[\s\S]*?>([^<>{}]+)</g)].map((m) => m[1].trim())
+    vrai(mots.length >= 4, `seulement ${mots.length} onglets lus : la lecture de la barre est cassée`)
+    vrai(mots.length <= 5,
+      `la barre porte ${mots.length} onglets : à six, chaque case tombe sous la largeur de ROULAGES`)
+    for (const m of mots) {
+      vrai(m.length <= 8,
+        `l'onglet « ${m} » fait ${m.length} caractères : il déborde de sa case à 375 px`)
+      vrai(/^[A-ZÀ-Ý]+$/.test(m),
+        `l'onglet « ${m} » n'est pas en capitales : deux casses à trois centimètres se lisent comme deux natures de bouton`)
+    }
+    egal(mots.length, new Set(mots).size, 'deux onglets portent le même mot')
+    // Et la mesure tient dans la feuille : des cases égales, sans écart.
+    const regle = FEUILLE.slice(FEUILLE.indexOf('.onglet {'), FEUILLE.indexOf('.onglet {') + 260)
+    vrai(regle.length > 0, 'la règle des onglets a disparu de la feuille')
+    vrai(/flex: 1/.test(regle),
+      'les onglets ne se partagent plus la largeur à égalité : le calcul des 75 px ne vaut plus')
+    const nav = FEUILLE.slice(FEUILLE.indexOf('.barre {'), FEUILLE.indexOf('.barre {') + 260)
+    vrai(!/gap:/.test(nav),
+      'la barre du bas a pris un écart entre ses onglets : ROULAGES perd les 1,8 px qui lui restaient')
+
+    /* ⚠ UN ONGLET APPARAÎT QUAND IL A QUELQUE CHOSE À MONTRER — UX-DR9. Et le
+       MÊME test décide de l'onglet ET de l'écran : ce qui n'a pas d'onglet n'a
+       pas d'écran, sinon le pilote atterrit sur un blanc entre les deux barres,
+       et un écran blanc se lit comme un plantage. */
+    vrai((source.match(/analysable\(porte\)/g) ?? []).length >= 2,
+      'l\'onglet d\'analyse et son écran ne se gardent plus au même test : l\'un des deux s\'ouvre sur du blanc')
+    const analysable = source.match(/const analysable = [\s\S]*?\n\n/)
+    vrai(!!analysable && !/p\.moto/.test(analysable![0]),
+      'le test de l\'onglet lit une condition qui ne peut jamais décider seule : on croit la lire')
+
+    /* ⚠ ET UN ÉCRAN NE MONTRE JAMAIS CE QU'IL N'A PAS. Les rangées se
+       recomposent : un domaine sans matière n'apparaît pas, un axe non plus.
+       Aucun gris, aucun « bientôt », aucun croisement mort — un écran vide
+       signale l'abandon dans ce produit (FR-14). */
+    const ecran = sansCommentaires(fichierDe(ECRANS, '/Analyse.tsx'))
+    vrai(ecran.length > 0, 'l\'écran d\'analyse a disparu : le témoin est muet')
+    for (const mot of ['disabled', 'bientôt', 'à venir', 'aucune donnée', 'pas encore de'])
+      vrai(!new RegExp(mot, 'i').test(ecran),
+        `l'écran d'analyse porte « ${mot} » : il dessine le squelette de ce que le pilote n'a pas`)
+    vrai(/if \(!lu \|\| !annees \|\| !trace \|\| !forme\) return null/.test(ecran),
+      'l\'écran d\'analyse se monte sans matière : un cadre en attente, puis rien')
+    // Une rangée qui n'offre pas de choix n'est pas une rangée : elle disparaît,
+    // exactement comme les années du bilan de saison.
+    for (const rangee of ['domaines', 'duDomaine', 'annees'])
+      vrai(new RegExp(`${rangee}\\.length > 1 &&`).test(ecran),
+        `la rangée « ${rangee} » s'affiche à une seule puce : un bouton toujours actif qui ne fait rien`)
+
+    /* Et les domaines gardent l'ordre de la table. Les trier par ce qu'ils
+       contiennent ferait bouger la première puce d'une ouverture à l'autre, et le
+       pilote réapprendrait la rangée à chaque fois. */
+    const faux: Trace[] = CROISEMENTS.map((c) => ({
+      croisement: c, forme: c.forme, lignes: [], manque: null, nonCompte: null,
+    }))
+    const domaines: Domaine[] = domainesDe(faux)
+    egal(domaines, [...new Set(CROISEMENTS.map((c) => c.domaine))],
+      'les domaines ne sortent plus dans l\'ordre de la table : la première puce bouge d\'une ouverture à l\'autre')
+    /* ⚠ ET LES DEUX FILTRES RETIRENT SANS RÉORDONNER. C'est la moitié que la
+       comparaison ci-dessus ne peut pas voir : un tri ajouté APRÈS le dédoublage
+       rendrait exactement la même chose sur une table complète, et ne se verrait
+       que le jour où un domaine se vide — c'est-à-dire chez le pilote qui vient
+       de commencer, et chez lui seulement. */
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    for (const nom of ['domainesDe', 'tracesDuDomaine']) {
+      const i = an.indexOf(`export const ${nom} =`)
+      vrai(i > 0, `${nom} a disparu de l'analyse : le témoin est muet`)
+      vrai(!/\.sort\(/.test(an.slice(i, i + 300)),
+        `${nom} trie ce qu'il filtre : les puces changent de place d'une ouverture à l'autre`)
+    }
+    for (const d of domaines) {
+      egal(tracesDuDomaine(faux, d).map((t) => t.croisement.axe),
+        CROISEMENTS.filter((c) => c.domaine === d).map((c) => c.axe),
+        `les axes de ${NOM_DOMAINE[d]} ne sortent plus dans l'ordre de la table`)
+      vrai(/^[A-ZÀ-Ý]+$/.test(NOM_DOMAINE[d]),
+        `le domaine ${NOM_DOMAINE[d]} n'est plus en capitales comme les onglets`)
+    }
+    /* ⚠ ET AUCUNE COULEUR NE RANGE. `--alerte` ne sert QU'À CE QUI DÉTRUIT :
+       « un rouge qui sert à deux choses ne sert plus à rien ». Un domaine, une
+       puce ou une note en rouge se lirait comme un avertissement sur un mois qui
+       n'en est pas un — et la seule variation de teinte autorisée est
+       l'atténuation de ce que le produit ne sait pas ranger. */
+    vrai(!/--alerte|--plus-lent|--record/.test(ecran),
+      'l\'écran d\'analyse emprunte le rouge de l\'alerte ou le violet du record : une couleur s\'est mise à ranger')
+    /* On lit CHAQUE règle dont le sélecteur nomme l'analyse, et pas une tranche
+       de fichier : une tranche s'arrête où la feuille s'arrête aujourd'hui, et la
+       prochaine règle ajoutée en dessous tomberait hors du témoin sans que
+       personne ne le voie. */
+    let regles = 0
+    for (const m of FEUILLE.replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .matchAll(/([^{}]*analyse[^{}]*)\{([^{}]*)\}/gi)) {
+      regles++
+      vrai(!/--alerte|--plus-lent/.test(m[2]),
+        `« ${m[1].trim()} » peint l'analyse en rouge : le rouge cesse de ne signifier qu'une destruction`)
+    }
+    vrai(regles > 0, 'l\'habillage de l\'analyse a disparu de la feuille : le témoin est muet')
+
+    /* « TOUTES LES SAISONS » EST LE TABLEAU VIDE, la seule valeur qui ne se
+       confonde avec aucune année — et l'axe ANNÉE n'existe que sous elle. */
+    egal(TOUTES_ANNEES.length, 0,
+      '« toutes les saisons » est devenu une liste d\'années : on ne distingue plus « toutes » de « les deux cochées »')
+  }),
+
+  doit('l\'analyse — les circuits se regroupent à plat, et l\'analyse ne les regroupe pas elle-même', () => {
+    /* `circuit_nom` est du TEXTE LIBRE — il n'existe aucun identifiant de circuit
+       côté client. « Pau-Arnos » tapé un soir puis « pau arnos » le suivant
+       faisaient DEUX circuits, chacun sous le seuil de trois points, donc AUCUNE
+       courbe : le pilote qui roulait le plus voyait le moins. */
+    egal(aplati('Pau-Arnos'), aplati('pau arnos'),
+      'deux façons d\'écrire le même circuit font deux tracés : chacun sous le seuil, donc aucun')
+    egal(aplati('Pau-Arnos'), aplati('PAU  ARNOS'),
+      'la casse et les espaces séparent encore un circuit de lui-même')
+
+    /* ⚠ ET LE REGROUPEMENT NE SE REFAIT PAS ICI. `circuitsAvecCourbe` et
+       `courbeDuCircuit` le portent déjà : un second rapprochement écrit dans
+       l'analyse serait un second endroit où « Pau-Arnos » et « pau arnos »
+       peuvent se séparer à nouveau, et il divergerait au premier accent. */
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    vrai(an.length > 0, 'src/db/analyse.ts ne se lit plus : le témoin est muet')
+    vrai(/circuitsAvecCourbe\(/.test(an) && /courbeDuCircuit\(/.test(an),
+      'l\'analyse est allée chercher les chronos ailleurs que dans les courbes qui existent')
+    /* ⚠ ET ELLE NE TOUCHE `circuit_nom` QUE POUR NOMMER UNE JOURNÉE. La colonne
+       est bien lue une fois — « Pau-Arnos · 12/04 » est le nom d'un pas de la
+       suite — et c'est légitime : nommer n'est pas rapprocher. Ce qui est refusé,
+       c'est de GROUPER ou de COMPARER sur ce texte libre, en SQL : l'égalité
+       stricte a déjà séparé un circuit de lui-même une fois, et le pilote qui
+       roulait le plus voyait le moins. */
+    for (const { fichier, sql } of gabaritsSql()) {
+      if (!fichier.endsWith('db/analyse.ts')) continue
+      vrai(!/GROUP BY[^\n]*circuit/i.test(sql),
+        'l\'analyse regroupe les circuits en SQL : l\'égalité stricte sépare « Pau-Arnos » de « pau arnos »')
+      vrai(!/circuit_nom\s*(=|LIKE|IN\b)/i.test(sql),
+        'l\'analyse compare des noms de circuit bruts : deux façons de l\'écrire redeviennent deux circuits, chacun sous le seuil')
+    }
+  }),
+
+  doit('l\'analyse — les commentaires abrogés de Barres.tsx sont morts, et le nouveau nomme la levée', () => {
+    /* ⚠ UN COMMENTAIRE FAUX EST PIRE QU'UN COMMENTAIRE ABSENT : ON LE CROIT. Le
+       propriétaire a LEVÉ l'interdit de RELIER des paniers mensuels le 1er
+       septembre 2026 — un segment droit entre deux paniers ne dit rien de plus
+       que les deux paniers, il les ORDONNE. Ce fichier interdisait encore de
+       relier, en deux endroits, avec l'aplomb d'une règle : le prochain lecteur
+       aurait défait la suite au nom d'un interdit qui n'existe plus.
+
+       Ce qui reste debout et n'a pas bougé d'un mot : le LISSAGE — une courbe
+       passe par des valeurs que personne n'a mesurées — et la DROITE DE TENDANCE,
+       qui n'invente pas entre les points mais AU-DELÀ. La levée porte sur RELIER,
+       jamais sur PROLONGER. */
+    const brut = fichierDe(ECRANS, '/Barres.tsx')
+    vrai(brut.length > 0, 'src/ecrans/Barres.tsx a disparu : le témoin est muet')
+
+    vrai(!/aucune droite ne se tire/i.test(brut),
+      'Barres.tsx interdit de nouveau de relier : la suite se fera défaire au nom d\'une règle levée')
+    vrai(!/RIEN NE SE COMPARE AU PRÉCÉDENT/.test(brut),
+      'le paragraphe qui mettait relier et comparer dans le même sac est revenu')
+    /* La phrase abrogée peut rester CITÉE — c'est même ce qui rend la levée
+       lisible — mais alors la levée la suit immédiatement. Une citation sans sa
+       levée redevient une règle. */
+    const cite = brut.indexOf('inventerait des valeurs entre eux')
+    if (cite > 0)
+      vrai(brut.indexOf('A LEVÉ CE POINT') > cite
+        && brut.indexOf('A LEVÉ CE POINT') - cite < 200,
+      'la phrase abrogée traîne sans sa levée : elle se relit comme une règle en vigueur')
+    vrai(/1er septembre[\s*\n]*2026/i.test(brut),
+      'la levée ne porte plus sa date : on ne sait plus ce qui a été décidé, ni quand')
+
+    // ET CE QUI RESTE INTERDIT EST TOUJOURS ÉCRIT, en toutes lettres.
+    for (const clause of ['LISSAGE', 'DROITE DE TENDANCE'])
+      vrai(new RegExp(clause).test(brut),
+        `Barres.tsx ne refuse plus le ${clause.toLowerCase()} : la levée a débordé de « relier » vers « prolonger »`)
+    /* Et le fichier ne trace toujours aucune ligne : une barre est un RECTANGLE,
+       deux `div` et une largeur en pourcentage la font. La ligne vit dans
+       Courbe.tsx, et le produit a DEUX fichiers qui ont le droit de poser un
+       `<svg>`, pas trois. */
+    vrai(!/<svg\b/.test(sansCommentaires(brut)),
+      'le tracé de l\'argent pose un <svg> à lui : le jeu d\'icônes se rouvre')
+    vrai(/<polyline/.test(sansCommentaires(fichierDe(ECRANS, '/Courbe.tsx'))),
+      'la ligne a quitté Courbe.tsx : elle est allée poser un <svg> dans un troisième fichier')
   }),
 ]
 

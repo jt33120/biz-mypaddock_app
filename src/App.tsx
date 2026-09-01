@@ -50,6 +50,10 @@ import { Chutes } from './ecrans/Chute'
 import { Preparation } from './ecrans/Preparation'
 import { retirerLEcranDeChargement } from './chargement'
 import { Circuit } from './ecrans/Circuit'
+import { Analyse, type DepartAnalyse } from './ecrans/Analyse'
+import {
+  argentParMoto, argentParPoste, gestesParMoto, journeesVecues, TOUTES_ANNEES,
+} from './db/analyse'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 import { useGeste } from './ecrans/geste'
@@ -70,7 +74,7 @@ export type Adoption =
   | { etat: 'faite' }
   | { etat: 'partielle'; refus: number; motif: string }
   | { etat: 'echec'; motif: string }
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'modifier' | 'session' | 'bilan' | 'journee' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'analyse' | 'nouveau' | 'modifier' | 'session' | 'bilan' | 'journee' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -78,6 +82,97 @@ type Liste = Awaited<ReturnType<typeof listerRoulages>>
  *  2 à 4 groupes nommés Initiation/Intermédiaire/Confirmé/Expert, pas
  *  Blanc/Jaune/Rouge. Seul le RANG est comparable d'une sortie à l'autre. */
 const GROUPES = ['Initiation', 'Intermédiaire', 'Confirmé', 'Expert']
+
+/**
+ * CE QUE L'ANALYSE A À MONTRER, EN QUATRE FAITS ET PAS EN UN BOOLÉEN.
+ *
+ * L'onglet se garde sur l'un, les portes pré-réglées se gardent chacune sur le
+ * SIEN. Un seul booléen aurait suffi à l'onglet et aurait laissé les trois liens
+ * promettre ce qu'ils n'ouvrent pas : un pilote qui n'a consigné que des gestes
+ * d'atelier a bien un onglet à ouvrir, et rien à répartir entre ses motos. Un lien
+ * qui annonce « ce que chaque moto t'a coûté » et qui ouvre autre chose ne se
+ * distingue pas d'un lien cassé — l'analyse retombe alors sur le premier
+ * croisement vivant, donc rien ne plante, et c'est justement ce qui rend le
+ * défaut invisible en essai et visible au doigt.
+ */
+type Porte = {
+  /** Au moins une dépense saisie, toutes saisons confondues. Garde le lien du
+   *  bilan de saison — FINANCE · POSTE. */
+  poste: boolean
+  /** Au moins une machine qui porte de l'argent — une dépense de cible
+   *  `machine`, ou une intervention chiffrée sans dépense (`argentParMoto` tient
+   *  la clause qui empêche de compter deux fois). Garde le lien du garage —
+   *  FINANCE · MOTO. */
+  moto: boolean
+  /** Les journées VÉCUES, au sens de `bilanSaison` — jamais celles à venir. */
+  journees: number
+  /** Au moins un geste d'atelier consigné. */
+  gestes: boolean
+}
+
+/**
+ * TROIS JOURNÉES VÉCUES, et c'est le seuil des ROULAGES SEULS — une dépense ou un
+ * geste d'atelier ouvrent l'onglet dès le premier.
+ *
+ * Une ou deux journées ne font pas un tracé : une composition de deux barres se
+ * lit déjà d'un coup d'œil dans la liste des roulages, et l'onglet n'ajouterait
+ * que le détour. C'est le MÊME TROIS que `POINTS_MINIMUM` (src/db/courbe.ts), et
+ * pour une raison voisine — deux points font toujours une droite, deux barres ne
+ * font pas une forme — mais ce n'est pas la MÊME question, et il n'est donc pas
+ * importé : si un tracé exigeait un jour quatre points, ce seuil-ci n'aurait
+ * aucune raison de le suivre.
+ */
+const ROULAGES_A_ANALYSER = 3
+
+/**
+ * ─── LE TEST DE L'ONGLET — UX-DR9 appliquée au cinquième ────────────────────
+ *
+ * « Un onglet apparaît QUAND IL A QUELQUE CHOSE À MONTRER. » La règle est déjà
+ * celle de la barre (voir son commentaire plus bas) ; ceci n'est que son test
+ * pour l'analyse, et il porte sur des FAITS SAISIS, jamais sur une date ni sur un
+ * réglage.
+ *
+ * ⚠ ET IL EST MESURÉ AVEC LES LECTURES DE L'ANALYSE ELLE-MÊME, pas avec des
+ * requêtes écrites pour l'occasion. Un onglet gardé par un compte et rempli par
+ * un autre finit par s'ouvrir sur un écran vide — c'est le défaut exact que ce
+ * dépôt vient de payer ailleurs : une colonne posée en base, lue par un écran,
+ * exigée par une fabrique, et écrite par personne. Ici les quatre lectures sont
+ * QUATRE DES ONZE qui remplissent l'écran (`src/db/analyse.ts`) : le garde et le
+ * contenu ne peuvent pas diverger sans que les deux bougent ensemble.
+ *
+ * ⚠ ET AUCUNE DES QUATRE N'EST COURT-CIRCUITÉE, alors qu'une seule suffirait
+ * souvent à trancher l'onglet. Un champ rendu `false` parce qu'« on n'avait plus
+ * besoin de le savoir » est un champ qui MENT à celui qui le lit ensuite — et
+ * `moto` le lit. Quatre agrégats sur une base locale ne se sentent pas ; un fait
+ * faux, si.
+ *
+ * Elles portent sur TOUTES LES SAISONS — `TOUTES_ANNEES` est le tableau vide, et
+ * il ne filtre rien. Un onglet qui apparaîtrait puis disparaîtrait au 1er janvier
+ * serait un onglet qui clignote une fois par an, sur une frontière que le pilote
+ * n'a pas posée.
+ */
+const aDeQuoiAnalyser = async (db: Db): Promise<Porte> => ({
+  // ⚠ SEULES LES LIGNES NON INCERTAINES COMPTENT, et c'est la règle de
+  // `tracesDisponibles` recopiée ici plutôt que contredite. Elle refuse un tracé
+  // fait UNIQUEMENT d'incertain — « une puce Mois qui n'ouvre que sur une barre
+  // Sans mois promet un découpage que la donnée ne porte pas ». Le garde, lui,
+  // comptait toutes les lignes : une seule dépense sans poste ET sans jour — une
+  // ligne d'avant le récit 19.2, ou restaurée d'une vieille sauvegarde — ouvrait
+  // donc l'onglet sur un écran que `tracesDisponibles` rendait vide. Le pilote
+  // tapait ANALYSE et tombait sur un blanc, ce qui se lit comme un plantage.
+  poste: (await argentParPoste(db, TOUTES_ANNEES)).some((l) => !l.incertain),
+  moto: (await argentParMoto(db, TOUTES_ANNEES)).some((l) => !l.incertain),
+  journees: (await journeesVecues(db, TOUTES_ANNEES)).length,
+  gestes: (await gestesParMoto(db, TOUTES_ANNEES)).some((l) => !l.incertain),
+})
+
+/** L'onglet : une dépense, ou trois journées vécues, ou un geste consigné.
+ *  `moto` n'y figure pas et n'a pas à y figurer — de l'argent sur une moto vient
+ *  soit d'une dépense, soit d'une intervention chiffrée, donc l'un des deux
+ *  autres est déjà vrai. L'ajouter ferait une quatrième condition qui ne peut
+ *  jamais décider seule, c'est-à-dire une condition qu'on croit lire. */
+const analysable = (p: Porte) =>
+  p.poste || p.journees >= ROULAGES_A_ANALYSER || p.gestes
 
 export default function App() {
   const [db, setDb] = useState<Db | null>(null)
@@ -118,6 +213,22 @@ export default function App() {
    *  identifiant : le référentiel peut ne pas le connaître, et la fiche doit
    *  quand même s'ouvrir — c'est ce que le pilote y a fait qui la remplit. */
   const [circuitVu, setCircuitVu] = useState<string | null>(null)
+  /** Ce que l'analyse a à montrer — UX-DR9, voir `aDeQuoiAnalyser`. Il démarre
+   *  À VIDE : l'onglet n'apparaît qu'après la première lecture, jamais avant.
+   *  L'inverse — le supposer plein puis le retirer — ferait clignoter la barre au
+   *  démarrage, et une barre qui bouge sous le pouce fait taper à côté. */
+  const [porte, setPorte] = useState<Porte>(
+    { poste: false, moto: false, journees: 0, gestes: false })
+  /** LA MOLETTE PRÉ-TOURNÉE quand on entre par une porte, et `null` quand on
+   *  entre par l'onglet.
+   *
+   *  ⚠ IL SE REMET À `null` SUR L'ONGLET, et ce n'est pas de la propreté. L'écran
+   *  d'analyse se démonte quand on le quitte : à la remontée, il relit `depart`
+   *  pour son état initial. Gardé d'un passage à l'autre, le dernier raccourci
+   *  emprunté déciderait de ce que l'onglet ouvre — le pilote taperait ANALYSE et
+   *  retomberait sur la question qu'un lien lui avait posée trois écrans plus tôt.
+   *  L'onglet est le chemin NEUTRE, et il doit le rester. */
+  const [departAnalyse, setDepartAnalyse] = useState<DepartAnalyse | null>(null)
   /** L'ADOPTION SE FAIT TOUTE SEULE — « ça devrait se faire automatiquement
    *  aussi hein ». Son état est ici et non dans l'écran du compte : c'est
    *  l'application qui l'entreprend, l'écran ne fait que la raconter. */
@@ -181,6 +292,13 @@ export default function App() {
     // manqué son rendez-vous — l'accueil est immunisé par construction.
     setSrc(await sourceAccueil(base, aujourdhui()))
     setConseil(await conseilDuJour(base, aujourdhui()))
+    /* ⚠ ET L'ONGLET D'ANALYSE SE RECALCULE ICI, avec tout le reste. Posé dans un
+       effet à lui, il aurait raté la seule chose qui compte : la PREMIÈRE
+       dépense, le PREMIER geste, la TROISIÈME journée — c'est-à-dire l'instant
+       exact où il doit apparaître. `rafraichir` part à l'ouverture, à chaque
+       écriture des roulages, au retour au premier plan et à l'ouverture de la
+       liste : ce sont déjà tous les moments où le produit gagne de la matière. */
+    setPorte(await aDeQuoiAnalyser(base))
   }, [])
   useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
 
@@ -505,7 +623,17 @@ export default function App() {
         {ecran === 'roulages' && <Roulages db={db} liste={liste} onOuvrir={ouvrirRoulage}
                                             onModifier={(id) => { setAModifier(id); setEcran('modifier') }}
                                             onNouveau={() => setEcran('nouveau')}
-                                            onEcrit={() => void rafraichir(db)} />}
+                                            onEcrit={() => void rafraichir(db)}
+                                            onArgentParPoste={porte.poste
+                                              ? (annee) => {
+                                                // La porte ouvre sur LA saison qu'on regardait, pas
+                                                // sur celle que l'analyse choisirait par défaut.
+                                                setDepartAnalyse({
+                                                  domaine: 'finance', axe: 'poste', periode: [annee],
+                                                })
+                                                setEcran('analyse')
+                                              }
+                                              : null} />}
         {/* ⚠ LA LIGNE VIENT DE `liste`, ET C'EST VOULU : elle porte déjà le
             circuit, la date, le groupe et la machine, lus dans la même requête
             que la liste. Une seconde lecture par identifiant ferait un second
@@ -556,6 +684,12 @@ export default function App() {
             tenue={gestesDeLaJournee.tenue}
             visibilite={gestesDeLaJournee.visibilite}
             onCircuit={() => { setCircuitVu(bilan.circuit); setEcran('circuit') }}
+            onAnalyse={analysable(porte)
+              ? () => {
+                setDepartAnalyse({ domaine: 'performance', axe: 'circuit' })
+                setEcran('analyse')
+              }
+              : null}
           />
         )}
         {/* ⚠ LE MÊME ROULAGE, L'AUTRE MOITIÉ DU CHEMIN — récit 17.2. Ce n'est
@@ -607,7 +741,36 @@ export default function App() {
                      else if (courant) void ouvrirRoulage(courant)
                    }} />
         )}
-        {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
+        {ecran === 'garage' && (
+          <Garage db={db} onEcrit={() => void rafraichir(db)}
+                  /* LA PORTE DU GARAGE — FINANCE · MOTO, et elle n'existe que
+                     s'il y a de l'argent à répartir. `null` la retire : Garage
+                     ne rend rien du tout, plutôt qu'un lien gris. */
+                  onArgentParMoto={porte.moto
+                    ? () => {
+                        // ⚠ ELLE OUVRE SUR TOUTES LES SAISONS, ET SON LIBELLÉ NE NOMME
+                        // AUCUNE ANNÉE : « ce que chaque moto t'a coûté » se lit sur la
+                        // vie de la machine, pas sur l'exercice en cours, et le garage
+                        // lui-même n'est découpé par aucune saison. C'est aussi la seule
+                        // période sur laquelle l'écran a de la matière À COUP SÛR : le
+                        // garde qui a offert cette porte a été mesuré sur toutes
+                        // (`aDeQuoiAnalyser`), et ouvrir sur la saison la plus récente
+                        // pouvait donc tomber sur un écran vide.
+                        setDepartAnalyse({
+                          domaine: 'finance', axe: 'moto', periode: TOUTES_ANNEES,
+                        })
+                        setEcran('analyse')
+                      }
+                    : null} />
+        )}
+        {/* ⚠ L'ÉCRAN NE SE MONTE QUE SI L'ONGLET EXISTE, et ce n'est pas une
+            ceinture de plus. `Analyse` ne rend rien quand rien n'a de matière —
+            un écran blanc entre la barre du haut et celle du bas, qui se lit
+            comme un plantage. Le même test décide donc des deux : ce qui n'a pas
+            d'onglet n'a pas d'écran. */}
+        {ecran === 'analyse' && analysable(porte) && (
+          <Analyse db={db} depart={departAnalyse ?? undefined} />
+        )}
         {ecran === 'compte' && <Compte db={db} identite={identite} adoption={adoption}
                                        onLegal={() => setEcran('legal')}
                                        onSonde={() => setEcran('sonde')} />}
@@ -634,6 +797,17 @@ export default function App() {
           réorientation du 18 août, qui fait du garage le centre du produit — le
           garage a donc maintenant quelque chose à montrer, et c'est le TEST de
           la règle qui tranche, pas son exemple chiffré.
+
+          ⚠ ET ANALYSE EST LE PREMIER ONGLET DU PRODUIT QUI APPLIQUE VRAIMENT LA
+          RÈGLE — 1er septembre 2026. Les quatre autres sont rendus à plat : le
+          garage parce qu'un garage vide est l'écran par lequel on déclare sa
+          moto, l'accueil et le compte parce qu'ils existent avant toute saisie,
+          les roulages parce que c'est là qu'on en saisit un. Aucun n'avait donc
+          de test à passer, et la règle n'était plus qu'un commentaire. Celui-ci
+          en a un, et il vit dans `aDeQuoiAnalyser` : au moins une dépense, ou
+          trois journées vécues, ou un geste d'atelier consigné. Un pilote qui
+          vient d'installer l'application voit quatre onglets, pas cinq — et le
+          cinquième arrive le jour où il a de quoi le remplir, sans rien réclamer.
 
           ⚠ ET GARAGE EST TOUJOURS VISIBLE, y compris sans machine. Le masquer
           jusqu'à la première machine rendait la première machine INATTEIGNABLE
@@ -684,6 +858,32 @@ export default function App() {
         <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
         <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('garage') }}>GARAGE</button>
         <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('roulages') }}>ROULAGES</button>
+        {/* ⚠ LE CINQUIÈME ONGLET, ET LA LARGEUR A ÉTÉ MESURÉE, PAS SUPPOSÉE.
+            `.onglet` est `flex: 1` sans marge ni écart, dans une `.barre` en
+            `left: 0; right: 0` : à cinq, chacun fait exactement 75,0 px sur un
+            écran de 375. Le mot le plus large de la barre est ROULAGES — mesuré
+            dans la Chakra Petch 600 EMBARQUÉE de la feuille (fontes.css, en data
+            URI, donc c'est bien elle qui rend) : 5,136 em, soit 61,6 px à 12 px,
+            plus 11,5 px d'interlettre à .12em = 73,2 px. Il tient, avec 1,8 px
+            de reste. ANALYSE en fait 62,4 px et en garde 12,6.
+
+            ⚠ LA MARGE EST DONC MINCE, ET ELLE EST SUR ROULAGES, PAS SUR CE
+            MOT-CI : un sixième onglet, ou un mot plus long que « ROULAGES », ne
+            passeront pas sans toucher `font-size` ou `letter-spacing` dans la
+            feuille. En dessous de 375 px — un iPhone SE de première génération
+            fait 320 — ROULAGES déborde déjà de sa case ; les tailles de référence
+            du produit sont 375, 390 et 430. La hauteur, elle, ne bouge pas :
+            `min-height: var(--cible-min)`, 52 px, au-delà des 44 px exigés. */}
+        {analysable(porte) && (
+          <button className="onglet" data-actif={ecran === 'analyse' ? '1' : '0'}
+                  onClick={() => {
+                    setDepenseNote(null)
+                    // Le chemin NEUTRE : il efface la molette qu'une porte aurait
+                    // pré-tournée. Voir `departAnalyse`.
+                    setDepartAnalyse(null)
+                    setEcran('analyse')
+                  }}>ANALYSE</button>
+        )}
         <button className="onglet" data-actif={ecran === 'compte' || ecran === 'sonde' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('compte') }}>COMPTE</button>
       </nav>
     </>
@@ -1087,9 +1287,12 @@ function ZoneChiffres({ db }: { db: Db }) {
   )
 }
 
-function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
+function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit, onArgentParPoste }: {
   db: Db; liste: Liste; onOuvrir: (id: string) => void; onModifier: (id: string) => void
   onNouveau: () => void; onEcrit: () => void
+  /** La porte du bilan de saison vers l'analyse — FINANCE · POSTE. `null` quand
+   *  aucune dépense n'est saisie : le bilan ne montre alors rien à ouvrir. */
+  onArgentParPoste: ((annee: number) => void) | null
 }) {
   const groupes = classerRoulages(liste)
   return (
@@ -1097,7 +1300,7 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
       {/* Le bilan de saison ouvre l'écran des roulages : c'est la vue d'ensemble
           de ce que la liste détaille en dessous. Consultable à tout moment
           (FR-55), jamais réservé à une fin de saison. */}
-      <Saison db={db} />
+      <Saison db={db} onArgentParPoste={onArgentParPoste} />
 
       {/* UN ROULAGE EST UNE JOURNÉE, jamais une session — Julian a eu à le
           rappeler, ce qui veut dire que l'écran ne le disait pas. Il le dit
@@ -1539,7 +1742,7 @@ function Session({ onValider, onAnnuler }: {
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, tenue, visibilite, onCircuit, onSession, onAccueil, onRecap }: {
+function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, tenue, visibilite, onCircuit, onAnalyse, onSession, onAccueil, onRecap }: {
   db: Db; b: NonNullable<Bilan>; courbe: DonneesCourbe | null
   identite: Identite | null
   /** ⚠ LE COÛT ET LA VISIBILITÉ ARRIVENT MONTÉS, ILS NE SE COMPOSENT PLUS ICI —
@@ -1565,6 +1768,11 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, tenue, visi
    *  une fiche de circuit se consulte quand on pense à ce circuit-là, et c'est
    *  en regardant sa journée qu'on y pense. */
   onCircuit: () => void
+  /** La porte vers l'analyse, pré-réglée sur PERFORMANCE · CIRCUIT. Elle n'est
+   *  offerte que sous la courbe, et `null` quand l'onglet d'analyse lui-même
+   *  n'existe pas — voir sous la courbe pourquoi les DEUX gardes sont
+   *  nécessaires. */
+  onAnalyse: (() => void) | null
   onSession: () => void; onAccueil: () => void; onRecap: () => void
 }) {
   const record = b.ecart != null && b.ecart < 0
@@ -1611,8 +1819,46 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, tenue, visi
           Une courbe de deux points fait toujours une droite, donc toujours une
           progression ou toujours une chute : le pilote y lirait un mouvement
           qui n'existe pas. Rien ne signale son absence, et rien n'annonce ce
-          qu'il faudrait faire pour la voir apparaître. */}
-      {courbe && <Courbe d={courbe} />}
+          qu'il faudrait faire pour la voir apparaître.
+
+          ⚠ ET ELLE RESTE ICI. Le soir d'un roulage, la courbe se regarde DANS le
+          contexte de la journée qu'on vient de vivre — c'est ce qui lui donne son
+          sens, et la déplacer dans l'analyse l'aurait rendue introuvable au seul
+          moment où on la cherche. Elle a gagné un SECOND point de montage
+          (Circuit.tsx), elle n'en a pas changé. */}
+      {courbe && (
+        <>
+          <Courbe d={courbe} />
+          {/* LA PORTE VERS L'ANALYSE, PRÉ-RÉGLÉE SUR PERFORMANCE · CIRCUIT.
+              DEUX GARDES, ET LA SECONDE N'EST PAS UNE CEINTURE DE PLUS.
+
+              · `courbe` dit que le croisement a de la matière : cette journée a
+                une courbe, donc ce circuit porte au moins trois journées
+                chronométrées, donc PERFORMANCE · CIRCUIT montrera au moins un
+                tracé. C'est le fait, pas une supposition.
+              · `onAnalyse` dit que l'ONGLET existe, et les deux comptes ne sont
+                PAS le même. La courbe prend TOUTES les journées (`TOUTES_JOURNEES`
+                — « un tour prouve la journée mieux qu'une date »), le test de
+                l'onglet ne compte que les journées VÉCUES, au sens de
+                `bilanSaison`. Trois journées annoncées pour septembre et déjà
+                chronométrées font donc une courbe et zéro journée vécue : sans
+                cette seconde garde, ce lien s'afficherait sous un onglet absent,
+                et il ouvrirait un écran que rien ne rend. C'est exactement le
+                défaut « lu par un écran, écrit par personne » que ce lot a promis
+                de ne pas rejouer.
+
+              ⚠ ET IL DIT « TES CIRCUITS », PAS « CE CIRCUIT ». Le raccourci
+              tourne les deux premières molettes, domaine et axe ; il ne porte
+              aucun circuit, et l'analyse rend une courbe PAR circuit. Promettre
+              celui-ci et en afficher cinq serait un lien qui ment sur sa
+              destination — le mot suit ce que le lien fait vraiment. */}
+          {onAnalyse && (
+            <button className="lien" onClick={onAnalyse}>
+              Tes chronos, circuit par circuit
+            </button>
+          )}
+        </>
+      )}
 
       {/* FR-49 — la checklist se coche au fur et à mesure du chargement et
           reste attachée au roulage comme TRACE. Elle ne se vide jamais : c'est

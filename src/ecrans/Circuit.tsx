@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import { ficheCircuit, formaterLongueur, type FicheCircuit } from '../db/circuits'
 import { formaterChrono, formaterEcart } from '../db/depot'
+import { courbeDuCircuit, type Courbe as DonneesCourbe } from '../db/courbe'
+import { Courbe } from './Courbe'
 import { Trophee } from './Trophee'
 
 /**
@@ -30,7 +32,13 @@ export function Circuit({ db, nom, onFermer }: {
   db: PowerSyncDatabase; nom: string; onFermer: () => void
 }) {
   const [f, setF] = useState<FicheCircuit | null>(null)
+  /** LA COURBE DE CE CIRCUIT — `null` tant qu'il n'a pas trois journées
+   *  chronométrées, et c'est `courbeDuCircuit` qui tient ce seuil, pas cet
+   *  écran. Même appel, même composant, même requête que sur le bilan d'une
+   *  journée : rien de neuf n'a été écrit pour la poser ici. */
+  const [courbe, setCourbe] = useState<DonneesCourbe | null>(null)
   useEffect(() => { void ficheCircuit(db, nom).then(setF) }, [db, nom])
+  useEffect(() => { void courbeDuCircuit(db, nom).then(setCourbe) }, [db, nom])
 
   if (!f) return <div className="libelle">…</div>
 
@@ -95,6 +103,29 @@ export function Circuit({ db, nom, onFermer }: {
       {sien.journees === 0 && (
         <p className="note">Tu n'as pas encore roulé ici.</p>
       )}
+
+      {/* ⚠ LA COURBE GAGNE ICI SON SECOND POINT DE MONTAGE, ET C'EST SA VRAIE
+          PLACE — 1er septembre 2026. Elle EST par roulage et par circuit : elle
+          n'a jamais parlé de la journée qu'on regarde, elle parle de CE
+          CIRCUIT-LÀ, sur toutes les journées qu'on y a passées. Montée seulement
+          au bilan d'une journée, elle était un effet secondaire de la journée
+          ouverte : pour revoir sa progression à Pau-Arnos, il fallait retrouver
+          une journée à Pau-Arnos et l'ouvrir. Elle est maintenant dans le lieu
+          dont elle parle, et elle reste au bilan — le soir d'un roulage, on la
+          veut dans son contexte.
+
+          Elle vient APRÈS ce que le pilote y a fait et AVANT le référentiel,
+          exactement pour la raison qui ouvre cet écran sur ses trois chiffres :
+          ce qu'il a fait là-bas existe dès le premier chrono, la longueur du
+          circuit attend une récolte qui n'a pas tourné.
+
+          Et elle n'apparaît QUE quand elle a de quoi dire quelque chose : sous
+          trois points, `courbeDuCircuit` rend `null`, parce que deux points font
+          toujours une droite — donc toujours une progression ou toujours une
+          chute, et le pilote y lirait un mouvement qui n'existe pas. Rien ne
+          signale son absence, et rien n'annonce ce qu'il faudrait faire pour la
+          voir : ce serait une cible, et cet écran n'en pose aucune. */}
+      {courbe && <Courbe d={courbe} />}
 
       {/* ─── LE PLAN ────────────────────────────────────────────────────── */}
       {r?.plan_url && (

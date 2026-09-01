@@ -25,15 +25,30 @@ import { aujourdhui } from '../db/vecu'
  *   — une machine SANS sprite reste pleinement une machine : la scène existe quand même et
  *     montre une silhouette. Le garage n'exige jamais une photo pour fonctionner.
  *   — c'est la MACHINE qui monte en niveau, jamais le pilote : tous les chiffres affichés
- *     portent sur l'objet — ses kilomètres, ses roulages, ce qu'elle a coûté.
+ *     portent sur l'objet — ses roulages, son meilleur tour, le circuit où elle va le plus.
+ *
+ * ⚠ CETTE LIGNE NOMMAIT « ses kilomètres, ses roulages, ce qu'elle a coûté », et
+ * deux de ses trois exemples étaient faux. Aucun kilométrage n'a jamais existé :
+ * ni colonne, ni saisie, ni affichage. Et « ce qu'elle a coûté » a été retiré des
+ * trois cases sur la proposition de Julian, remplacé par « circuit favori » — le
+ * raisonnement est plus bas, à sa place. Le commentaire, lui, avait gardé
+ * l'ancienne liste : il décrivait un garage qui n'existe plus, et il le décrivait
+ * avec l'aplomb d'une règle.
  */
-export function Garage({ db, onEcrit }: {
+export function Garage({ db, onEcrit, onArgentParMoto }: {
   db: PowerSyncDatabase
   /** Le garage écrit des roulages et des machines : sans ce rappel, le reste de
    *  l'application ne le savait pas et la liste des roulages restait vide.
    *  Trouvé par l'essai, pas par la relecture — un écran qui ne se rafraîchit
    *  pas ne se signale jamais. */
   onEcrit: () => void
+  /** LA PORTE VERS L'ANALYSE, PRÉ-RÉGLÉE SUR FINANCE · MOTO — 1er septembre
+   *  2026. C'est un LIEN et jamais un nombre : voir le commentaire des trois
+   *  cases plus bas, qui dit pourquoi « ce qu'elle a coûté » en est sorti.
+   *
+   *  `null` quand aucune dépense n'est saisie — App.tsx le retire alors, plutôt
+   *  que d'offrir un lien vers une répartition qui n'a rien à répartir. */
+  onArgentParMoto: (() => void) | null
 }) {
   const [machines, setMachines] = useState<Machine[]>([])
   const [actif, setActif] = useState(0)
@@ -376,6 +391,29 @@ export function Garage({ db, onEcrit }: {
           ) : <p className="va">—</p>}
         </div>
       </div>
+
+      {/* ⚠ L'ARGENT REVIENT ICI, MAIS EN LIEN — ET C'EST TOUTE LA DIFFÉRENCE
+          AVEC CE QUI EN A ÉTÉ RETIRÉ. La quatrième case « ce qu'elle a coûté »
+          est partie parce qu'« un total en tête d'écran ne se rattache à rien et
+          ne se corrige nulle part » : on lisait 2 180 €, on ne savait ni de quoi
+          c'était fait ni où le reprendre. Ce lien ne repose donc AUCUN chiffre
+          au-dessus des trois cases ; il MÈNE à l'endroit où le montant se
+          décompose et où chaque ligne se corrige.
+
+          ⚠ ET IL DIT « CHAQUE MOTO », PAS « CETTE MOTO ». FINANCE · MOTO est une
+          COMPOSITION : elle répartit l'argent entre toutes les machines
+          déclarées, elle n'isole pas celle qu'on regarde. Écrire « ce que cette
+          moto t'a coûté » sur un lien qui en montre trois serait un lien qui ment
+          sur sa destination.
+
+          ⚠ ET IL N'EST PAS DANS LA BRANCHE SANS MACHINE. Là-bas il n'y a pas de
+          page de moto, donc pas de question à laquelle il répondrait ; le budget
+          et l'équipement, eux, y sont déjà — voir plus haut pourquoi. */}
+      {onArgentParMoto && (
+        <button className="lien" onClick={onArgentParMoto}>
+          Ce que chaque moto t'a coûté
+        </button>
+      )}
 
       {/* ─── LE PORTRAIT DE JEU — récit 3bis.3 ─────────────────────────── */}
       <input ref={fichier} type="file" accept="image/*" hidden
