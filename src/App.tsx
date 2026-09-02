@@ -855,7 +855,29 @@ export default function App() {
       </p>
 
       <nav className="barre">
-        <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
+        {/* ⚠ DEUX ONGLETS SUR CINQ SONT DES GLYPHES — 2 septembre 2026, « ça fait
+            très chargé ». Cinq mots en capitales espacées à .12em remplissaient
+            la barre d'un bord à l'autre : rien n'y avait plus de silence autour,
+            donc rien n'y ressortait, pas même l'onglet actif.
+
+            ⚠ CE SONT L'ACCUEIL ET LE COMPTE, ET LE PARTAGE N'EST PAS ARBITRAIRE.
+            Ces deux-là sont le CADRE du produit — d'où l'on part, et où l'on se
+            gère. Les trois autres sont sa MATIÈRE : garage, roulages, analyse
+            sont les mots du carnet, et un pilote les cherche par leur nom. Une
+            maison et un buste sont lus sans apprentissage par tout le monde ;
+            « la matière », non — un glyphe pour ANALYSE demanderait qu'on
+            devine, et deviner un onglet est le contraire de ce qu'on gagne ici.
+
+            ⚠ ET LE NOM ACCESSIBLE PASSE PAR `titre`, PAS PAR UN `aria-label` SUR
+            LE BOUTON. `Icone` pose alors un vrai `<title>` dans le SVG : le mot
+            existe DANS LE DOCUMENT, il est lu par un lecteur d'écran ET par le
+            banc, qui continue de cliquer ces onglets par leur texte comme les
+            trois autres. Un `aria-label` aurait nommé le bouton pour l'un et
+            l'aurait rendu introuvable pour l'autre. */}
+        <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'}
+                onClick={() => setEcran('accueil')}>
+          <Icone nom="maison" taille={21} titre="Accueil" />
+        </button>
         <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('garage') }}>GARAGE</button>
         <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('roulages') }}>ROULAGES</button>
         {/* ⚠ LE CINQUIÈME ONGLET, ET LA LARGEUR A ÉTÉ MESURÉE, PAS SUPPOSÉE.
@@ -884,7 +906,10 @@ export default function App() {
                     setEcran('analyse')
                   }}>ANALYSE</button>
         )}
-        <button className="onglet" data-actif={ecran === 'compte' || ecran === 'sonde' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('compte') }}>COMPTE</button>
+        <button className="onglet" data-actif={ecran === 'compte' || ecran === 'sonde' ? '1' : '0'}
+                onClick={() => { setDepenseNote(null); setEcran('compte') }}>
+          <Icone nom="pilote" taille={21} titre="Compte" />
+        </button>
       </nav>
     </>
   )
