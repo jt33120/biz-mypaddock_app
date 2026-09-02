@@ -204,13 +204,17 @@ body {
   border: 1px solid var(--alerte); box-shadow: none;
   min-height: var(--cible-min); font-weight: 600; letter-spacing: .06em;
 }
-/* Le même geste posé en lien — « retirer » au bout d'une ligne de liste. Il
-   n'a pas de cadre à teindre : le trait sous le mot le porte, sinon le rouge
-   se lirait comme un lien visité et non comme une perte. */
-.lien.destructif {
-  color: var(--alerte); text-decoration-color: var(--alerte);
-  text-underline-offset: 2px;
-}
+/* Le même geste posé en lien — « retirer » au bout d'une ligne de liste.
+   ⚠ SON PORTEUR DE ROUGE A CHANGÉ LE 2 SEPTEMBRE 2026, et il fallait qu'il
+   change. Ce commentaire disait : « il n'a pas de cadre à teindre : le trait
+   sous le mot le porte ». Le lien a maintenant un cadre, et il n'a plus de
+   trait — la phrase était donc devenue fausse dans ses deux moitiés, et un
+   commentaire faux sur le rouge du produit est le pire endroit où en laisser un.
+   Le cadre teint remplace le trait teint, et la crainte d'origine tombe avec :
+   un cadre rouge ne peut pas se lire comme un lien visité, puisqu'il n'y a plus
+   de lien souligné nulle part à confondre avec lui. Le mot reste rouge aussi :
+   la couleur ne porte jamais seule (UX-DR8). */
+.lien.destructif { color: var(--alerte); border-color: var(--alerte); }
 
 /* ─── LES MOLETTES — le geste ne change pas, seule la peau s'allège ───────── */
 .molettes { display: flex; gap: 10px; align-items: stretch; }
@@ -321,12 +325,20 @@ body {
 .legal .titre { font-size: 24px; margin-top: 8px; }
 .legal .texte { max-width: 62ch; line-height: 1.55; }
 .legal .note { max-width: 62ch; }
-.legal .lien { display: inline; padding: 0; }
+/* Dans une PHRASE, un lien redevient un lien : le cadre découperait un mot au
+   milieu d'un paragraphe. C'est le seul contexte du produit où le soulignement
+   est la forme juste — celle d'un document, parce que c'en est un. */
+.legal .lien { display: inline; padding: 0; border: 0; text-decoration: underline; }
 
 /* Le lien de réarrangement est DISCRET par exigence, pas par goût : FR-15
    interdit qu'il ressemble à une étape d'installation. Il se trouve quand on le
    cherche et ne se remarque pas quand on ne le cherche pas. */
-.lien.discret { font-size: 11px; color: var(--encre-tenue); align-self: flex-start; }
+.lien.discret {
+  font-size: 11px; color: var(--encre-tenue); align-self: flex-start;
+  /* Sans cadre : un cadre le rendrait aussi visible que les commandes qu'il
+     doit justement ne pas concurrencer. */
+  border: 0; text-decoration: underline; padding: 6px 0;
+}
 
 /* LA COURBE. Rien de lissé, rien de flou : `crispEdges` sur le tracé comme sur
    les points, et une hauteur fixe pour que trois roulages et quinze occupent la
@@ -574,11 +586,24 @@ body {
 /* Global, et pas par écran : la première version vivait deux fois, enfermée
    dans `.garage` et `.compte`, et le troisième écran qui s'en servait retombait
    sur le bouton gris du système. */
+/* ⚠ LE SOULIGNEMENT EST TOMBÉ — 2 septembre 2026, rapporté depuis le téléphone :
+   « les boutons texte soulignés sont très moches ». Il l'était, et pas seulement
+   à l'œil : trois liens soulignés empilés sous chaque pièce d'équipement se
+   lisent comme du texte qu'on aurait oublié de mettre en forme, pas comme trois
+   gestes. Le trait sous un mot est la convention d'un DOCUMENT ; ici ce sont des
+   commandes, et le produit en a déjà une forme — la puce, cadre d'un pixel sur
+   `--filet`, angles vifs. Le lien la rejoint : une seule famille de commande à
+   apprendre au lieu de deux, et l'écran cesse de ressembler à une page web de
+   1998 posée dans une borne d'arcade.
+   Il garde ce qui le distingue de la puce : plus petit, sourd, jamais allumé —
+   une puce dit un ÉTAT choisi, un lien déclenche un GESTE. */
 .lien {
-  background: none; border: 0; color: var(--encre-tenue); font: inherit; font-size: 13px;
-  text-decoration: underline; align-self: flex-start; padding: 6px 0; cursor: pointer;
+  background: none; border: 1px solid var(--filet); color: var(--encre-faible);
+  font: inherit; font-size: 12px; letter-spacing: .06em;
+  text-decoration: none; align-self: flex-start; padding: 8px 12px; cursor: pointer;
   min-height: var(--cible-min);
 }
+.lien:active { border-color: var(--miami); color: var(--encre); }
 .garage .onglets { display: flex; gap: 0; border-bottom: 1px solid var(--filet); }
 .garage .onglets .onglet {
   padding: 8px 13px 9px; font-size: 12px; letter-spacing: .10em; text-transform: uppercase;
@@ -738,7 +763,9 @@ body {
    place d'un lieu dans la barre basse. */
 .tete { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .tete .reglages { display: flex; gap: 14px; }
-.tete .reglages .lien { min-height: auto; padding: 2px 0; }
+/* Deux mots dans l'en-tête, sur une ligne de base partagée : un cadre y
+   fabriquerait deux boîtes là où il n'y a de la place que pour du texte. */
+.tete .reglages .lien { min-height: auto; padding: 2px 0; border: 0; text-decoration: underline; }
 
 /* ⚠ CE COMMENTAIRE A TRANCHÉ LA BANDE CONTRE LA GRILLE, ET LA DÉCISION EST
    RETOURNÉE — 26 août 2026, récit 18.2. Il disait : « au paddock on en verse
@@ -1027,7 +1054,10 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 /* Les actions d'une pièce d'équipement passent à la ligne plutôt que de sortir
    de l'écran : elles sont deux, trois ou quatre selon qu'il y a une photo et un
    portrait, et trois liens en une seule rangée débordent sur 390 px. */
-.actions-materiel { flex-wrap: wrap; gap: 4px 16px; }
+/* L'écart de 16 px séparait des mots soulignés qui, sans lui, se seraient
+   touchés. Chaque geste porte maintenant son cadre : c'est LUI qui sépare,
+   et 16 px de plus poussaient la troisième commande à la ligne à 375 px. */
+.actions-materiel { flex-wrap: wrap; gap: 6px 8px; }
 /* L'annonce de coût du portrait s'ouvre SOUS la ligne d'actions et non dedans :
    comprimée entre « Photographier » et « retirer », elle rendait une colonne de
    texte de 90 px — c'est-à-dire une annonce qu'on ne lit pas, donc pas une
@@ -1135,7 +1165,11 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 .languettes .lien {
   flex: 1; min-height: 56px; display: flex; align-items: center;
   justify-content: center; gap: 6px;
-  border-top: 1px solid var(--filet); text-decoration: none;
+  /* `border: 0` D'ABORD : le lien porte maintenant un cadre complet, et ici le
+     filet du haut est un SÉPARATEUR entre le tiroir et la ligne, pas le contour
+     d'un bouton. Sans cette remise à zéro, chaque languette se retrouvait
+     encadrée dans un tiroir qui n'a que deux languettes collées. */
+  border: 0; border-top: 1px solid var(--filet); text-decoration: none;
 }
 
 /* ─── LE TÉMOIN DE SAUVEGARDE — récit 22.3 ─────────────────────────────────

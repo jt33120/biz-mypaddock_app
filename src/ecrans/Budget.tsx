@@ -497,6 +497,17 @@ export function Equipement({ db, onEcrit, appele }: {
             return (
               <div className="pile" key={c} style={{ gap: 6 }}>
                 <span className="sous-titre">{NOM_EQUIPEMENT[c]}</span>
+                {/* Dite UNE FOIS pour le groupe, jamais sous chaque pièce : c'est
+                    une règle du groupe, pas un fait de la pièce. Répétée, elle
+                    faisait défiler trois fois la même chose — et une phrase qu'on
+                    a déjà lue trois fois cesse d'être lue. */}
+                {c === 'protection' && (
+                  <p className="note">
+                    Nommer une pièce « casque » ou « combinaison » permet de la porter sur
+                    une journée, et son portrait est alors dessiné pour ce qu'elle est.
+                    Facultatif : la plupart des pièces n'ont pas à l'être.
+                  </p>
+                )}
                 {dedans.map((e) => (
                   <LigneMateriel key={e.id} db={db} e={e} genre={genres.get(e.id) ?? null}
                                  onEcrit={() => void charger().then(onEcrit)} />
@@ -664,24 +675,32 @@ function LigneMateriel({ db, e, genre, onEcrit }: {
         </span>
       )}
 
+      {/* ⚠ `puces` SEUL, ET SURTOUT PAS `rang puces` — 2 septembre 2026, rapporté
+          depuis le téléphone : « les boutons casque combinaison ne fonctionnent
+          pas, et même pas très pratique ». Ils fonctionnaient ; c'est la mise en
+          page qui mentait. `.rang` porte `justify-content: space-between` et il
+          est déclaré APRÈS `.puces` dans la feuille, donc il gagne : les deux
+          puces partaient aux deux bords opposés de l'écran, à 250 px l'une de
+          l'autre. Deux choix qui s'excluent doivent se toucher — écartés, ils se
+          lisent comme deux boutons sans rapport, et le doigt traverse l'écran
+          pour corriger. C'est le seul endroit du produit qui cumulait les deux
+          classes, et c'est le seul qui était rapporté comme cassé.
+
+          ⚠ ET LA PHRASE N'EST PLUS ICI. Elle était rendue SOUS CHAQUE pièce de
+          protection : trois pièces, trois fois la même explication, plus trois
+          fois son titre. Elle est dite une fois pour le groupe, plus haut — une
+          règle qui vaut pour toutes les pièces se dit à l'endroit qui les tient
+          toutes. Le groupe `role`/`aria-label` garde ce que le titre disait à
+          qui n'a pas l'écran sous les yeux. */}
       {e.categorie === 'protection' && (
-        <div className="pile mini-espace">
-          <span className="libelle">Ce que c'est · facultatif</span>
-          <div className="rang puces">
-            {GENRES_DE_TENUE.map(([g, mot]) => (
-              <button key={g} type="button" className="puce" disabled={genreOccupe}
-                      data-actif={genre === g ? '1' : '0'} aria-pressed={genre === g}
-                      onClick={() => void poserGenre(genre === g ? null : g)}>
-                {mot}
-              </button>
-            ))}
-          </div>
-          {/* Ce que ça change, dit une fois et sans promettre plus : le genre ne
-              sert qu'à deux choses, et aucune n'est une obligation. */}
-          <span className="libelle faible">
-            Une pièce nommée peut être portée sur une journée, et son portrait est
-            dessiné pour ce qu'elle est.
-          </span>
+        <div className="puces" role="group" aria-label="Ce que c'est">
+          {GENRES_DE_TENUE.map(([g, mot]) => (
+            <button key={g} type="button" className="puce" disabled={genreOccupe}
+                    data-actif={genre === g ? '1' : '0'} aria-pressed={genre === g}
+                    onClick={() => void poserGenre(genre === g ? null : g)}>
+              {mot}
+            </button>
+          ))}
         </div>
       )}
 
