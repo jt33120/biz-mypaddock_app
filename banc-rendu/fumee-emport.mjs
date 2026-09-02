@@ -8,6 +8,7 @@
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
 import { photoDEssai } from './photo-essai.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
   executablePath: process.env.CHROME
@@ -84,6 +85,7 @@ await page.click('text=Saisir mon premier roulage')
 await page.fill('.champ[placeholder="Pau-Arnos"]', 'Pau-Arnos')
 await page.click('text=Continuer')
 await enregistrerSession()
+await ouvrirTousLesPlis(page)
 await page.setInputFiles('input[type=file]', await photoDEssai())
 await page.waitForSelector('.case-album img', { timeout: 60_000 })
 

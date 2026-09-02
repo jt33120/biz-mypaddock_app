@@ -3,6 +3,7 @@
 // dans les DEUX sens : sans budget le coût au tour est ABSENT, avec budget il est là.
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
   executablePath: process.env.CHROME
@@ -53,6 +54,7 @@ await enregistrerSession()
 console.log('① sans dépense :', await texte('.bloc:last-of-type'))
 
 // Une dépense de journée.
+await ouvrirTousLesPlis(page)
 await page.click('text=Ajouter une dépense')
 await page.waitForSelector('section.depense')
 await page.fill('#montant', '180,50')
@@ -72,6 +74,10 @@ console.log('   champ budget proposé :', await page.isVisible('#budget'))
    500/mois ». Il a saisi un montant MENSUEL dans un champ ANNUEL, et rien à
    l'écran ne l'a contredit — le mot « saison » vivait dans une étiquette
    au-dessus et le placeholder disait « 0 ». */
+// Le coût de la journée est replié depuis le lot 3 : la saisie du budget vit à
+// l'intérieur. On ouvre AVANT d'affirmer, jamais dans l'affirmation — glisser
+// l'ouverture dans l'expression en faisait un appel de son propre résultat.
+await ouvrirTousLesPlis(page)
 console.log('   l\'unité du champ porte la période :',
   (await texte('.somme .unite')).includes('par an') ? 'oui' : 'NON')
 await page.fill('#budget', '2000')
@@ -111,6 +117,11 @@ await page.waitForSelector('section.depense')
 await page.fill('#montant', '2000')
 await page.fill('#libelle', 'Pneus')
 await page.click('section.depense .bouton:not(.secondaire)')
+/* La saisie remplace l'écran ; on attend le retour du bloc du coût — replié,
+   avec son montant en tête — puis on l'ouvre. La jauge vit à l'intérieur. */
+await page.waitForSelector('.atelier-tete:has-text("Ce que la journée a coûté")',
+  { timeout: 20_000 })
+await ouvrirTousLesPlis(page)
 await page.waitForSelector('.jauge', { timeout: 20_000 })
 await page.waitForFunction(() => document.querySelectorAll('.jauge i').length > 0,
   null, { timeout: 20_000 }).catch(() => {})

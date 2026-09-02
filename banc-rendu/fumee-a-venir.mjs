@@ -22,6 +22,7 @@
 // d'une session existe encore sur l'écran de la journée, et la journée à venir
 // reste dans la liste des roulages, où elle se corrige et se retire.
 import { chromium } from 'playwright-core'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
   executablePath: process.env.CHROME
@@ -134,6 +135,9 @@ verifier('   la préparation a RÉPONDU avant qu\'on lise la page',
 
 // ── ② IL PORTE CE QUI PRÉPARE — les deux listes, réunies et non mélangées.
 verifier('② « Avant d\'y aller » est là', await page.isVisible('.journee-page .preparation'))
+// Le chargement vide est replié depuis le lot 3 : son en-tête le dit, et ce
+// qu'il contient s'ouvre. On ouvre AVANT d'affirmer, jamais dans l'affirmation.
+await ouvrirTousLesPlis(page)
 verifier('   et le chargement aussi',
   await page.isVisible('text=Préparer le chargement')
   || await page.isVisible('.journee-page .checklist'))

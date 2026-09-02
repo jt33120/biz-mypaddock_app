@@ -22,6 +22,7 @@
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
 import { photoDEssai } from './photo-essai.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
   executablePath: process.env.CHROME
@@ -172,7 +173,9 @@ await page.fill('.champ[placeholder="Pau-Arnos"]', 'Pau-Arnos')
 await page.click('text=Continuer')
 await enregistrerSession()
 
+await ouvrirTousLesPlis(page)
 await page.setInputFiles('input[type=file]', await photoDEssai())
+await ouvrirTousLesPlis(page)
 await page.waitForSelector('.case-album img', { timeout: 60_000 })
 
 const verse = await magasins()
@@ -191,6 +194,9 @@ await pret()
 await onglet('ROULAGES')
 await page.click('.pile > .bloc')
 await page.waitForSelector('.bloc:has-text("Photos et gestes")', { timeout: 30_000 })
+// Le rechargement remet l'album replié : c'est un état de rendu, il ne survit
+// pas au disque — et c'est justement ce que cet essai vient éprouver, la photo.
+await ouvrirTousLesPlis(page)
 await page.waitForSelector('.case-album img', { timeout: 30_000 })
 
 /* ⚠ ON ATTEND LE DÉCODAGE, PAS L'ÉLÉMENT — et c'est ce qui manquait.
