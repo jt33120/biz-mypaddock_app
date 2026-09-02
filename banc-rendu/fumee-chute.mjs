@@ -186,10 +186,23 @@ verifier('   le nom accessible conserve circuit, date, chrono et crash',
   nomAccessibleCarte ?? 'absent')
 await page.click('.glissable:has-text("Nogaro")')
 await page.waitForSelector('.chute:has-text("Virage 3")', { timeout: 20_000 })
+/* ⚠ LA PHOTO ARRIVE APRÈS LE TEXTE, ET CET ESSAI LE SUPPOSAIT FAUX — corrigé le
+   2 septembre 2026. Son URL est un `blob:` fabriqué dans un effet, après lecture
+   du fichier : quand le récit est rendu, l'image ne l'est pas encore. Lire sa
+   visibilité dans la foulée rendait donc l'essai rouge une fois sur deux AU BANC
+   COMPLET et vert seul — sur un produit qui n'a jamais eu ce défaut.
+   On attend l'image, sans lever : une attente qui échoue doit rendre une
+   ASSERTION rouge et non une exception, sinon les vérifications suivantes ne
+   tournent pas et un défaut de photo se lit comme un banc cassé.
+   Et le détail nomme ce qu'on a lu : l'ancienne version ne disait rien du tout,
+   donc son échec n'indiquait aucune des trois conditions. */
+const laPhotoEstLa = await page.waitForSelector('.case-photo-crash img',
+  { state: 'visible', timeout: 20_000 }).then(() => true, () => false)
+const dossier = await texte('.chute')
 verifier('   récit, réparation et photo sont relus',
-  (await texte('.chute')).includes('Levier droit')
-    && (await texte('.chute')).includes('123,45')
-    && await page.isVisible('.case-photo-crash img'))
+  dossier.includes('Levier droit') && dossier.includes('123,45') && laPhotoEstLa,
+  `réparation ${dossier.includes('Levier droit')} · montant ${dossier.includes('123,45')}`
+  + ` · photo ${laPhotoEstLa}`)
 
 // Plusieurs chutes restent possibles ; la carte affiche le pluriel sans créer
 // une statistique de saison.

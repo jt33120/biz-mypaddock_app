@@ -146,10 +146,23 @@ await pret()
    ANALYSE est le premier onglet du produit qui applique vraiment la règle : les
    quatre autres sont rendus à plat. Vérifier son ABSENCE au premier lancement
    est donc la seule façon de savoir que la règle est tenue et pas commentée. */
+/* ⚠ ON ATTEND LA BARRE AVANT DE LA LIRE, et ce garde a été ajouté APRÈS coup —
+   2 septembre 2026. `$$eval` sur une barre pas encore rendue ne lève rien : il
+   rend un tableau VIDE. La première assertion rougissait donc avec un détail
+   vide (« attendu … lu “” »), ce qui est déjà mauvais — mais la seconde, elle,
+   PASSAIT : `[].includes('ANALYSE')` est faux, donc « ANALYSE n'est nulle part »
+   se vérifiait sur un écran où il n'y avait rien du tout.
+   Un garde qui se satisfait du néant ne garde rien, et c'est précisément le
+   défaut que cet essai existe pour attraper chez le produit. Il l'avait
+   lui-même. La longueur est donc vérifiée AVANT le contenu : tant qu'on n'a pas
+   lu quatre onglets, on n'a rien lu. */
+await page.waitForFunction(
+  () => document.querySelectorAll('nav.barre .onglet').length >= 4, null, { timeout: 20_000 })
 const barreNeuve = await onglets()
 verifier('① au premier lancement, quatre onglets et pas cinq',
   barreNeuve.join(' · ') === 'ACCUEIL · GARAGE · ROULAGES · COMPTE', barreNeuve.join(' · '))
-verifier('   ANALYSE n\'est nulle part', !barreNeuve.includes('ANALYSE'))
+verifier('   ANALYSE n\'est nulle part',
+  barreNeuve.length === 4 && !barreNeuve.includes('ANALYSE'), barreNeuve.join(' · '))
 
 /* ── ① bis LA PORTE SE FRANCHIT AVEC UNE DÉPENSE, ET RIEN D'AUTRE ──────────
    « Au moins une dépense, ou trois journées vécues, ou un geste consigné »

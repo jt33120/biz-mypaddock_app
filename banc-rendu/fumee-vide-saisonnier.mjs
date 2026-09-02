@@ -86,8 +86,26 @@ console.log('   il passe devant la pièce :', a3.includes('Tu vises') && a3.incl
 console.log('   le coût est annoncé comme ESTIMÉ :', a3.includes('estimés') ? 'oui' : 'NON')
 
 // ── ④ FR-13 sur toutes les nouvelles formulations.
-const interdits = ['!', 'pense à', 'n\'oublie', 'il faut', 'tu dois', 'plus que', 'reste', 'en retard', 'urgent']
-const fautes = interdits.filter((m) => a3.toLowerCase().includes(m.toLowerCase()))
+/* ⚠ DES MOTIFS, PLUS DES SOUS-CHAÎNES — 2 septembre 2026, et c'est le banc qui
+   avait tort. `'reste'` cherché en sous-chaîne attrapait « Les bras RESTEnt
+   souples », un conseil de pilotage parfaitement conforme au FR-13. Le conseil
+   du jour est choisi de façon DÉTERMINISTE sur la date (`conseilDuJour`, six
+   textes embarqués), donc cet essai rougissait un jour sur six, sur un produit
+   juste, et une fois sur six seulement — c'est-à-dire assez rarement pour qu'on
+   soupçonne le produit avant le harnais. C'est exactement ce que la tête de
+   `essais.mjs` refuse : un banc qui échoue pour une raison qui n'est pas le
+   sujet est un banc qu'on finit par ne plus croire.
+
+   Ce qu'on interdit n'a jamais été le MOT « reste », c'est la tournure de
+   COMPTE À REBOURS — « il te reste », « reste à faire ». Les motifs le disent
+   maintenant, et `\b` empêche un verbe conjugué de se faire prendre pour elle.
+   Le « ! » reste littéral : un point d'exclamation n'a pas de frontière de mot. */
+const interdits = [
+  /!/, /\bpense[sz]? à\b/, /\bn'oublie/, /\bil faut\b/, /\btu dois\b/,
+  /\bplus que\b/, /\bil (te |vous )?reste\b/, /\breste à\b/,
+  /\ben retard\b/, /\burgent/,
+]
+const fautes = interdits.filter((r) => r.test(a3.toLowerCase())).map(String)
 console.log('④ FR-13 — aucun impératif, aucune échéance :',
   fautes.length ? 'NON — ' + fautes.join(', ') : 'oui')
 
