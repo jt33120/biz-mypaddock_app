@@ -176,14 +176,23 @@ await passer('roulages')
 //    On en ressort par « Garder » — le sortant du produit, celui qui ne détruit
 //    rien — et la journée est encore là ensuite : l'essai le vérifie, sans quoi
 //    il pourrait effacer une saison en croyant l'auditer.
+/* ⚠ ON COMPTE AVANT, PLUTÔT QUE D'ÉCRIRE 5 EN DUR — corrigé le 2 septembre 2026.
+   Ce que cette assertion veut dire est « se raviser N'A RIEN RETIRÉ », c'est-à-dire
+   « autant qu'avant » : un nombre littéral y ajoutait une seconde affirmation,
+   sur la LONGUEUR de la liste, que rien ici ne cherche à vérifier. Le lot 3 a
+   plié les journées passées au-delà des trois dernières, la liste rendue est
+   passée de 5 à 4, et l'essai a rougi sur une suppression qui n'a pas eu lieu —
+   il accusait le geste destructif d'un changement d'affichage. */
+const journees = () => page.locator('.lien.destructif:has-text("Retirer cette journée")').count()
+const avant = await journees()
 await page.click('.lien.destructif:has-text("Retirer cette journée")')
 await page.waitForSelector('.bouton.destructif:has-text("Retirer définitivement")', { timeout: 20_000 })
 await passer('roulages · confirmation ouverte')
 await page.click('.lien:has-text("Garder")')
 await page.waitForSelector('.lien.destructif:has-text("Retirer cette journée")', { timeout: 20_000 })
 verifier('se raviser n\'a rien retiré',
-  (await page.locator('.lien.destructif:has-text("Retirer cette journée")').count()) === 5,
-  `${await page.locator('.lien.destructif:has-text("Retirer cette journée")').count()} journée(s) restante(s)`)
+  avant > 0 && (await journees()) === avant,
+  `${await journees()} journée(s) restante(s), ${avant} avant le geste`)
 
 await onglet('COMPTE')
 await page.waitForSelector('section.compte', { timeout: 20_000 })

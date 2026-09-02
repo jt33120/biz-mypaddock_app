@@ -1306,13 +1306,28 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit, onArgen
           rappeler, ce qui veut dire que l'écran ne le disait pas. Il le dit
           maintenant, une fois, à l'endroit où l'on compte. */}
       <div className="libelle">Roulages · {liste.length} journée{liste.length > 1 ? 's' : ''}</div>
+      {/* ⚠ `seul` : LES SECTIONS VIDES SE TAISENT, SAUF QUAND ELLES SONT SEULES —
+          lot 3, 2 septembre 2026. « Aujourd'hui · Aucun roulage aujourd'hui »
+          coûtait 65 px pour ne rien dire, et il les coûtait TOUS LES JOURS sauf
+          onze par an. C'est la règle que le budget applique déjà à ses postes :
+          « un poste vide ne s'affiche ni à zéro ni en tiret — il n'a rien à
+          dire ».
+
+          ⚠ MAIS UN ÉCRAN ENTIÈREMENT MUET N'EST PAS UN ÉCRAN VIDE, C'EST UN
+          ÉCRAN CASSÉ. Quand AUCUNE section n'a de journée, la phrase est la
+          seule chose que le pilote a à lire : `seul` la laisse alors passer, et
+          seulement là. Sans ce garde, un compte neuf ouvrait ROULAGES sur un
+          titre et un bouton, sans un mot expliquant ce qui manque. */}
       <SectionRoulages id="aujourdhui" titre="Aujourd'hui" vide="Aucun roulage aujourd'hui."
+                       seul={!liste.length}
                        db={db} liste={groupes.aujourdhui} onOuvrir={onOuvrir}
                        onModifier={onModifier} onEcrit={onEcrit} />
       <SectionRoulages id="a-venir" titre="À venir" vide="Aucun roulage à venir."
+                       seul={false}
                        db={db} liste={groupes.aVenir} onOuvrir={onOuvrir}
                        onModifier={onModifier} onEcrit={onEcrit} />
       <SectionRoulages id="passes" titre="Passés" vide="Aucun roulage passé."
+                       seul={false}
                        db={db} liste={groupes.passes} onOuvrir={onOuvrir}
                        onModifier={onModifier} onEcrit={onEcrit} />
       <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
@@ -1325,17 +1340,42 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit, onArgen
   )
 }
 
-function SectionRoulages({ id, titre, vide, db, liste, onOuvrir, onModifier, onEcrit }: {
-  id: 'aujourdhui' | 'a-venir' | 'passes'; titre: string; vide: string; db: Db; liste: Liste
+/** Ce qu'une section montre avant de proposer le reste. Trois journées : c'est
+ *  ce qui tient sous le pli avec le titre, et c'est aussi la profondeur à
+ *  laquelle on se souvient encore de ce qu'on cherche. */
+const JOURNEES_MONTREES = 3
+
+function SectionRoulages({ id, titre, vide, seul, db, liste, onOuvrir, onModifier, onEcrit }: {
+  id: 'aujourdhui' | 'a-venir' | 'passes'; titre: string; vide: string
+  /** `true` seulement pour la section qui doit parler quand AUCUNE n'a de
+   *  journée — voir le commentaire de l'appelant. */
+  seul: boolean
+  db: Db; liste: Liste
   onOuvrir: (id: string) => void; onModifier: (id: string) => void; onEcrit: () => void
 }) {
+  /* ⚠ LE RESTE SE DÉPLIE, IL NE DISPARAÎT PAS, ET LE LIEN LE COMPTE. Quatre
+     journées passées faisaient 536 px à elles seules. Montrer les trois
+     dernières et DIRE combien il y en a d'autres n'est pas cacher un fait :
+     c'est le nommer. Une liste tronquée en silence, elle, est un mensonge —
+     Julian s'est déjà retrouvé avec vingt-cinq roulages là où il en avait saisi
+     cinq, et c'est précisément une liste à laquelle on ne peut pas se fier qui
+     a coûté le plus cher à ce produit. */
+  const [tout, setTout] = useState(false)
+  if (!liste.length && !seul) return null
+  const montrees = tout ? liste : liste.slice(0, JOURNEES_MONTREES)
+  const cachees = liste.length - montrees.length
   return (
     <section className="pile groupe-roulages" aria-labelledby={`roulages-${id}`}>
       <h2 id={`roulages-${id}`} className="titre-section">{titre}</h2>
-      {liste.length ? liste.map((r) => (
+      {liste.length ? montrees.map((r) => (
         <LigneRoulage key={r.id} db={db} r={r} onOuvrir={onOuvrir}
                       onModifier={onModifier} onEcrit={onEcrit} />
       )) : <p className="note">{vide}</p>}
+      {cachees > 0 && (
+        <button className="lien" onClick={() => setTout(true)}>
+          Voir les {cachees} autre{cachees > 1 ? 's' : ''}
+        </button>
+      )}
     </section>
   )
 }

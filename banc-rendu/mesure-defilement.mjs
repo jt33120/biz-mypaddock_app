@@ -123,6 +123,10 @@ await relever('ROULAGES · liste et bilan de saison')
 // soit le jour où l'instrument tourne, donc la seule qui ouvre un bilan et non un
 // écran de préparation. On attend sa courbe, qui est ce que le bilan a de plus
 // lent à venir — attendre le cadre arriverait avant le contenu qu'on mesure.
+// « Passés » ne montre que les trois dernières : la plus ancienne est sous le
+// pli, et il faut le déplier pour l'atteindre. C'est le lot 3 qui l'a mise là.
+const reste = page.locator('.groupe-roulages .lien:has-text("Voir les")')
+if (await reste.count()) await reste.first().click()
 await page.click('.glissable:has-text("2026-04-18")')
 await page.waitForSelector('.courbe', { timeout: 30_000 })
 await relever("ROULAGES · le bilan d'une journée")

@@ -276,13 +276,28 @@ const sections = await page.$$eval('.groupe-roulages', (groupes) => groupes.map(
   dates: [...g.querySelectorAll('.ligne-glissante .rang:first-child .libelle')]
     .map((n) => n.textContent.trim()),
 })))
-verifier('   les trois sections sont distinctes et dans le bon ordre',
-  JSON.stringify(sections.map((s) => s.titre)) === JSON.stringify(["Aujourd'hui", 'À venir', 'Passés']),
+/* ⚠ UNE SECTION VIDE NE SE REND PLUS — lot 3, 2 septembre 2026. « Aujourd'hui ·
+   Aucun roulage aujourd'hui » coûtait 65 px pour ne rien dire, tous les jours
+   sauf onze par an. Ce qui est vérifié n'a pas changé de NATURE : les sections
+   présentes restent distinctes et dans l'ordre du produit. C'est donc une
+   SOUS-SUITE de l'ordre canonique qu'on exige, pas la liste entière — écrire
+   ["À venir", "Passés"] en dur ferait rougir cet essai le jour où le banc
+   tourne un jour de roulage, sur un produit parfaitement juste. */
+const ORDRE = ["Aujourd'hui", 'À venir', 'Passés']
+const sousSuite = (vus, ordre) => {
+  let i = 0
+  for (const v of vus) { i = ordre.indexOf(v, i); if (i < 0) return false; i += 1 }
+  return true
+}
+const IDENTIFIANT = {
+  "Aujourd'hui": 'roulages-aujourdhui', 'À venir': 'roulages-a-venir', 'Passés': 'roulages-passes',
+}
+verifier('   les sections rendues sont distinctes et dans le bon ordre',
+  sections.length > 0 && new Set(sections.map((s) => s.titre)).size === sections.length
+    && sousSuite(sections.map((s) => s.titre), ORDRE),
   sections.map((s) => s.titre).join(' · '))
-verifier('   les trois sections référencent un titre par un identifiant stable',
-  JSON.stringify(sections.map((s) => s.reference)) === JSON.stringify([
-    'roulages-aujourdhui', 'roulages-a-venir', 'roulages-passes',
-  ]) && sections.every((s) => s.reference === s.titreId),
+verifier('   chaque section référence son titre par un identifiant stable',
+  sections.every((s) => s.reference === IDENTIFIANT[s.titre] && s.reference === s.titreId),
   JSON.stringify(sections.map((s) => [s.reference, s.titreId])))
 const futur = sections.find((s) => s.titre === 'À venir')
 const passes = sections.find((s) => s.titre === 'Passés')
@@ -317,6 +332,18 @@ verifier('⑦ le garage ne compte pas la journée annoncée',
 
 await onglet('ROULAGES')
 await page.waitForSelector('.saison', { timeout: 20_000 })
+// ⚠ LE BILAN DE SAISON EST REPLIÉ PAR DÉFAUT depuis le lot 3 : il pesait 637 px
+// sur 759 utiles, avant même que la liste commence. Ce qu'il dit n'a pas changé,
+// l'endroit où on le lit non plus — il faut seulement l'ouvrir. La complétude,
+// elle, reste dans l'en-tête plié (FR-55) : c'est la seule chose qu'on lise sans
+// ce tap, et c'est voulu.
+const ouvrirLeBilan = async () => {
+  const tete = page.locator('.saison .atelier-tete')
+  await tete.waitFor({ state: 'visible', timeout: 20_000 })
+  if (await tete.getAttribute('aria-expanded') === 'false') await tete.click()
+  await page.waitForSelector('.saison .chiffres-saison', { timeout: 20_000 })
+}
+await ouvrirLeBilan()
 const saison = await texte('.saison')
 verifier('   le bilan de saison non plus',
   !/sans chrono/.test(saison), saison.slice(0, 200))
