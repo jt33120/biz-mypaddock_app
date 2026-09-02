@@ -159,8 +159,16 @@ await pret()
 await page.waitForFunction(
   () => document.querySelectorAll('nav.barre .onglet').length >= 4, null, { timeout: 20_000 })
 const barreNeuve = await onglets()
+/* ⚠ « Accueil » ET « Compte » S'ÉCRIVENT EN MINUSCULES ICI, ET C'EST JUSTE —
+   2 septembre 2026. Ces deux onglets ne portent plus de mot mais un GLYPHE, dont
+   le nom accessible vit dans le `<title>` du SVG : c'est ce titre que rend
+   `textContent`, et c'est lui que lit un lecteur d'écran. Les trois autres
+   portent toujours leur mot en capitales, parce qu'ils sont la matière du carnet
+   et qu'on les cherche par leur nom.
+   La casse différente n'est donc pas une négligence : elle dit exactement ce que
+   l'écran montre — trois mots affichés, deux noms qui ne s'affichent pas. */
 verifier('① au premier lancement, quatre onglets et pas cinq',
-  barreNeuve.join(' · ') === 'ACCUEIL · GARAGE · ROULAGES · COMPTE', barreNeuve.join(' · '))
+  barreNeuve.join(' · ') === 'Accueil · GARAGE · ROULAGES · Compte', barreNeuve.join(' · '))
 verifier('   ANALYSE n\'est nulle part',
   barreNeuve.length === 4 && !barreNeuve.includes('ANALYSE'), barreNeuve.join(' · '))
 
@@ -177,7 +185,7 @@ await page.click('section.depense .bouton:not(.secondaire)')
 await page.waitForSelector('nav.barre .onglet:has-text("ANALYSE")', { timeout: 20_000 })
 const barreOuverte = await onglets()
 verifier('   une dépense notée, et le cinquième onglet arrive',
-  barreOuverte.join(' · ') === 'ACCUEIL · GARAGE · ROULAGES · ANALYSE · COMPTE',
+  barreOuverte.join(' · ') === 'Accueil · GARAGE · ROULAGES · ANALYSE · Compte',
   barreOuverte.join(' · '))
 
 /* ═══════════════════════════════════════════════════════════════════════════

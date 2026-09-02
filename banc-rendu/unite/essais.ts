@@ -5019,10 +5019,31 @@ const essais = [
     const debut = source.indexOf('<nav className="barre">')
     vrai(debut > 0, 'la barre du bas a disparu : le témoin est muet')
     const barre = source.slice(debut, source.indexOf('</nav>', debut))
-    const mots = [...barre.matchAll(/className="onglet"[\s\S]*?>([^<>{}]+)</g)].map((m) => m[1].trim())
-    vrai(mots.length >= 4, `seulement ${mots.length} onglets lus : la lecture de la barre est cassée`)
-    vrai(mots.length <= 5,
-      `la barre porte ${mots.length} onglets : à six, chaque case tombe sous la largeur de ROULAGES`)
+    /* ⚠ DEUX ONGLETS SONT DEVENUS DES GLYPHES — 2 septembre 2026, « ça fait très
+       chargé ». Ce témoin lisait le MOT de chaque onglet et exigeait quatre
+       captures : il est passé à trois d'un coup, et il avait raison de rougir —
+       une barre qui perd ses mots en silence est exactement ce qu'il garde.
+       Ce qu'il vérifie change donc de forme, pas de nature. Le compte total tient
+       toujours la largeur ; chaque MOT tient toujours sa case ; et un onglet qui
+       n'a plus de mot doit avoir un NOM — un glyphe muet est un bouton qu'on ne
+       peut ni annoncer, ni chercher, ni décrire au téléphone. */
+    const onglets = (barre.match(/className="onglet"/g) ?? []).length
+    vrai(onglets >= 4, `seulement ${onglets} onglets lus : la lecture de la barre est cassée`)
+    vrai(onglets <= 5,
+      `la barre porte ${onglets} onglets : à six, chaque case tombe sous la largeur de ROULAGES`)
+    const mots = [...barre.matchAll(/className="onglet"[\s\S]*?>([^<>{}]+)</g)]
+      .map((m) => m[1].trim()).filter((m) => m.length > 0)
+    const nommes = [...barre.matchAll(/<Icone[^>]*titre="([^"]+)"/g)].map((m) => m[1])
+    vrai(mots.length + nommes.length === onglets,
+      `${onglets} onglets, mais ${mots.length} mots et ${nommes.length} glyphes nommés :`
+      + ' un onglet ne dit son nom NI en toutes lettres NI dans le titre de son icône')
+    /* ⚠ TROIS MOTS AU MINIMUM. Une barre entièrement en pictogrammes se devine
+       au lieu de se lire : garage, roulages et analyse sont la MATIÈRE du
+       carnet, et un pilote les cherche par leur nom. Seuls le cadre — d'où l'on
+       part, où l'on se gère — se rendent sans mot, parce qu'une maison et un
+       buste se lisent sans apprentissage. */
+    vrai(mots.length >= 3,
+      `la barre ne porte plus que ${mots.length} mots : au-delà du cadre, un onglet se devine`)
     for (const m of mots) {
       vrai(m.length <= 8,
         `l'onglet « ${m} » fait ${m.length} caractères : il déborde de sa case à 375 px`)
