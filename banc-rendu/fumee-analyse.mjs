@@ -286,6 +286,16 @@ await page.click('text=Reprendre la saison 2026 · Pau-Arnos')
 // qui se fie à une durée devient rouge le jour où la machine est chargée.
 await page.waitForTimeout(1200)
 await onglet('ROULAGES')
+/* ⚠ ON DÉPLIE AVANT DE COMPTER — lot 3, 2 septembre 2026. « Passés » ne rend que
+   les trois dernières journées : compter les `.glissable` rendus ne compte plus
+   les journées ÉCRITES, et cette attente-là veut vérifier que les cinq écritures
+   ont abouti, pas combien la liste en montre. On révèle donc le reste, puis on
+   compte — le lien porte lui-même le nombre qu'il cache, il n'y a rien de
+   silencieux à contourner. */
+await page.waitForFunction(
+  () => document.querySelectorAll('.glissable').length >= 1, null, { timeout: 30_000 })
+const revele = page.locator('.groupe-roulages .lien:has-text("Voir les")')
+if (await revele.count()) await revele.first().click()
 await page.waitForFunction(
   () => document.querySelectorAll('.glissable').length >= 5, null, { timeout: 30_000 })
 
@@ -396,6 +406,9 @@ await arriveeSur('FINANCE', 'Moto', [])
 // LA PORTE DU BILAN DE SAISON — FINANCE · POSTE.
 await onglet('ROULAGES')
 await page.waitForSelector('.saison', { timeout: 20_000 })
+// Le bilan est replié depuis le lot 3, et la porte vit à l'intérieur.
+const teteSaison = page.locator('.saison .atelier-tete')
+if (await teteSaison.getAttribute('aria-expanded') === 'false') await teteSaison.click()
 await page.click('.saison .lien:has-text("Cet argent, poste par poste")')
 await arriveeSur('FINANCE', 'Poste', [SAISON])
 
@@ -408,6 +421,10 @@ await page.waitForSelector('.glissable', { timeout: 20_000 })
 // quel que soit le jour où ce banc tourne, donc la seule qui ouvre à coup sûr un
 // bilan et non un écran de préparation. La courbe qu'elle porte est celle du
 // CIRCUIT, pas de la journée : ses quatre points sont là dès la première.
+// « Passés » ne montre que les trois dernières journées : la plus ancienne est
+// sous le pli, et le lien qui l'ouvre COMPTE ce qu'il révèle (lot 3).
+const resteRoulages = page.locator('.groupe-roulages .lien:has-text("Voir les")')
+if (await resteRoulages.count()) await resteRoulages.first().click()
 await page.click('.glissable:has-text("2026-04-18")')
 await page.waitForSelector('.courbe', { timeout: 30_000 })
 await page.click('.lien:has-text("Tes chronos, circuit par circuit")')

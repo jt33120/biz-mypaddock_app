@@ -34,6 +34,20 @@ export function Saison({ db, onArgentParPoste }: {
   const [annees, setAnnees] = useState<number[]>([])
   const [annee, setAnnee] = useState<number | null>(null)
   const [b, setB] = useState<Bilan | null>(null)
+  /* ⚠ REPLIÉ PAR DÉFAUT — 2 septembre 2026, lot 3. Mesuré à 637 px sur 759 px
+     utiles à 375 × 812 : ce seul bloc mangeait une vue d'iPhone entière AVANT
+     que la liste des roulages commence. Or on vient sur cet écran pour SA
+     LISTE ; le bilan est la vue d'ensemble qu'on consulte, pas celle qu'on
+     traverse. FR-55 le veut consultable à tout moment — il l'est, en un tap, et
+     rien n'y relance.
+
+     ⚠ ET LA COMPLÉTUDE RESTE DEHORS. « La complétude d'abord » (FR-55) n'est pas
+     une question de position dans le bloc, c'est une question de ce qu'on lit
+     AVANT les chiffres : replier « 5 roulages saisis, 1 sans chrono » derrière un
+     tap rendrait les chiffres accessibles sans leur réserve, ce qui est
+     exactement l'ordre que ce récit interdit. Elle est donc dans l'en-tête, et
+     c'est l'en-tête qui la porte quand le reste est plié. */
+  const [ouvert, setOuvert] = useState(false)
   const [report, setReport] = useState<Report>(null)
 
   useEffect(() => {
@@ -59,19 +73,38 @@ export function Saison({ db, onArgentParPoste }: {
      l'absence se rend, elle ne se calcule pas. */
   const repereDuMois = repereMensuel(b.budgetCentimes)
 
+  const complet = `${b.roulages} roulage${b.roulages > 1 ? 's' : ''} saisi${b.roulages > 1 ? 's' : ''}`
+    + `${b.sansChrono > 0 ? `, ${b.sansChrono} sans chrono` : ''}`
+    + `${b.sansGroupe > 0 ? `, ${b.sansGroupe} sans groupe` : ''}.`
+
   return (
     <div className="bloc pile saison">
-      <div className="rang">
-        <span className="libelle">Saison {b.annee}</span>
-        {annees.length > 1 && (
-          <div className="puces">
-            {annees.map((a) => (
-              <button key={a} className="puce" data-actif={a === annee ? '1' : '0'}
-                      onClick={() => setAnnee(a)}>{a}</button>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* ⚠ LES PUCES D'ANNÉE SONT SORTIES DE LA TÊTE, et il le fallait : la tête
+          est devenue un `<button>`, et un bouton dans un bouton n'est pas du
+          HTML valide — le navigateur défait l'imbrication, et la puce cesse
+          d'être cliquable sans que rien ne le dise. Elles descendent donc dans
+          le corps déplié, où elles servent : choisir une saison est un geste
+          qu'on fait en regardant le bilan, pas en le repliant. */}
+      <button className="rang atelier-tete" onClick={() => setOuvert(!ouvert)}
+              aria-expanded={ouvert}>
+        <span className="pile" style={{ gap: 1 }}>
+          <span className="libelle">Saison {b.annee}</span>
+          {/* FR-55 — LA COMPLÉTUDE D'ABORD, et elle reste dehors quand le reste
+              est plié : voir le commentaire de `ouvert` ci-dessus. */}
+          <span className="sous-titre">{complet}</span>
+        </span>
+        <span className="signe">{ouvert ? '–' : '+'}</span>
+      </button>
+
+      {ouvert && (<>
+      {annees.length > 1 && (
+        <div className="puces">
+          {annees.map((a) => (
+            <button key={a} className="puce" data-actif={a === annee ? '1' : '0'}
+                    onClick={() => setAnnee(a)}>{a}</button>
+          ))}
+        </div>
+      )}
 
       {/* FR-52 — la saison est un ÉTAT DÉRIVÉ : du premier au dernier roulage
           saisi. Aucune plage de dates, aucun réglage, aucune bascule. */}
@@ -82,13 +115,6 @@ export function Saison({ db, onArgentParPoste }: {
           pas un calendrier.
         </p>
       )}
-
-      {/* FR-55 — LA COMPLÉTUDE D'ABORD. */}
-      <p className="texte">
-        <b>{b.roulages}</b> roulage{b.roulages > 1 ? 's' : ''} saisi{b.roulages > 1 ? 's' : ''}
-        {b.sansChrono > 0 ? `, ${b.sansChrono} sans chrono` : ''}
-        {b.sansGroupe > 0 ? `, ${b.sansGroupe} sans groupe` : ''}.
-      </p>
 
       <div className="chiffres-saison">
         <div><p className="et">circuits</p><p className="va">{b.circuits}</p></div>
@@ -168,6 +194,7 @@ export function Saison({ db, onArgentParPoste }: {
           </button>
         </div>
       )}
+      </>)}
     </div>
   )
 }

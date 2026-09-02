@@ -31,6 +31,18 @@ await page.waitForTimeout(1500)
 
 await page.click('nav.barre .onglet:has-text("ROULAGES")')
 await page.waitForSelector('.saison', { timeout: 20_000 })
+// ⚠ LE BILAN DE SAISON EST REPLIÉ PAR DÉFAUT depuis le lot 3 : il pesait 637 px
+// sur 759 utiles, avant même que la liste commence. Ce qu'il dit n'a pas changé,
+// l'endroit où on le lit non plus — il faut seulement l'ouvrir. La complétude,
+// elle, reste dans l'en-tête plié (FR-55) : c'est la seule chose qu'on lise sans
+// ce tap, et c'est voulu.
+const ouvrirLeBilan = async () => {
+  const tete = page.locator('.saison .atelier-tete')
+  await tete.waitFor({ state: 'visible', timeout: 20_000 })
+  if (await tete.getAttribute('aria-expanded') === 'false') await tete.click()
+  await page.waitForSelector('.saison .chiffres-saison', { timeout: 20_000 })
+}
+await ouvrirLeBilan()
 const t = (await page.textContent('.saison')).replace(/\s+/g, ' ')
 console.log('① bilan :', t.slice(0, 200))
 
