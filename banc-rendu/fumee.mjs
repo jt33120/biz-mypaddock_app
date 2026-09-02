@@ -2,6 +2,7 @@
 // c'est l'ordre réel d'un pilote, et le seul qui teste l'adoption.
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const base = process.argv[2] ?? 'http://localhost:4173'
 const sortie = process.argv[3] ?? '/tmp/compte.png'
@@ -94,6 +95,12 @@ console.log('   et il dit la conséquence, pas seulement le nom :',
 // Et se taire dès que le stockage est persistant : c'est un état énoncé, pas
 // une campagne d'installation.
 const abri = await page.getAttribute('.ecran', 'data-abri')
+/* ⚠ L'ABRI EST REPLIÉ DEPUIS LE LOT 3 : 216 px sur l'accueil, à chaque
+   ouverture, pour une INVITATION et non pour un fait de la saison. Son titre —
+   « ta saison vit dans un onglet » — se lit sans ouvrir ; ce que cet essai
+   vérifie est l'ORDRE de ce qu'il y a dedans, la conséquence avant le geste, et
+   cet ordre n'a pas bougé. On l'ouvre donc pour le lire. */
+await ouvrirTousLesPlis(page)
 const bloc = await page.isVisible('.bloc.abri')
   ? (await page.textContent('.bloc.abri')).replace(/\s+/g, ' ').trim() : null
 console.log('abri :', abri, '· bloc :', bloc ? bloc.slice(0, 70) + '…' : 'aucun')

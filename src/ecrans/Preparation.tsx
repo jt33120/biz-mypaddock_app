@@ -5,6 +5,7 @@ import {
 } from '../db/preparation'
 import { ajouter, cocher, lignes, retirer, type Ligne } from '../db/checklist'
 import { useGeste } from './geste'
+import { TeteRepli } from './Repli'
 
 /**
  * AVANT D'Y ALLER — retour de Julian du 23 août :
@@ -31,7 +32,8 @@ import { useGeste } from './geste'
  * quand la date approche. La liste est là quand le pilote ouvre ; elle ne va pas
  * le chercher (contre-mesure C1).
  */
-export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
+export function Preparation({ db, roulage, onAller, ajoutPrimaire = false,
+                             repliable = false }: {
   db: PowerSyncDatabase
   roulage: { id: string; machineId: string | null; date: string }
   /** Chaque ligne dérivée MÈNE QUELQUE PART. Une liste de rappels dont les
@@ -43,7 +45,16 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
    *  place avec « Saisir un roulage ». Un seul composant, deux poids — jamais
    *  deux composants, qui divergeraient à la première correction. */
   ajoutPrimaire?: boolean
+  /** ⚠ SUR L'ACCUEIL, LA PRÉPARATION EST UN APERÇU — et elle y pesait 397 px sur
+   *  1562, le bloc le plus lourd de l'écran le plus ouvert du produit. Elle s'y
+   *  replie donc, avec son décompte dans l'en-tête. Sur l'écran de la JOURNÉE
+   *  elle est le sujet : la replier là demanderait un tap pour voir ce qu'on
+   *  vient de venir voir. Même raisonnement, même forme et même commentaire
+   *  qu'`ajoutPrimaire` juste au-dessus : un seul composant, deux poids — jamais
+   *  deux composants, qui divergeraient à la première correction. */
+  repliable?: boolean
 }) {
+  const [ouvert, setOuvert] = useState(false)
   const [taches, setTaches] = useState<Tache[]>([])
   const [siennes, setSiennes] = useState<Ligne[]>([])
   const [saisie, setSaisie] = useState('')
@@ -161,7 +172,16 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
 
   return (
     <div className="bloc pile preparation" data-etat="su" data-garde={garde ? '1' : '0'}>
-      <p className="libelle">Avant d'y aller</p>
+      {repliable ? (
+        /* Le décompte se lit SANS ouvrir : c'est ce qui sépare un pli d'une
+           disparition. Il compte ce qui reste À FAIRE — les lignes dérivées et
+           les siennes non cochées — jamais ce qui est fait : un compteur de
+           progression sur une préparation ferait de la journée un devoir. */
+        <TeteRepli titre="Avant d'y aller"
+                   etat={`${taches.length + propres.filter((s) => !s.cochee).length} à voir`}
+                   ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+      ) : <p className="libelle">Avant d'y aller</p>}
+      {(!repliable || ouvert) && (<>
 
       {taches.map((t, i) => (
         <button className="rang ligne-atelier tache" key={`d${i}`} onClick={() => onAller(t.vers)}>
@@ -203,6 +223,7 @@ export function Preparation({ db, roulage, onAller, ajoutPrimaire = false }: {
 
       <Ajout valeur={saisie} sur={setSaisie} occupe={occupe} poser={poser}
              primaire={ajoutPrimaire} doublon={doublon} />
+      </>)}
     </div>
   )
 }
