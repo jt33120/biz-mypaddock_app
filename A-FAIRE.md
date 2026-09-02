@@ -462,3 +462,45 @@ t'appartient : soit la suite gagne une manière de dire la composition d'un poin
 sous le tracé, qui suivrait le point touché), soit FINANCE · MOIS redevient une composition et
 perd sa ligne continue, soit on s'en tient à ce qu'il y a. Rien ne presse — mais rien ne doit
 non plus l'oublier, d'où cette ligne.
+
+---
+
+## 13 · Le serveur avait CINQ JOURS de retard, et rien ne le disait
+
+**Rattrapé le 2 septembre 2026, depuis la session cloud.** Ce paragraphe existe pour que
+la panne se reconnaisse la prochaine fois, parce qu'elle ne ressemblait pas à une panne.
+
+**Ce qui s'était passé.** Fusionner une PR déploie Vercel, et Vercel ne déploie que le
+*paquet servi au navigateur*. Ni les migrations, ni les fonctions de bord ne partent avec.
+Deux lots avaient donc été livrés, testés au banc, mergés — et n'existaient que côté client :
+
+| | appliqué le | manquait |
+|---|---|---|
+| `20260828000001` la vidéo de crash | 2 sept. | table `video`, bucket `videos`, 4 politiques RLS |
+| `20260901000001` la tenue du jour | 2 sept. | `equipement.genre`, `roulage.casque_id`, `roulage.combinaison_id` |
+| fonction `sprite` | 2 sept. (v4) | elle datait du 19 août et ignorait le champ `sujet` |
+
+**Pourquoi c'était invisible.** Le schéma PowerSync local, lui, déclarait bien `genre`.
+Taper « Casque » écrivait donc en base LOCALE, la puce s'allumait, et tout paraissait
+marcher — jusqu'à ce que l'envoi au serveur soit refusé (colonne inconnue) et que la
+valeur revienne. Le symptôme lu par le pilote était « le bouton ne marche pas ». Le vrai
+symptôme était plus grave : **une opération d'envoi qui échoue en boucle bloque la file
+d'envoi**, donc tout ce qui suit cesse aussi de remonter.
+
+Même mécanique pour les skins : la fonction en ligne ne connaissait pas `sujet`, donc
+l'appel n'atteignait jamais Gemini. La clé et ses crédits n'y étaient pour rien.
+
+**Ce qui reste à ta main — et c'est le même piège, un cran plus loin.**
+Les règles de synchronisation vivent sur l'instance PowerSync **cloud**, pas dans Supabase :
+je n'y ai aucun accès depuis ici. `powersync/sync-config.yaml:37` fait descendre `video`,
+et cette ligne n'a jamais été déployée. Tant qu'elle ne l'est pas, la table existe des deux
+côtés et **ne descend sur aucun second appareil** — exactement la panne silencieuse que la
+migration elle-même décrit en son ③.
+
+    powersync deploy
+
+Les colonnes de la tenue, elles, n'ont besoin de rien : toutes les règles sont en
+`SELECT *`, donc une colonne nouvelle descend d'elle-même.
+
+**La leçon, en une ligne :** un lot qui touche `supabase/` n'est pas livré quand la PR est
+mergée. Il est livré quand la migration est appliquée ET la fonction redéployée.
