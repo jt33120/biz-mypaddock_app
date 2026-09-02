@@ -3,6 +3,7 @@
 // regardant la base, pas l'écran.
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
   executablePath: process.env.CHROME
@@ -75,6 +76,10 @@ console.log('   délai calculé :', /Délai roulage → saisie/.test(apres) ? 'o
 
 // ── AD-16 : on refuse, on recharge, et RIEN de nouveau ne doit être écrit.
 await onglet('COMPTE')
+// Sur l'écran du COMPTE, « Sauvegarde » et « Données et confidentialité » se
+// replient depuis le lot 3, comme « Diagnostic et aide » avant elles : l'écran
+// mesurait 2130 px pour 759 utiles. Ce qu'on vient lire est DEDANS.
+await ouvrirTousLesPlis(page)
 const mesures = page.locator('button[aria-label="Mesures sur le produit"]')
 const photos = page.locator('button[aria-label="Envoyer les photos"]')
 const accessibles = await mesures.count() === 1 && await photos.count() === 1

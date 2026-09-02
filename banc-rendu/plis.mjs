@@ -23,6 +23,17 @@
  * pli n'est qu'un chemin de plus.
  */
 export const ouvrirTousLesPlis = async (page) => {
+  /* ⚠ DEUX MÉCANIQUES DE PLI, ET C'EST VOULU CÔTÉ PRODUIT. La plupart des écrans
+     portent `TeteRepli` — un bouton et son `aria-expanded`. L'écran du COMPTE,
+     lui, utilise `<details>` depuis toujours pour « Diagnostic et aide », et les
+     deux groupes repliés au lot 3 l'ont rejoint plutôt que d'introduire un
+     second signe à trois centimètres du premier. Cet utilitaire connaît donc les
+     deux : il ouvre ce qui est fermé, quelle qu'en soit la forme.
+     Les `<details>` s'ouvrent par la propriété et non par un clic : cliquer un
+     `<summary>` bascule, et basculer ce qui est déjà ouvert le referme. */
+  await page.evaluate(() => {
+    for (const d of document.querySelectorAll('details:not([open])')) d.open = true
+  })
   const tetes = page.locator('.atelier-tete[aria-expanded="false"]')
   // On relit le compte à chaque tour : ouvrir un pli peut en révéler un autre
   // (l'album vit à l'intérieur d'un écran que le premier tap déplie).

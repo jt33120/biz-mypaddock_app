@@ -91,6 +91,10 @@ await page.waitForSelector('.case-album img', { timeout: 60_000 })
 
 // ── ① Sans compte, hors ligne : l'emport est là.
 await onglet('COMPTE')
+// Sur l'écran du COMPTE, « Sauvegarde » et « Données et confidentialité » se
+// replient depuis le lot 3, comme « Diagnostic et aide » avant elles : l'écran
+// mesurait 2130 px pour 759 utiles. Ce qu'on vient lire est DEDANS.
+await ouvrirTousLesPlis(page)
 await page.waitForSelector('text=emporter ta saison', { timeout: 10_000 })
 console.log('① atteignable sans compte, hors ligne :', await page.isVisible('text=emporter ta saison'))
 console.log('   annoncé avant le geste :', (await page.textContent('.compte:has-text("emporter") .libelle:nth-of-type(2)')

@@ -115,22 +115,42 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
             ) : <Anonyme db={db} onLegal={onLegal} />}
           </section>
 
-          <section className="compte compte-groupe" aria-labelledby="compte-sauvegarde">
-            <h2 id="compte-sauvegarde" className="titre-section">Sauvegarde</h2>
+          {/* ⚠ DEUX GROUPES DE PLUS SE REPLIENT — lot 3, 2 septembre 2026. Cet
+              écran mesurait 2130 px pour 759 utiles, le pire chiffre du produit,
+              et ces deux-là en prenaient 954. On ne vient pas ici pour LIRE : on
+              y vient pour une course précise — se connecter, emporter sa saison,
+              régler ce qui part. Quatre intitulés qu'on parcourt du pouce sont
+              exactement la forme d'un écran de réglages ; quatre sections
+              dépliées sont une notice.
+
+              ⚠ `<details>` ET PAS `TeteRepli`, ET C'EST DÉLIBÉRÉ. Le groupe
+              « Diagnostic et aide » juste en dessous en est un depuis toujours :
+              c'est LA convention de cet écran. Y poser le composant de pli des
+              autres écrans donnerait deux mécanismes côte à côte, deux signes
+              différents à trois centimètres l'un de l'autre, sur le seul écran
+              où l'on cherche déjà quelque chose. Le natif ne demande d'ailleurs
+              aucun état, et un état de moins est un état qui ne peut pas mentir.
+
+              ⚠ ET « CONNEXION » RESTE DÉPLIÉ. C'est la course pour laquelle on
+              ouvre cet écran quand on n'a pas de compte, et replier ce pour quoi
+              on vient est le seul défaut que ce lot s'interdit depuis le début.
+              Une fois connecté il ne pèse plus que sa ligne d'adresse. */}
+          <details className="compte compte-groupe">
+            <summary className="titre-section">Sauvegarde</summary>
             {identite && supabaseConfigure && (
               <SauvegardeConnectee db={db} identite={identite} adoption={adoption} />
             )}
             <Emporter db={db} />
-          </section>
+          </details>
 
-          <section className="compte compte-groupe" aria-labelledby="compte-donnees">
-            <h2 id="compte-donnees" className="titre-section">Données et confidentialité</h2>
+          <details className="compte compte-groupe">
+            <summary className="titre-section">Données et confidentialité</summary>
             <EnvoiDesPhotos />
             <Mesures />
             <button type="button" className="lien" onClick={onLegal}>
               Lire les informations légales
             </button>
-          </section>
+          </details>
 
           <details className="compte compte-groupe compte-diagnostic">
             <summary className="titre-section">Diagnostic et aide</summary>

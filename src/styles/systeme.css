@@ -624,7 +624,15 @@ body {
   border-top: 1px solid var(--filet); padding-top: 14px;
 }
 .compte-groupe > .titre-section { margin-bottom: 2px; }
-.compte-diagnostic > summary {
+/* ⚠ SUR TOUT GROUPE REPLIABLE, PLUS SEULEMENT SUR LE DIAGNOSTIC — lot 3,
+   2 septembre 2026. Cette règle était scopée à `.compte-diagnostic`, le seul
+   `<details>` de l'écran ; « Sauvegarde » et « Données et confidentialité » en
+   sont devenus, et ils seraient sortis avec le triangle nu du navigateur, sans
+   cible de 44 px et sans alignement — trois sommaires voisins, deux allures.
+   Le sélecteur suit donc le RÔLE (un groupe qui se replie) et non l'un de ses
+   occupants. `.compte-diagnostic` reste comme prise, elle ne porte plus de
+   style. */
+.compte-groupe > summary {
   cursor: pointer; min-height: 44px; display: flex; align-items: center;
   list-style-position: inside;
 }
