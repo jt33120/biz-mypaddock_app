@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
+import { TeteRepli } from './Repli'
 import {
   ajouter, CHARGEMENT, cocher, composer, direLAge, direPublication, lignesDuChargement,
   moisDepuis, MOIS_AVANT_DOUTE, NOM_CATEGORIE, rattachement, retirer,
@@ -26,6 +27,10 @@ export function Checklist({ db, roulageId, jour }: {
   const [liste, setListe] = useState<Ligne[]>([])
   const [ouverte, setOuverte] = useState(false)
   const [ajout, setAjout] = useState('')
+  /** Le pli de l'ÉTAT VIDE, et de lui seul : la checklist remplie a déjà son
+   *  propre dépliage (`ouverte`), et deux plis sur le même bloc se
+   *  contrediraient. */
+  const [ouvert, setOuvert] = useState(false)
   const [enregistrement, setEnregistrement] = useState(0)
   const [erreur, setErreur] = useState('')
   const listeCourante = useRef<Ligne[]>([])
@@ -110,14 +115,21 @@ export function Checklist({ db, roulageId, jour }: {
        `.checklist` pour savoir que la composition a eu lieu, et le faire
        correspondre à l'état vide rendrait cette attente immédiate, donc muette. */
     return (
+      /* ⚠ REPLIÉ — lot 3, 2 septembre 2026 : 154 px pour dire qu'il n'y a rien de
+         préparé, sur un écran qui en faisait 2051. L'état le dit maintenant dans
+         l'en-tête, donc sans ouvrir : un pli qui obligerait à taper pour
+         apprendre qu'il est vide serait pire que le bloc qu'il remplace. */
       <div className="bloc pile chargement-vide">
-        <p className="libelle">Chargement</p>
-        <p className="sous-titre">
-          Ce que tu emportes : la moto, ce que tu portes, ce que l'organisateur publie.
-        </p>
-        <button type="button" className="lien" onClick={() => void creer()}>
-          Préparer le chargement
-        </button>
+        <TeteRepli titre="Chargement" etat="rien de préparé"
+                   ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+        {ouvert && (<>
+          <p className="sous-titre">
+            Ce que tu emportes : la moto, ce que tu portes, ce que l'organisateur publie.
+          </p>
+          <button type="button" className="lien" onClick={() => void creer()}>
+            Préparer le chargement
+          </button>
+        </>)}
       </div>
     )
   }

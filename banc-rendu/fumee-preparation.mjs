@@ -15,6 +15,7 @@
 //   ⚠ ELLE N'APPARAÎT PAS SUR UNE JOURNÉE PASSÉE. « Ce qui reste à faire » sur
 //     un roulage déjà vécu serait un reproche.
 import { chromium } from 'playwright-core'
+import { ouvrirTousLesPlis } from './plis.mjs'
 const nav = await chromium.launch({
   executablePath: process.env.CHROME
     ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -127,6 +128,7 @@ await page.waitForTimeout(400)
 await page.click('.bloc:has-text("Prochain roulage")')
 await page.waitForTimeout(800)
 
+await ouvrirTousLesPlis(page)
 const composable = await page.isVisible('text=Préparer le chargement')
 verifier('⑥ le chargement reste composable après une tâche de préparation', composable)
 

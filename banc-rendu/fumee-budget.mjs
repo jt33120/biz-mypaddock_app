@@ -27,6 +27,7 @@
 // Les refus sont donc joués DEUX FOIS : une fois sans plafond (l'état de
 // démarrage, qui est réel), une fois avec (l'état où la tentation existe).
 import { chromium } from 'playwright-core'
+import { ouvrirTousLesPlis } from './plis.mjs'
 const nav = await chromium.launch({
   executablePath: process.env.CHROME
     ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -306,10 +307,18 @@ if (await page.isVisible('section.recap')) {
   await page.click('text=Retour au roulage')
 }
 await page.waitForSelector('text=Meilleur tour du jour', { timeout: 20_000 })
+await ouvrirTousLesPlis(page)
 await page.click('text=Ajouter une dépense')
 await page.waitForSelector('section.depense', { timeout: 20_000 })
 await page.fill('#montant', '180,50')
 await page.click('section.depense .bouton:not(.secondaire)')
+/* ⚠ ON ATTEND LE RETOUR AVANT D'OUVRIR. La saisie de dépense remplace l'écran ;
+   ouvrir les plis pendant qu'elle est encore là n'ouvre rien, et le `#budget`
+   qu'on cherche ensuite est resté fermé. On attend donc que le bloc du coût
+   soit revenu — replié, avec son montant en tête — puis on l'ouvre. */
+await page.waitForSelector('.atelier-tete:has-text("Ce que la journée a coûté")',
+  { timeout: 20_000 })
+await ouvrirTousLesPlis(page)
 await page.waitForSelector('#budget', { timeout: 20_000 })
 await page.fill('#budget', '2000')
 await page.click('text=Poser le budget')

@@ -6,6 +6,7 @@
 // remarque jamais : personne ne va vérifier que rien n'est parti.
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
   executablePath: process.env.CHROME
@@ -43,9 +44,21 @@ await page.click('.lien.discret')
 await page.waitForTimeout(400)
 console.log('   et revient :', (await page.textContent('.lien.discret')).includes('masqué') ? 'oui' : 'NON')
 
-// ── ② Sans compte, le cercle le dit au lieu de tourner à vide.
+/* ── ② Sans compte, le cercle le dit au lieu de tourner à vide.
+   ⚠ EN DEUX TEMPS DEPUIS LE LOT 3, ET C'EST PLUS EXIGEANT QU'AVANT. Ce bloc
+   pesait 158 px pour un paragraphe qui n'offre aucun geste ; il est replié, et
+   son en-tête porte l'essentiel. Ce que cet essai vérifiait — « le cercle le DIT
+   au lieu de tourner à vide » — se vérifie donc maintenant DEUX fois : d'abord
+   sans ouvrir, parce que c'est là que le pilote lit, ensuite en entier, parce
+   qu'une promesse du produit sur lui-même ne doit pas se perdre dans un pli.
+   Se contenter du texte déplié aurait laissé passer un en-tête muet. */
+const replie = (await page.textContent('.ecran')).replace(/\s+/g, ' ')
+console.log('② sans compte, dit SANS ouvrir :',
+  /cercle[\s\S]{0,40}demande un compte/.test(replie) ? 'annoncé' : 'NON — ' + replie.slice(0, 90))
+await ouvrirTousLesPlis(page)
 const c = (await page.textContent('.ecran')).replace(/\s+/g, ' ')
-console.log('② sans compte :', c.includes('Le cercle demande un compte') ? 'annoncé' : 'NON')
+console.log('   et la phrase entière est dedans :',
+  c.includes('Le cercle demande un compte') ? 'oui' : 'NON')
 console.log('   et dit que c\'est le SEUL endroit :', c.includes('seul endroit du produit') ? 'oui' : 'NON')
 
 // ── ③ FR-39 : aucun classement, nulle part, sous aucun nom.

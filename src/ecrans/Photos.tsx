@@ -6,6 +6,7 @@ import {
 } from '../db/photos'
 import { declarerGeste, gestesDuRoulage, listerCaps, type Cap, type Geste } from '../db/gestes'
 import { Icone } from './Icones'
+import { TeteRepli } from './Repli'
 import { useGeste } from './geste'
 
 /**
@@ -63,6 +64,10 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
    *  identifiant : la navigation d'une photo à l'autre est un déplacement dans
    *  la liste, et un identifiant obligerait à la re-parcourir à chaque flèche. */
   const [enGrand, setEnGrand] = useState<number | null>(null)
+  /** Le pli de l'album — voir son commentaire au rendu. Il porte un nom distinct
+   *  de `ouvert` parce que ce module en a déjà d'autres, et deux booléens du même
+   *  nom dans un même fichier finissent par se prendre l'un pour l'autre. */
+  const [ouvertAlbum, setOuvertAlbum] = useState(false)
 
   /**
    * ⚠ LES URL D'OBJET SE RÉVOQUENT, ET ELLES NE SE RÉVOQUAIENT QU'À MOITIÉ.
@@ -158,14 +163,21 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
 
   return (
     <div className="bloc pile album" data-garde={garde ? '1' : '0'}>
-      <div className="rang">
-        <span className="rang" style={{ gap: 8 }}>
-          <Icone nom="photo" taille={16} />
-          <span className="libelle">Photos et gestes</span>
-        </span>
-        {/* Un DÉCOMPTE de ce qui est là, jamais une progression. */}
-        {photos.length > 0 && <span className="hud-12 faible">{photos.length}</span>}
-      </div>
+      {/* ⚠ REPLIÉ PAR DÉFAUT — lot 3, 2 septembre 2026 : 179 px sur le bilan
+          d'une journée, dont l'essentiel pour deux boutons d'ajout. On ouvre une
+          journée pour lire son chrono ; on ouvre son album quand on veut voir
+          des photos, et c'est un geste séparé.
+
+          ⚠ LE DÉCOMPTE RESTE DEHORS, et c'est ce qui autorise le pli. « 4 » se
+          lit sans ouvrir : le pilote sait qu'il y a quelque chose derrière, ou
+          qu'il n'y a rien. Un pli qui obligerait à taper pour apprendre qu'il
+          est vide coûterait plus qu'il ne rend. Et ce décompte reste un
+          DÉCOMPTE, jamais une progression — rien ne dit combien il en manque. */}
+      <TeteRepli titre="Photos et gestes"
+                 chiffre={photos.length > 0 ? String(photos.length) : undefined}
+                 etat={photos.length > 0 ? undefined : 'rien de versé'}
+                 ouvert={ouvertAlbum} onBasculer={() => setOuvertAlbum(!ouvertAlbum)} />
+      {ouvertAlbum && (<>
 
       {photos.length > 0 && (
         <div className="grille-album">
@@ -244,6 +256,7 @@ export function Photos({ db, roulageId }: { db: PowerSyncDatabase; roulageId: st
                    i == null ? null : Math.min(photos.length - 1, Math.max(0, i + d)))}
                  onRetirer={() => retirer(photos[enGrand])} />
       )}
+      </>)}
     </div>
   )
 }

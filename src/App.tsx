@@ -24,6 +24,7 @@ import { ouverture } from './db/mesures'
 import { surRetourDeReseau, televerserEnAttente } from './db/photos'
 import { televerserVideosEnAttente } from './db/video'
 import { Photos } from './ecrans/Photos'
+import { TeteRepli } from './ecrans/Repli'
 import { Icone } from './ecrans/Icones'
 import { useGlissement } from './ecrans/glissement'
 import { Recap } from './ecrans/Recap'
@@ -1973,23 +1974,35 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
 }) {
   const [saisie, setSaisie] = useState('')
   const centimes = enCentimes(saisie)
+  /* ⚠ REPLIÉ PAR DÉFAUT — lot 3, 2 septembre 2026. Mesuré à 172 px sur le bilan
+     d'une journée, et 172 px pour écrire « Rien de saisi » quand rien n'est
+     saisi : c'était le troisième bloc le plus lourd d'un écran qui en faisait
+     2051. Le MONTANT, lui, reste dehors — c'est le fait qu'on vient chercher, et
+     le mettre derrière un tap coûterait exactement ce que le pli fait gagner.
+     Ce qui se plie est le détail : le coût au tour, le plafond, la jauge, la
+     saisie du budget — tout ce qu'on ouvre quand on a une question, jamais
+     quand on passe. */
+  const [ouvert, setOuvert] = useState(false)
 
   if (!c.journeeCentimes) {
     return (
       <div className="bloc pile">
-        <div className="libelle">Ce que la journée a coûté</div>
-        <p className="texte">Rien de saisi. Ça se note plus tard, pas maintenant.</p>
-        <button className="bouton secondaire" onClick={onDepense}>Ajouter une dépense</button>
+        <TeteRepli titre="Ce que la journée a coûté" etat="rien de saisi"
+                   ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+        {ouvert && (<>
+          <p className="texte">Rien de saisi. Ça se note plus tard, pas maintenant.</p>
+          <button className="bouton secondaire" onClick={onDepense}>Ajouter une dépense</button>
+        </>)}
       </div>
     )
   }
 
   return (
     <div className="bloc pile">
-      <div className="rang">
-        <span className="libelle">Ce que la journée a coûté</span>
-        <span className="chiffre hud-40">{formaterEuros(c.journeeCentimes)}</span>
-      </div>
+      <TeteRepli titre="Ce que la journée a coûté"
+                 chiffre={formaterEuros(c.journeeCentimes)}
+                 ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+      {ouvert && (<>
 
       {c.auTour ? (
         <>
@@ -2108,6 +2121,7 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
       )}
 
       <button className="lien" onClick={onDepense}>Ajouter une dépense</button>
+      </>)}
     </div>
   )
 }
