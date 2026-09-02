@@ -76,6 +76,10 @@ await page.click('nav.barre .onglet:has-text("ACCUEIL")')
 await page.waitForSelector('.preparation', { timeout: 20_000 })
 await page.waitForTimeout(500)
 
+// Sur l'ACCUEIL la préparation est un aperçu, et elle s'y replie depuis le lot 3
+// (397 px sur 1562). Sur l'écran de la journée elle reste dépliée : c'est le
+// sujet. Ce que cet essai lit est son CONTENU, donc il l'ouvre.
+await ouvrirTousLesPlis(page)
 const prep = await texte('.preparation')
 
 // ── ② CHAQUE LIGNE VIENT D'UNE DONNÉE SAISIE, et le dit.
@@ -103,6 +107,10 @@ verifier('   « Plaquettes » mène au garage', await page.isVisible('.garage'))
 // ── ⑤ CE QU'ON AJOUTE À LA MAIN SE COCHE ; ce qui est dérivé, non.
 await page.click('nav.barre .onglet:has-text("ACCUEIL")')
 await page.waitForSelector('.preparation', { timeout: 20_000 })
+// Retour sur l'accueil : la préparation y repart repliée (c'est un aperçu, et
+// le pli est un état de rendu qui ne survit pas au changement d'écran). La
+// saisie vit à l'intérieur.
+await ouvrirTousLesPlis(page)
 await page.fill('.ajout-tache .champ', 'Passer chercher le bidon')
 await page.click('.ajout-tache .bouton')
 await page.waitForSelector('.preparation .coche', { timeout: 15_000 })

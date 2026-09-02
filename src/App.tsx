@@ -967,7 +967,7 @@ function Accueil({ db, src, conseil, abri, depenseNote, onNouveau, onOuvrir, onL
           qu'on vient chercher quand une date approche, et ce n'est rien du tout
           le reste de l'année — où elle est simplement absente. */}
       {src?.genre === 'a_venir' && (
-        <Preparation db={db}
+        <Preparation db={db} repliable
                      roulage={{ id: src.roulage.id, machineId: src.roulage.machine_id,
                                 date: src.roulage.date_jour }}
                      onAller={(vers) => onAller(vers, src.roulage.id)} />
@@ -1010,13 +1010,27 @@ function Conseil({ texte }: { texte: string }) {
  */
 function Abrite({ abri }: { abri: Abri | null }) {
   const [issue, setIssue] = useState<string | null>(null)
+  const [ouvert, setOuvert] = useState(false)
   if (!abri) return null
   const mot = direLAbri(abri)
   if (!mot) return null
 
   return (
     <div className="bloc pile abri">
-      <div className="libelle">{mot.titre}</div>
+      {/* ⚠ REPLIÉ PAR DÉFAUT — lot 3, 2 septembre 2026. Mesuré à 216 px sur un
+          accueil qui en faisait 1562 : c'était le deuxième bloc le plus lourd de
+          l'écran le plus ouvert du produit, et il y était À CHAQUE OUVERTURE.
+
+          ⚠ ET CE N'EST PAS UN FAIT DE LA SAISON, C'EST UNE INVITATION. « Une
+          source de l'accueil est CE QU'ON A ENVIE DE VOIR, jamais ce qu'on a
+          oublié de faire » — la règle est écrite en tête de `db/accueil.ts`, et
+          une proposition d'installation est exactement l'autre moitié. Elle
+          n'est pas retirée pour autant : le risque qu'elle nomme est réel, un
+          navigateur PEUT libérer la place et la saison avec. Le titre le dit
+          replié — « ta saison vit dans un onglet » se lit sans ouvrir — et ce
+          qu'il faut faire est derrière un tap au lieu d'un cinquième d'écran. */}
+      <TeteRepli titre={mot.titre} ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+      {ouvert && (<>
       <p className="texte">{mot.texte}</p>
       {abri.proposable ? (
         <button className="bouton secondaire" onClick={() => void proposerInstallation().then((i) => {
@@ -1027,6 +1041,7 @@ function Abrite({ abri }: { abri: Abri | null }) {
         </button>
       ) : mot.geste ? <p className="note">{mot.geste}</p> : null}
       {issue && <p className="note">{issue}</p>}
+      </>)}
     </div>
   )
 }
