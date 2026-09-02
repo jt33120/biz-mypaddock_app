@@ -1142,7 +1142,20 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
    navigateur qu'il garde le défilement VERTICAL pour lui et nous laisse
    l'horizontal. Sans lui, une liste qu'on fait défiler s'entrouvre sous le
    pouce — le défaut qui rend ces listes détestables. */
-.ligne-glissante { touch-action: pan-y; overflow: hidden; }
+/* ⚠ PLUS SERRÉE QUE LE BLOC ORDINAIRE — lot 3, 2 septembre 2026, mesuré. Une
+   carte de journée pesait 134 px, et l'écran en empile trois à cinq : c'est le
+   premier poste de défilement de ROULAGES une fois le bilan replié. Un `.bloc`
+   générique s'aère à 16 px parce qu'il porte un contenu ; celle-ci porte DEUX
+   LIGNES et se lit d'un coup d'œil — le blanc n'y sépare rien, il éloigne
+   seulement la carte suivante.
+
+   ⚠ CE QUI N'A PAS BOUGÉ : la taille du chrono. C'est le chiffre qu'on vient
+   chercher dans cette liste, et le rétrécir pour gagner six pixels échangerait
+   la raison d'être de la carte contre du défilement. Les cibles tactiles non
+   plus : la carte entière est le bouton, et elle reste très au-dessus des 44 px.
+   Ce qui se retire ici est du VIDE, jamais un fait ni une prise. */
+.ligne-glissante { touch-action: pan-y; overflow: hidden; padding: 11px 13px; gap: 7px; }
+.ligne-glissante .glissable { gap: 6px; }
 .glissable { cursor: pointer; }
 
 /* ⚠ LES LANGUETTES SONT TOUJOURS DANS LE DOM, ET SEULEMENT REPLIÉES. Rendues
