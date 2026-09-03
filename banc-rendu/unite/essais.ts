@@ -5027,21 +5027,38 @@ const essais = [
        toujours la largeur ; chaque MOT tient toujours sa case ; et un onglet qui
        n'a plus de mot doit avoir un NOM — un glyphe muet est un bouton qu'on ne
        peut ni annoncer, ni chercher, ni décrire au téléphone. */
+    /* ⚠ LES CINQ ONGLETS PORTENT UN GLYPHE DEPUIS LE 3 SEPTEMBRE 2026, et trois
+       gardent leur mot en tout petit à l'intérieur. Ce témoin lisait le mot
+       comme le SEUL contenu du bouton — `>MOT<` — et il est retombé à zéro d'un
+       coup : le mot vit maintenant dans un `<span className="mot">`. Il avait
+       raison de rougir, et c'est la troisième fois qu'il attrape ce genre de
+       bascule sans qu'aucun autre garde ne bouge.
+
+       Ce qu'il vérifie ne change toujours pas de nature : chaque onglet doit
+       avoir un NOM, chaque mot doit tenir dans sa case, et la barre ne doit pas
+       glisser vers le tout-pictogramme par petits pas. */
     const onglets = (barre.match(/className="onglet"/g) ?? []).length
     vrai(onglets >= 4, `seulement ${onglets} onglets lus : la lecture de la barre est cassée`)
     vrai(onglets <= 5,
       `la barre porte ${onglets} onglets : à six, chaque case tombe sous la largeur de ROULAGES`)
-    const mots = [...barre.matchAll(/className="onglet"[\s\S]*?>([^<>{}]+)</g)]
-      .map((m) => m[1].trim()).filter((m) => m.length > 0)
+    const mots = [...barre.matchAll(/className="mot">([^<]+)</g)].map((m) => m[1].trim())
     const nommes = [...barre.matchAll(/<Icone[^>]*titre="([^"]+)"/g)].map((m) => m[1])
-    vrai(mots.length + nommes.length === onglets,
-      `${onglets} onglets, mais ${mots.length} mots et ${nommes.length} glyphes nommés :`
+    const glyphes = (barre.match(/<Icone /g) ?? []).length
+    vrai(glyphes === onglets,
+      `${onglets} onglets mais ${glyphes} glyphes : un onglet a perdu son dessin,`
+      + ' et deux natures de bouton à trois centimètres se remarquent avant leur contenu')
+    /* ⚠ TOUT ONGLET SANS MOT DOIT AVOIR UN NOM DANS SON GLYPHE. `Icone` pose
+       alors un vrai `<title>` : le mot existe dans le document, lu par un
+       lecteur d'écran ET par le banc. Un glyphe muet est un bouton qu'on ne peut
+       ni annoncer, ni chercher, ni décrire au téléphone. */
+    vrai(mots.length + nommes.length >= onglets,
+      `${onglets} onglets, ${mots.length} mots et ${nommes.length} glyphes nommés :`
       + ' un onglet ne dit son nom NI en toutes lettres NI dans le titre de son icône')
-    /* ⚠ TROIS MOTS AU MINIMUM. Une barre entièrement en pictogrammes se devine
-       au lieu de se lire : garage, roulages et analyse sont la MATIÈRE du
-       carnet, et un pilote les cherche par leur nom. Seuls le cadre — d'où l'on
-       part, où l'on se gère — se rendent sans mot, parce qu'une maison et un
-       buste se lisent sans apprentissage. */
+    /* ⚠ TROIS MOTS AU MINIMUM. Une maison et un buste se lisent sans
+       apprentissage ; une moto, un calendrier et trois barres, non — « moto »
+       peut vouloir dire le garage ou la journée. Une barre entièrement en
+       pictogrammes se devine au lieu de se lire, et elle ne doit pas pouvoir
+       s'installer par petits pas. */
     vrai(mots.length >= 3,
       `la barre ne porte plus que ${mots.length} mots : au-delà du cadre, un onglet se devine`)
     for (const m of mots) {

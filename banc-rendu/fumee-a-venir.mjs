@@ -228,6 +228,20 @@ await pret()
 await onglet('ROULAGES')
 await page.click(`.groupe-roulages .bloc:has-text("${jour(18)}") >> nth=0`)
 await page.waitForSelector('.journee-page', { timeout: 20_000 })
+/* ⚠ LE CADRE ARRIVE AVANT SES DONNÉES — corrigé le 3 septembre 2026, après une
+   demi-douzaine de rouges dans cette seule zone. `.journee-page` existe dès que
+   React rend l'écran ; les objectifs et la checklist, eux, viennent d'une
+   lecture PowerSync qui part APRÈS le montage. Lire dans la foulée du sélecteur,
+   c'est lire une page vraie mais pas encore remplie — et cet essai rougissait
+   donc sous la charge du banc complet en restant vert seul, ce qui est la pire
+   forme de rouge : celle qu'on finit par ignorer.
+   L'attente est TOLÉRANTE et ne remplace pas l'assertion : si la donnée ne
+   revient jamais, on veut une vérification rouge avec son détail, pas une
+   exception qui empêche les suivantes de tourner. */
+await page.waitForFunction(() => {
+  const t = document.querySelector('.journee-page')?.textContent ?? ''
+  return t.includes('Travailler la sortie') && t.includes('Relâcher les épaules')
+}, null, { timeout: 20_000 }).catch(() => {})
 const apresRecharge = await texte('.journee-page')
 verifier('   objectifs et coches persistent après rechargement',
   apresRecharge.includes('Travailler la sortie')
@@ -249,6 +263,13 @@ await pret()
 await onglet('ROULAGES')
 await page.click(`.groupe-roulages .bloc:has-text("${jour(18)}") >> nth=0`)
 await page.waitForSelector('.journee-page', { timeout: 20_000 })
+// Même course qu'au-dessus : on attend que l'objectif RESTANT soit revenu de la
+// base avant de conclure que l'autre est bien parti. Sans ça, « les deux sont
+// absents » se lit comme « le retrait a trop retiré ».
+await page.waitForFunction(() => {
+  const t = document.querySelector('.objectifs')?.textContent ?? ''
+  return t.includes('Relâcher les épaules')
+}, null, { timeout: 20_000 }).catch(() => {})
 const apresRetrait = await texte('.objectifs')
 verifier('   retirer un objectif ne retire pas l\'autre',
   !apresRetrait.includes('Travailler la sortie') && apresRetrait.includes('Relâcher les épaules'))

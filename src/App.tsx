@@ -877,10 +877,34 @@ export default function App() {
             l'aurait rendu introuvable pour l'autre. */}
         <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'}
                 onClick={() => setEcran('accueil')}>
-          <Icone nom="maison" taille={21} titre="Accueil" />
+          <Icone nom="maison" taille={20} titre="Accueil" />
         </button>
-        <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('garage') }}>GARAGE</button>
-        <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('roulages') }}>ROULAGES</button>
+        {/* ⚠ LES CINQ ONGLETS PORTENT UN GLYPHE — 3 septembre 2026. Deux
+            l'avaient depuis la veille ; trois gardaient leur mot seul, et la
+            barre restait bancale : deux natures de bouton à trois centimètres
+            l'une de l'autre se remarquent avant leur contenu.
+
+            ⚠ MAIS CES TROIS-LÀ GARDENT AUSSI LEUR MOT, EN TOUT PETIT. Une maison
+            et un buste se lisent sans apprentissage ; une moto, un calendrier et
+            trois barres, non — « moto » peut vouloir dire le garage ou la
+            journée, un calendrier peut vouloir dire les roulages ou le prochain
+            événement. Un onglet qui se devine est le contraire de ce qu'on
+            gagne, et le mot coûte neuf pixels de haut.
+
+            ⚠ ET LE MOT EST AU-DESSUS DU GLYPHE. C'est ce que Julian a demandé,
+            et ça tient : le liseré de l'onglet actif borde le haut de la case,
+            le mot vient juste dessous, le glyphe ferme. L'œil descend du repère
+            au nom puis au dessin, dans cet ordre. */}
+        <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'}
+                onClick={() => { setDepenseNote(null); setEcran('garage') }}>
+          <span className="mot">GARAGE</span>
+          <Icone nom="moto" taille={20} />
+        </button>
+        <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'}
+                onClick={() => { setDepenseNote(null); setEcran('roulages') }}>
+          <span className="mot">ROULAGES</span>
+          <Icone nom="calendrier" taille={20} />
+        </button>
         {/* ⚠ LE CINQUIÈME ONGLET, ET LA LARGEUR A ÉTÉ MESURÉE, PAS SUPPOSÉE.
             `.onglet` est `flex: 1` sans marge ni écart, dans une `.barre` en
             `left: 0; right: 0` : à cinq, chacun fait exactement 75,0 px sur un
@@ -905,11 +929,14 @@ export default function App() {
                     // pré-tournée. Voir `departAnalyse`.
                     setDepartAnalyse(null)
                     setEcran('analyse')
-                  }}>ANALYSE</button>
+                  }}>
+            <span className="mot">ANALYSE</span>
+            <Icone nom="barres" taille={20} />
+          </button>
         )}
         <button className="onglet" data-actif={ecran === 'compte' || ecran === 'sonde' ? '1' : '0'}
                 onClick={() => { setDepenseNote(null); setEcran('compte') }}>
-          <Icone nom="pilote" taille={21} titre="Compte" />
+          <Icone nom="pilote" taille={20} titre="Compte" />
         </button>
       </nav>
     </>

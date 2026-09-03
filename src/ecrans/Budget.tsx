@@ -773,10 +773,14 @@ function DeclarerMateriel({ db, onFini }: { db: PowerSyncDatabase; onFini: () =>
   const [categorie, setCategorie] = useState<CategorieEquipement>('protection')
   const [achat, setAchat] = useState('')
   const [montant, setMontant] = useState('')
+  /** Ce que la pièce EST, choisi ici plutôt qu'après coup. `null` reste l'état
+   *  normal : la plupart des protections ne sont ni un casque ni une
+   *  combinaison — une dorsale, des gants, des bottes n'ont pas de genre. */
+  const [genre, setGenre] = useState<GenreDeTenue | null>(null)
   const [poser, occupe] = useGeste(async () => {
     if (!nom.trim()) return
     await declarerEquipement(db, {
-      nom, categorie,
+      nom, categorie, genre,
       acheteLe: /^\d{4}-\d{2}$/.test(achat) ? achat : null,
       centimes: montant.trim() ? enCentimes(montant) : null,
     })
@@ -794,6 +798,32 @@ function DeclarerMateriel({ db, onFini }: { db: PowerSyncDatabase; onFini: () =>
         ))}
       </div>
       <p className="note">{EXEMPLE_EQUIPEMENT[categorie]}</p>
+
+      {/* ⚠ LE GENRE SE POSE ICI, AU MOMENT OÙ ON LE SAIT — 3 septembre 2026.
+          Il ne se posait qu'APRÈS, sous la pièce déjà déclarée : il fallait
+          valider, retrouver la ligne dans l'inventaire, puis taper une puce.
+          Deux gestes séparés par une lecture, pour un fait qu'on a en tête au
+          moment où l'on tape le nom.
+
+          ⚠ ET IL RESTE FACULTATIF, DONC SANS DÉFAUT. Aucune des deux puces n'est
+          allumée à l'ouverture, et c'est l'état juste : une dorsale, des gants,
+          des bottes sont des protections sans genre, et pré-cocher « casque »
+          en ferait des casques par distraction. Taper la puce active la retire,
+          comme sous la pièce — un seul geste à connaître, aux deux endroits. */}
+      {categorie === 'protection' && (
+        <>
+          <div className="libelle">Ce que c'est · facultatif</div>
+          <div className="puces" role="group" aria-label="Ce que c'est">
+            {GENRES_DE_TENUE.map(([g, mot]) => (
+              <button key={g} type="button" className="puce"
+                      data-actif={genre === g ? '1' : '0'} aria-pressed={genre === g}
+                      onClick={() => setGenre(genre === g ? null : g)}>
+                {mot}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {/* UN MOIS, pas un jour. Personne ne se souvient de la date exacte où il a
           acheté ses gants — et exiger le jour transforme dix secondes de saisie
           en recherche de facture, donc en saisie qu'on ne fait pas. */}

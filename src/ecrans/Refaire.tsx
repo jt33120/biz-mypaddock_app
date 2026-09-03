@@ -4,6 +4,7 @@ import { formaterEuros } from '../db/depot'
 import {
   COUT_PORTRAIT_CENTIMES, fabriqueOuverte, PORTRAITS_INCLUS, portraitsFaits,
 } from '../pixel/portrait'
+import { Attente } from './Attente'
 
 /**
  * REFAIRE UN PORTRAIT PIXEL — le seul bouton du produit qui dépense de l'argent.
@@ -118,8 +119,12 @@ export function Refaire({ db, aUnPortrait, enCours, onFabriquer }: {
 
   if (!ouvert) {
     return (
+      /* ⚠ LE TÉMOIN REMPLACE LE MOT, IL NE S'Y AJOUTE PAS — 3 septembre 2026.
+         « fabrication… » était juste et immobile : sur un appel de dix secondes,
+         rien ne distinguait « ça travaille » de « ça a planté », et on retape.
+         Retaper un geste qui coûte 0,16 € n'est pas un détail. */
       <button className="lien" disabled={enCours} onClick={() => setOuvert(true)}>
-        {enCours ? 'fabrication…' : mot}
+        {enCours ? <Attente mot="fabrication" /> : mot}
       </button>
     )
   }
@@ -142,7 +147,7 @@ export function Refaire({ db, aUnPortrait, enCours, onFabriquer }: {
       </p>
       <button className="bouton" disabled={enCours}
               onClick={() => { setOuvert(false); onFabriquer() }}>
-        {enCours ? 'fabrication…' : 'Lancer la fabrication'}
+        {enCours ? <Attente mot="fabrication" /> : 'Lancer la fabrication'}
       </button>
       <button className="lien" onClick={() => setOuvert(false)}>Ne rien lancer</button>
     </div>
