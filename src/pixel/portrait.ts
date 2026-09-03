@@ -55,6 +55,15 @@ const MOTS: Record<string, string> = {
   modele: "Le modèle d'image n'a rien rendu cette fois. Rien n'a été décompté.",
   aucune_image: "Le modèle n'a rendu aucune image. Rien n'a été décompté.",
   reseau: 'Le serveur est resté injoignable. Rien n\'a été décompté, et la photo est intacte.',
+  /* ⚠ UNE RÉPONSE QUI ARRIVE PROUVE QUE LE SERVEUR EST JOIGNABLE — 3 septembre
+     2026, rapporté depuis le téléphone. Tout échec sans champ `refus` retombait
+     sur `reseau`, donc sur « le serveur est resté injoignable » : une 502 de
+     plateforme, un corps non-JSON, un délai dépassé, tous se lisaient comme une
+     panne de réseau. Le pilote ne pouvait distinguer NI la clé, NI le quota, NI
+     le modèle, NI la coupure — et moi non plus, à distance.
+     Le message porte donc le CODE, qui est le seul fait dont on dispose. */
+  reponse_illisible: "Le serveur a répondu, mais pas ce qu'on attendait. "
+    + "Rien n'a été décompté, et la photo est intacte.",
   spritification: "L'image est revenue mais n'a pas pu être détachée de son fond.",
 }
 const dire = (motif: string) => MOTS[motif] ?? "La fabrique de portraits n'a pas abouti."
@@ -156,12 +165,28 @@ export const genererPortrait = async (
       // une machine sans rattachement ont tous deux `machineId: null`.
       body: JSON.stringify({ photo: b64, machineId, sujet: quoi, piloteEnSelle }),
     })
-  } catch { return { ok: false, motif: 'reseau', message: dire('reseau') } }
+  } catch (cause) {
+    // Le SEUL cas où « injoignable » est vrai : la requête n'a pas abouti du
+    // tout. La cause est jointe telle quelle — coupure, préflight refusé,
+    // certificat : trois pannes que le pilote ne distingue pas et que moi je
+    // dois pouvoir lire quand il me la rapporte.
+    return {
+      ok: false, motif: 'reseau',
+      message: `${dire('reseau')} (${(cause as Error).message ?? 'sans détail'})`,
+    }
+  }
 
   const corps = await rep.json().catch(() => ({}))
   if (!rep.ok || !corps.image) {
-    const motif = corps.refus ?? 'reseau'
-    return { ok: false, motif, message: dire(motif), reste: corps.reste }
+    /* ⚠ PAS DE `?? 'reseau'` ICI. Le serveur a répondu : il est joignable, par
+       définition. Sans champ `refus` c'est un échec que la fonction n'a pas
+       nommé — et le code HTTP est alors le seul fait qu'on ait. L'écrire coûte
+       six caractères et transforme une impasse en diagnostic. */
+    const motif = typeof corps.refus === 'string' ? corps.refus : 'reponse_illisible'
+    const detail = motif === 'reponse_illisible'
+      ? ` (code ${rep.status}${typeof corps.detail === 'string' ? ` · ${corps.detail.slice(0, 120)}` : ''})`
+      : ''
+    return { ok: false, motif, message: dire(motif) + detail, reste: corps.reste }
   }
 
   // La moitié gratuite. Un échec ici ne rend PAS le quota — l'image a bien été

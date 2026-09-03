@@ -57,7 +57,7 @@
 export type Nom =
   | 'cle' | 'courbe' | 'caisse' | 'casque' | 'moto'
   | 'poubelle' | 'crayon' | 'calendrier' | 'photo' | 'portefeuille' | 'trophee'
-  | 'impact' | 'maison' | 'pilote'
+  | 'impact' | 'maison' | 'pilote' | 'barres'
 
 /* ─── LES DESSINS ──────────────────────────────────────────────────────────
    Douze lignes de douze caractères. `#` est un pixel plein, tout le reste est
@@ -65,6 +65,27 @@ export type Nom =
    dimensions de chacun : un dessin de onze lignes se rendrait décalé, sans
    erreur et sans que rien ne le dise. */
 const DESSINS: Record<Nom, string> = {
+  /* LES BARRES — l'ANALYSE. Trois hauteurs qui montent sur une ligne de sol.
+     ⚠ ET CE N'EST PAS `courbe`, QUI EXISTE POURTANT. Elle sert déjà aux
+     AMÉLIORATIONS de l'atelier (Atelier.tsx) : lui donner en plus le sens
+     « analyse » dans la barre du bas ferait dire deux choses au même dessin, et
+     un dessin à deux sens coûte une hésitation à chaque fois qu'on le croise.
+     Les barres disent d'ailleurs mieux cet écran-là : sa forme par défaut est
+     une composition, et sa seconde forme une suite — jamais une cartographie. */
+  barres: `
+............
+............
+.........##.
+.........##.
+......##.##.
+......##.##.
+...##.##.##.
+...##.##.##.
+...##.##.##.
+...##.##.##.
+.##########.
+............`,
+
   /* LA MAISON — l'ACCUEIL. Deux glyphes ont été ajoutés le 2 septembre 2026
      plutôt que de détourner `calendrier` ou `cle`, qui existent déjà et disent
      déjà autre chose : un même dessin employé à deux sens n'économise pas un

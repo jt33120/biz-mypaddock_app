@@ -369,14 +369,28 @@ export const declarerEquipement = async (
   e: {
     nom: string; categorie: CategorieEquipement
     acheteLe?: string | null; centimes?: number | null; note?: string | null
+    /** ⚠ LE GENRE SE POSE MAINTENANT DÈS LA DÉCLARATION — 3 septembre 2026,
+     *  rapporté depuis le téléphone : « le choix casque combinaison doit être
+     *  saisi quand on ajoute l'équipement ». Il ne s'y posait pas, et il fallait
+     *  donc déclarer la pièce, la retrouver dans la liste, puis taper une puce
+     *  sous elle. Deux gestes séparés par une lecture, pour un fait qu'on
+     *  connaît au moment où l'on tape le nom.
+     *
+     *  Il reste FACULTATIF et il reste CORRIGEABLE : `poserGenreEquipement` ne
+     *  disparaît pas, la puce sous la pièce non plus. Poser à la déclaration ne
+     *  ferme rien — ça évite seulement d'y revenir. */
+    genre?: GenreDeTenue | null
   },
 ) => {
   const id = nouvelId()
   await db.execute(
-    `INSERT INTO equipement (id, nom, categorie, achete_le, cout_centimes, note)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO equipement (id, nom, categorie, achete_le, cout_centimes, note, genre)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, e.nom.trim(), e.categorie, e.acheteLe || null, e.centimes ?? null,
-      e.note?.trim() || null])
+      e.note?.trim() || null,
+      // Le genre n'a de sens que sous la protection — la même frontière qu'à la
+      // correction. Une glacière déclarée « casque » serait proposée comme tenue.
+      e.categorie === 'protection' ? (e.genre ?? null) : null])
   await marquerSaisie(db)
   return id
 }

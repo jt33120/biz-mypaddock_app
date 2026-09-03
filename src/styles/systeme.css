@@ -411,11 +411,21 @@ body {
 }
 .onglet {
   flex: 1; min-height: var(--cible-min);
-  display: flex; align-items: center; justify-content: center;
+  /* En COLONNE depuis que les cinq portent un glyphe : le mot au-dessus, le
+     dessin dessous. Les deux onglets sans mot (accueil, compte) n'ont qu'un
+     enfant et se centrent donc exactement comme avant. */
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px;
   font-family: var(--face); font-size: 12px; font-weight: 600; letter-spacing: .12em;
   color: var(--encre-tenue); background: none; border: none; cursor: pointer;
   border-top: 2px solid transparent;
 }
+/* ⚠ 8,5 px ET .06em D'INTERLETTRE, ET C'EST MESURÉ. Le mot le plus large est
+   ROULAGES : à 12 px et .12em il occupait 73,2 px des 75 disponibles, et il n'y
+   avait plus de place pour autre chose. Sous le glyphe il n'a plus besoin de
+   porter l'onglet à lui seul — il le NOMME, le dessin le montre — donc il
+   rétrécit, et huit caractères repassent largement dans la case. */
+.onglet .mot { font-size: 8.5px; letter-spacing: .06em; line-height: 1; }
 .onglet[data-actif='1'] { color: var(--miami); border-top-color: var(--miami) }
 
 /* ─── LE GARAGE ────────────────────────────────────────────────────────────
@@ -604,6 +614,28 @@ body {
   min-height: var(--cible-min);
 }
 .lien:active { border-color: var(--miami); color: var(--encre); }
+
+/* ─── LE TÉMOIN D'ATTENTE ──────────────────────────────────────────────────
+   Un carré évidé dont un seul côté est allumé, qui tourne par CRANS. Le reste
+   du produit est en pixels carrés et `crispEdges` : un cercle lissé tournant en
+   continu viendrait d'une autre famille visuelle, et deux familles sur un même
+   écran se remarquent avant le contenu.
+
+   ⚠ IL S'ARRÊTE SI LE SYSTÈME LE DEMANDE. `prefers-reduced-motion` n'est pas un
+   confort : une rotation permanente déclenche des nausées chez une partie des
+   gens, et un pilote qui a réglé son téléphone pour les éviter ne s'attend pas à
+   ce qu'une application de carnet le lui impose. Le témoin reste alors VISIBLE
+   et immobile — retirer le repère laisserait l'attente sans signe du tout. */
+.attente {
+  width: 14px; height: 14px; flex: 0 0 auto; display: block;
+  border: 2px solid var(--filet); border-top-color: var(--miami);
+  animation: attente-tour .8s steps(8) infinite;
+}
+.attente-rang { gap: 8px; justify-content: flex-start; align-items: center; }
+@keyframes attente-tour { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .attente { animation: none; }
+}
 .garage .onglets { display: flex; gap: 0; border-bottom: 1px solid var(--filet); }
 .garage .onglets .onglet {
   padding: 8px 13px 9px; font-size: 12px; letter-spacing: .10em; text-transform: uppercase;
