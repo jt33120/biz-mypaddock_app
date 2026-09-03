@@ -52,6 +52,11 @@ type SujetDemande = typeof SUJETS[number]
  *  une photo de moto — et les jetons d'image se paient. */
 const CHARGE_MAX = 3_000_000
 
+/** Ce qu'on laisse au modèle avant de renoncer. Il tient SOUS la limite de temps
+ *  de mur du runtime — 150 s, relevée trois fois dans les journaux au moment du
+ *  `shutdown` — parce qu'une fonction tuée ne rend pas son créneau de quota. */
+const MODELE_MAX_MS = 100_000
+
 const entetes = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type',
@@ -79,21 +84,67 @@ Deno.serve(async (req) => {
   // ── L'interrupteur : pas de clé, pas de réservation, pas d'appel ─────────
   //    Il passe AVANT la réservation pour ne pas brûler un créneau de quota
   //    quand la fabrique est fermée.
+  //
+  // ⚠ CETTE BRANCHE A PENDU 150 SECONDES PENDANT DEUX SEMAINES, ET C'EST ELLE
+  // QUI A RENDU LA PANNE INDIAGNOSTICABLE. Elle décorait son refus de deux
+  // nombres — le quota du pilote et ce qui lui reste — lus en deux allers-retours
+  // PostgREST. Le second était un `count: 'exact', head: true`, donc une requête
+  // HEAD. Relevé trois fois dans les journaux (2 sept. 06:36, 3 sept. 05:06 et
+  // 05:34), toujours la même forme :
+  //
+  //     booted (30 ms)
+  //     GET  /auth/v1/user                        200
+  //     GET  /rest/v1/pilote?select=quota_sprites 200   ← résolu : la suivante part
+  //     HEAD /rest/v1/generation?select=id        200   ← la passerelle répond…
+  //     … 150 s de silence …                            ← … mais la promesse, jamais
+  //     shutdown                                        ← le runtime tue la fonction
+  //
+  // La passerelle journalise un 200 pour ce HEAD : la réponse EST partie. C'est
+  // la promesse de `fetch` qui ne se règle jamais côté Deno — une réponse HEAD
+  // n'a pas de corps, et le client en attend un. Le pilote, lui, voyait Safari
+  // abandonner à 60 s avec « Load failed », donc « le serveur est resté
+  // injoignable » : le message le plus faux possible, puisque le serveur avait
+  // répondu deux fois en 500 ms.
+  //
+  // ⚠ LE CORRECTIF N'EST PAS DE REMPLACER LE HEAD PAR UN GET. C'est de ne rien
+  // lire du tout. Cette branche est celle qui répond quand RIEN n'est configuré :
+  // c'est le chemin le plus dégradé de la fonction, et il doit être le moins
+  // cher et le plus sûr, pas celui qui fait deux appels authentifiés pour orner
+  // un refus. Les deux nombres n'avaient d'ailleurs aucun lecteur : le client
+  // rend `issue.message` et rien d'autre sur un échec (`Garage.tsx`,
+  // `Budget.tsx`), et ce qu'un compte inclut, il le sait déjà tout seul
+  // (`PORTRAITS_INCLUS`, confronté à la migration par un essai unitaire).
+  // Zéro `await` entre le jeton et la réponse : plus rien ne PEUT y pendre.
   const cle = Deno.env.get('GEMINI_IMAGE')
-  if (!cle) {
-    const { data: p } = await admin.from('pilote')
-      .select('quota_sprites').eq('id', pilote).single()
-    const { count } = await admin.from('generation')
-      .select('id', { count: 'exact', head: true }).eq('pilote_id', pilote)
-    const quota = p?.quota_sprites ?? 0
-    return repondre({ refus: 'cle_absente', quota, reste: Math.max(0, quota - (count ?? 0)) }, 503)
-  }
+  if (!cle) return repondre({ refus: 'cle_absente' }, 503)
 
-  let charge: { photo?: string; machineId?: string; piloteEnSelle?: boolean; sujet?: string }
+  let charge: {
+    photo?: string; machineId?: string; piloteEnSelle?: boolean
+    sujet?: string; mime?: string
+  }
   try { charge = await req.json() } catch { return repondre({ refus: 'corps_illisible' }, 400) }
   const b64 = (charge.photo ?? '').replace(/^data:[^,]+,/, '')
   if (!b64) return repondre({ refus: 'sans_photo' }, 400)
   if (b64.length > CHARGE_MAX) return repondre({ refus: 'photo_trop_lourde' }, 413)
+
+  /* ⚠ LE TYPE DE L'IMAGE ÉTAIT ÉCRIT EN DUR À `image/jpeg`, ET LA PHOTO N'EN A
+     JAMAIS ÉTÉ UNE. `reduire()` réencode en WebP (`c.toBlob(r, 'image/webp',
+     0.82)`, src/db/photos.ts) et vérifie même le type obtenu après coup, parce
+     que le format demandé peut être ignoré en silence. Il partait donc du WebP
+     étiqueté JPEG, et le modèle décidait quoi en faire.
+
+     ⚠ ET CE DÉFAUT N'A JAMAIS PU SE MONTRER, CE QUI EST PRÉCISÉMENT LE DANGER.
+     La clé n'a jamais été posée : aucun appel n'est allé jusqu'au modèle depuis
+     que la spritification existe. Le jour où la fabrique s'ouvre, c'est le
+     PREMIER appel qui l'aurait découvert — et il aurait été payé.
+
+     L'étiquette voyage donc avec l'image, et elle est confrontée à une liste
+     close : un client peut mentir, et `inlineData.mimeType` part chez un tiers.
+     Le repli reste `image/jpeg` — les clients déjà installés n'envoient pas ce
+     champ, et eux envoient bien du JPEG. */
+  const MIMES = ['image/webp', 'image/png', 'image/jpeg'] as const
+  const mime = (MIMES as readonly string[]).includes(charge.mime ?? '')
+    ? charge.mime! : 'image/jpeg'
 
   // ── LE SUJET, LU AVANT TOUTE DÉPENSE ────────────────────────────────────
   const demande = charge.sujet ?? 'machine'
@@ -140,10 +191,19 @@ Deno.serve(async (req) => {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cle },
+        // ⚠ BORNÉ DANS LE TEMPS, ET LA BORNE EST SOUS CELLE DU RUNTIME. Sans
+        // elle, un modèle qui traîne fait tuer la fonction par sa limite de
+        // temps de mur (150 s, mesurée) : la réservation reste alors en base,
+        // `annuler()` n'est jamais atteint, et le pilote a payé un créneau pour
+        // un silence. Avec elle, l'abandon passe par le `catch` — donc par
+        // `annuler()` — et le créneau revient. C'est la même leçon que la
+        // branche `cle_absente` ci-dessus : ce qui n'a pas de borne finit par
+        // pendre, et ce qui pend ici se paie.
+        signal: AbortSignal.timeout(MODELE_MAX_MS),
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [
             { text: consigne },
-            { inlineData: { mimeType: 'image/jpeg', data: b64 } },
+            { inlineData: { mimeType: mime, data: b64 } },
           ] }],
           // Température 0 : le prompt est le code, il doit se rejouer.
           generationConfig: { temperature: 0, responseModalities: ['IMAGE'] },
@@ -172,6 +232,11 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     await annuler()
-    return repondre({ refus: 'reseau', detail: (e as Error).message }, 502)
+    // Un abandon sur la borne ci-dessus se NOMME. « reseau » ferait dire au
+    // pilote « le serveur est resté injoignable » alors qu'il vient de répondre.
+    const lent = (e as Error).name === 'TimeoutError'
+    return repondre({
+      refus: lent ? 'modele_lent' : 'reseau', detail: (e as Error).message,
+    }, 504)
   }
 })

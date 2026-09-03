@@ -260,7 +260,50 @@ body {
 .circuit .nom { font-size: 16px }
 .circuit .libelle { color: var(--encre-tenue) }
 
-.puces { display: flex; flex-wrap: wrap; gap: 8px }
+/* ─── UN RANG DE COMMANDES EST UNE GRILLE, PLUS UN TAS ─────────────────────
+   « les boutons c'est n'importe quoi, revois l'organisation et le layout des
+   boutons de l'app » — Julian, 3 septembre 2026, capture à l'appui.
+
+   Ce qu'on voyait sur la capture : MAINTENANCE et FINANCE sur une ligne,
+   PERFORMANCE seul en dessous, les trois de largeurs différentes ; Casque large
+   comme son mot, Combinaison large comme le sien ; « Remplacer la photo »,
+   « retirer » et « Déclarer une pièce » chacun à SA largeur, empilés en escalier.
+   Aucune de ces largeurs ne voulait dire quoi que ce soit : elles disaient la
+   longueur du mot, et rien d'autre. Un écran où la taille d'une commande ne
+   signifie rien est un écran qu'on relit à chaque fois, gants aux mains.
+
+   ⚠ `flex-wrap: wrap` EST CE QUI PRODUISAIT L'ESCALIER, et ce n'est pas une
+   erreur de réglage : c'est ce que `wrap` FAIT. Il pose les enfants à leur
+   largeur naturelle et retourne à la ligne quand ça déborde. Le résultat est
+   correct au pixel près et illisible d'un coup d'œil.
+
+   ⚠ GRILLE ET NON `flex: 1 1 <base>`, ET LA DIFFÉRENCE SE VOIT SUR LA DERNIÈRE
+   LIGNE. En flex, les enfants d'une ligne incomplète s'étirent pour la remplir :
+   huit catégories donneraient trois cellules de 109 px, puis trois, puis DEUX de
+   167 px — la dernière ligne trahit la grille des deux premières. `auto-fit`
+   pose des colonnes de largeur égale une fois pour toutes ; une ligne incomplète
+   laisse ses colonnes vides au lieu de gonfler celles qui restent.
+
+   96 px est le plancher d'une colonne : à 375 px de large — le plus petit iPhone
+   visé — il en tient trois, ce qui est le nombre de choix des deux rangs les plus
+   vus du produit (MAINTENANCE · FINANCE · PERFORMANCE, puis Moto · Catégorie ·
+   Mois). Un mot trop long pour sa colonne passe à la ligne DANS sa cellule, et
+   ses voisines s'alignent sur sa hauteur : une commande plus haute, jamais une
+   grille cassée. */
+.puces, .actions-materiel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+/* Les enfants remplissent leur cellule, en largeur comme en hauteur. Sans ça,
+   `.lien` garderait son `align-self: flex-start` — il est fait pour une commande
+   isolée dans une colonne, où s'étirer sur toute la largeur serait grotesque —
+   et rouvrirait l'escalier à l'intérieur même de la grille. */
+.puces > *, .actions-materiel > * {
+  align-self: stretch;
+  justify-content: center;
+  text-align: center;
+}
 .puce {
   min-height: var(--cible-min); padding: 10px 16px;
   font-size: 13px; font-weight: 500; letter-spacing: .06em;
@@ -626,13 +669,47 @@ body {
    gens, et un pilote qui a réglé son téléphone pour les éviter ne s'attend pas à
    ce qu'une application de carnet le lui impose. Le témoin reste alors VISIBLE
    et immobile — retirer le repère laisserait l'attente sans signe du tout. */
+/* ⚠ IL A ÉTÉ UN CARRÉ ÉVIDÉ PENDANT UNE JOURNÉE, ET IL SE LISAIT « CASE À
+   COCHER ». Un carré de 14 px cerné d'un trait de 2 px, posé à gauche d'un mot,
+   dans un bouton lui-même encadré : c'est le dessin universel d'une case, et
+   « ▢ FABRICATION » se lit comme une option qu'on n'a pas cochée, pas comme un
+   travail en cours. La rotation aurait dû le dire — sauf qu'un carré qui tourne
+   par crans ressemble, à cette taille, à un carré immobile.
+
+   Trois pixels dont un seul est allumé, et l'allumé avance : il n'existe aucune
+   commande de ce produit qui ressemble à ça, donc aucune confusion possible. Et
+   c'est le dessin le plus natif qu'on puisse faire ici — le reste du produit est
+   fait de carrés pleins alignés sur une grille (`dessins.ts`, `crispEdges`).
+
+   ⚠ IL RESTE LISIBLE ARRÊTÉ. `prefers-reduced-motion` n'est pas un confort : une
+   animation permanente déclenche des nausées chez une partie des gens. Figé, le
+   témoin garde son premier pixel allumé et les deux autres éteints — donc une
+   marque présente, et pas un espace vide où l'on se demande si l'écran a planté. */
 .attente {
-  width: 14px; height: 14px; flex: 0 0 auto; display: block;
-  border: 2px solid var(--filet); border-top-color: var(--miami);
-  animation: attente-tour .8s steps(8) infinite;
+  width: 4px; height: 4px; flex: 0 0 auto; display: block;
+  margin-right: 16px; /* la place des deux pixels dessinés en `box-shadow` */
+  background: var(--miami);
+  box-shadow: 8px 0 0 var(--filet-vif), 16px 0 0 var(--filet-vif);
+  animation: attente-chasse .9s steps(1) infinite;
 }
-.attente-rang { gap: 8px; justify-content: flex-start; align-items: center; }
-@keyframes attente-tour { to { transform: rotate(360deg); } }
+/* Centré : le témoin est presque toujours SEUL dans un bouton, à la place du
+   libellé qu'il remplace — et un libellé de bouton est centré. `flex-start`
+   le collait au bord gauche d'une cellule dont le texte, lui, est centré. */
+.attente-rang { gap: 8px; justify-content: center; align-items: center; }
+@keyframes attente-chasse {
+  0%, 33% {
+    background: var(--miami);
+    box-shadow: 8px 0 0 var(--filet-vif), 16px 0 0 var(--filet-vif);
+  }
+  34%, 66% {
+    background: var(--filet-vif);
+    box-shadow: 8px 0 0 var(--miami), 16px 0 0 var(--filet-vif);
+  }
+  67%, 100% {
+    background: var(--filet-vif);
+    box-shadow: 8px 0 0 var(--filet-vif), 16px 0 0 var(--miami);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .attente { animation: none; }
 }
@@ -1097,12 +1174,39 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 /* L'écart de 16 px séparait des mots soulignés qui, sans lui, se seraient
    touchés. Chaque geste porte maintenant son cadre : c'est LUI qui sépare,
    et 16 px de plus poussaient la troisième commande à la ligne à 375 px. */
-.actions-materiel { flex-wrap: wrap; gap: 6px 8px; }
+/* La grille est déclarée plus haut, avec `.puces` : les deux rangs ont le même
+   défaut à corriger et la même correction, et deux règles jumelles dans deux
+   coins de la feuille finissent par diverger. Il ne reste ici que ce qui lui est
+   propre. */
 /* L'annonce de coût du portrait s'ouvre SOUS la ligne d'actions et non dedans :
    comprimée entre « Photographier » et « retirer », elle rendait une colonne de
    texte de 90 px — c'est-à-dire une annonce qu'on ne lit pas, donc pas une
    annonce. Même règle qu'en tête de garage. */
-.actions-materiel > .bloc { flex: 1 0 100%; margin-top: 6px; }
+/* ⚠ NE REMETS PAS `grid-column-start: 1` SUR LE GESTE ROUGE. Essayé le
+   3 septembre 2026, et le rendu l'a réfuté en une capture.
+
+   L'intention était bonne : la grille venait de poser « retirer » à côté de
+   « Photographier », même taille, même hauteur, à un pouce d'écart — or la
+   feuille dit plus haut pourquoi le rouge a sa propre forme, « gants aux mains,
+   on tape la forme qu'on reconnaît avant d'avoir fini de lire la phrase ».
+   Forcer la première colonne renvoie bien le geste rouge à la ligne suivante.
+
+   Sauf qu'`auto-fit` EFFONDRE LES PISTES VIDES. Le geste rouge seul sur sa ligne
+   laisse la deuxième colonne vide sur toute la grille, `auto-fit` la supprime, il
+   ne reste qu'UNE colonne — et « retirer » devient une barre rouge pleine
+   largeur, c'est-à-dire la commande la plus voyante de l'écran. La règle
+   produisait exactement ce que son propre commentaire disait vouloir éviter.
+
+   Ce qui distingue le geste rouge reste donc ce qui le distinguait déjà, et qui
+   est éprouvé par un essai unitaire et une fumée : son cadre `--alerte`, son mot
+   rouge, et le mot lui-même (UX-DR8 — la couleur ne porte jamais seule). Sa
+   taille égale à celle de ses voisins n'est pas un accident, c'est la fin des
+   largeurs qui ne voulaient rien dire. */
+
+/* Le panneau d'annonce du coût prend TOUTE la largeur : c'est un bloc de lecture
+   posé sous les commandes, pas une quatrième commande. `1 / -1` est la
+   traduction en grille de ce que `flex: 1 0 100%` disait en flex. */
+.actions-materiel > .bloc { grid-column: 1 / -1; margin-top: 6px; text-align: left; }
 
 /* ─── LES ICÔNES — épique 20 ───────────────────────────────────────────────
    Un seul jeu, une seule grille (12 x 12, en aplats), et la couleur du texte
