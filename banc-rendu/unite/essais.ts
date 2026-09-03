@@ -4011,6 +4011,81 @@ const essais = [
     }
   }),
 
+  doit('rien ne peut PENDRE entre le jeton vérifié et la réponse', () => {
+    /* ⚠ CET ESSAI EXISTE PARCE QUE LA PANNE A DURÉ DEUX SEMAINES SANS QUE
+       PERSONNE NE PUISSE LA VOIR — 3 septembre 2026.
+
+       La branche « pas de clé » ornait son refus de deux nombres, lus en deux
+       allers-retours PostgREST dont le second était un `count: 'exact',
+       head: true`. Les journaux du projet le montrent trois fois, toujours
+       pareil : la passerelle journalise un 200 pour ce HEAD — la réponse EST
+       partie — puis la fonction reste muette 150 secondes et le runtime la tue.
+       Une réponse HEAD n'a pas de corps, et le client Deno en attend un.
+
+       Côté téléphone, Safari abandonnait à 60 s avec « Load failed » ; le client
+       en concluait « le serveur est resté injoignable » face à un serveur qui
+       avait répondu deux fois en 500 ms. Le seul fait vrai — la clé n'est pas
+       posée sur le projet — n'a jamais pu remonter.
+
+       Ce que cet essai garde n'est PAS « ne pas écrire head: true ». C'est la
+       propriété qui rendait la panne possible : le chemin le plus dégradé de la
+       fonction, celui qui répond quand rien n'est configuré, faisait du réseau
+       pour orner un refus que personne ne lit. Il doit être le moins cher de
+       tous, pas le plus fragile. */
+    const cle = SPRITE_SERVEUR.indexOf("const cle = Deno.env.get('GEMINI_IMAGE')")
+    const rendu = SPRITE_SERVEUR.indexOf("refus: 'cle_absente'")
+    vrai(cle > 0 && rendu > cle, "la branche « fabrique fermée » a changé de forme")
+    egal(SPRITE_SERVEUR.slice(cle, rendu).match(/\bawait\b/g)?.length ?? 0, 0,
+      'un `await` est réapparu entre le test de la clé et son refus : il peut pendre')
+
+    /* Et le HEAD lui-même reste banni de TOUTE la fonction : la propriété
+       ci-dessus protège une branche, celle-ci protège les autres.
+
+       ⚠ SUR LE CODE, PAS SUR LA PROSE — et cette précaution s'est payée tout de
+       suite : la première version de cet essai rougissait sur le commentaire
+       qui RACONTE le défaut, à trois lignes de la correction. Un dépôt dont les
+       commentaires sont la mémoire des pannes ne peut pas se doter de gardes
+       qui interdisent de les nommer, sinon la garde chasse le souvenir. */
+    const codeSeul = (t: string) =>
+      t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+    vrai(!/head:\s*true/.test(codeSeul(SPRITE_SERVEUR)),
+      'une requête HEAD est revenue dans la fonction : sa promesse ne se règle jamais côté Deno')
+
+    /* ⚠ ET L'APPEL AU MODÈLE EST BORNÉ, PARCE QU'UNE FONCTION TUÉE NE REND PAS
+       SON CRÉNEAU. Sans borne, un modèle qui traîne fait dépasser la limite de
+       temps de mur : `annuler()` n'est jamais atteint, la réservation reste en
+       base, et le pilote a payé un silence. */
+    const appel = SPRITE_SERVEUR.indexOf('generativelanguage.googleapis.com')
+    const corps = SPRITE_SERVEUR.slice(appel, appel + 1200)
+    vrai(/signal:\s*AbortSignal\.timeout/.test(corps),
+      "l'appel au modèle n'a plus de borne de temps : un modèle lent brûle un créneau")
+
+    /* ⚠ ET CELUI QUI RENONCE EN PREMIER DOIT ÊTRE CELUI QUI PEUT RENDRE LE
+       CRÉNEAU. Si le téléphone abandonnait avant le serveur, le serveur
+       finirait sa fabrication — donc la facturerait — pour une image que
+       personne ne recevrait. Les deux bornes vivent dans deux dépôts que rien
+       d'autre ne relie : c'est ici, et seulement ici, qu'elles se confrontent. */
+    const client = SOURCES[Object.keys(SOURCES).find((k) => k.endsWith('/pixel/portrait.ts'))!]
+    const ms = (texte: string, nom: string) =>
+      Number((texte.match(new RegExp(`${nom} = ([\\d_]+)`))?.[1] ?? '0').replace(/_/g, ''))
+    const serveur = ms(SPRITE_SERVEUR, 'MODELE_MAX_MS')
+    const attente = ms(client, 'ATTENTE_MAX_MS')
+    vrai(serveur > 0 && attente > 0, 'une des deux bornes de temps a disparu')
+    vrai(attente > serveur,
+      `le téléphone (${attente} ms) renonce avant le serveur (${serveur} ms) : `
+      + 'la fabrication continue et se facture pour une image que personne ne reçoit')
+
+    /* ⚠ ET LE TYPE DE L'IMAGE N'EST PLUS ÉCRIT EN DUR. Il valait `image/jpeg`
+       alors que `reduire()` réencode en WebP : le modèle recevait une étiquette
+       fausse. Le défaut n'a jamais pu se montrer — aucun appel n'est allé
+       jusqu'au modèle, faute de clé — donc c'est le PREMIER appel payant qui
+       l'aurait découvert. */
+    vrai(!/mimeType:\s*'image\//.test(codeSeul(SPRITE_SERVEUR)),
+      "le type de l'image est de nouveau écrit en dur : il ment dès que `reduire()` change de format")
+    vrai(/mime:\s*r\.blob\.type/.test(client),
+      "le client n'envoie plus le type réel de ce qui part")
+  }),
+
   doit('un sujet inconnu est refusé AVANT la moindre dépense', () => {
     /* ⚠ SE REPLIER SUR UN DÉFAUT SERAIT PIRE QUE REFUSER : le serveur
        dessinerait une moto à la place d'une combinaison, et l'appel serait

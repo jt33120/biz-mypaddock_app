@@ -27,6 +27,23 @@ import { enBlob } from './octets'
 /** Le côté long envoyé au modèle. La réponse le confirme ; c'est un repli. */
 const COTE_MODELE = 1024
 
+/**
+ * ⚠ COMBIEN DE TEMPS ON ATTEND AVANT DE RENONCER, ET POURQUOI C'EST PLUS LONG
+ * QUE CE QU'ON CROIT VOULOIR.
+ *
+ * Il n'y avait aucune borne : c'est Safari qui tranchait, vers 60 s, avec un
+ * `TypeError: Load failed` — indistinguable d'une coupure de réseau. Le pilote
+ * lisait donc « le serveur est resté injoignable » face à un serveur qui
+ * répondait.
+ *
+ * Cette borne est DÉLIBÉRÉMENT au-dessus de celle du serveur (100 s pour le
+ * modèle, `MODELE_MAX_MS`) : abandonner en premier laisserait le serveur
+ * terminer sa fabrication — donc la facturer — pour une image que personne ne
+ * recevrait. Celui qui renonce en premier doit être celui qui peut RENDRE le
+ * créneau, et c'est le serveur.
+ */
+const ATTENTE_MAX_MS = 120_000
+
 export type Issue =
   | { ok: true; sprite: Sprite; reste: number; version: string }
   | { ok: false; motif: string; message: string; reste?: number }
@@ -55,6 +72,20 @@ const MOTS: Record<string, string> = {
   modele: "Le modèle d'image n'a rien rendu cette fois. Rien n'a été décompté.",
   aucune_image: "Le modèle n'a rendu aucune image. Rien n'a été décompté.",
   reseau: 'Le serveur est resté injoignable. Rien n\'a été décompté, et la photo est intacte.',
+  /* ⚠ « INJOIGNABLE » DISAIT AUSSI CECI, ET C'ÉTAIT FAUX — 3 septembre 2026.
+     Le serveur RÉPONDAIT, en 500 ms, et restait ensuite muet 150 secondes : sa
+     branche « fabrique fermée » pendait sur une requête HEAD (voir la fonction).
+     Safari abandonnait à 60 s avec « Load failed », le client en concluait une
+     panne de réseau, et le seul fait vrai — la clé n'est pas posée — n'a jamais
+     pu remonter. Une attente qui expire n'est PAS une absence de serveur : elle
+     a son mot, et son mot ne promet rien qu'on ne sache pas. */
+  silence: "Le serveur a reçu la demande mais n'a rien répondu à temps. La photo est "
+    + "intacte ; en revanche, on ne sait pas de ce côté-ci si un portrait a été "
+    + 'fabriqué de l\'autre.',
+  /* Celui-là vient du serveur, qui a renoncé AVANT sa propre limite de temps
+     précisément pour pouvoir le dire — et pour rendre le créneau réservé. */
+  modele_lent: "Le modèle d'image a mis trop longtemps et la fabrication a été "
+    + "abandonnée. Le créneau a été rendu, et la photo est intacte.",
   /* ⚠ UNE RÉPONSE QUI ARRIVE PROUVE QUE LE SERVEUR EST JOIGNABLE — 3 septembre
      2026, rapporté depuis le téléphone. Tout échec sans champ `refus` retombait
      sur `reseau`, donc sur « le serveur est resté injoignable » : une 502 de
@@ -163,16 +194,26 @@ export const genererPortrait = async (
       // `sujet` choisit le PROMPT, et c'est autre chose : il n'est jamais nul,
       // et il ne se déduit pas de `machineId` côté serveur — un équipement et
       // une machine sans rattachement ont tous deux `machineId: null`.
-      body: JSON.stringify({ photo: b64, machineId, sujet: quoi, piloteEnSelle }),
+      // `mime` dit CE QUI PART VRAIMENT. Le serveur l'écrivait en dur à
+      // `image/jpeg` alors que `reduire()` rend du WebP : il annonçait au modèle
+      // un format que l'image n'avait pas. Personne ne pouvait s'en apercevoir
+      // — aucun appel n'est jamais allé jusqu'au modèle, faute de clé.
+      body: JSON.stringify({
+        photo: b64, machineId, sujet: quoi, piloteEnSelle, mime: r.blob.type,
+      }),
+      signal: AbortSignal.timeout(ATTENTE_MAX_MS),
     })
   } catch (cause) {
-    // Le SEUL cas où « injoignable » est vrai : la requête n'a pas abouti du
-    // tout. La cause est jointe telle quelle — coupure, préflight refusé,
-    // certificat : trois pannes que le pilote ne distingue pas et que moi je
-    // dois pouvoir lire quand il me la rapporte.
+    // ⚠ DEUX PANNES SE CACHAIENT SOUS UNE SEULE. Une requête qui n'aboutit pas
+    // et une requête à laquelle on ne répond pas ne sont pas le même fait, et
+    // elles n'appellent pas la même conduite : la première se retente au retour
+    // du réseau, la seconde se retente en sachant qu'un créneau a peut-être
+    // brûlé. Elles rendaient pourtant la même phrase.
+    const nom = (cause as Error).name
+    const motif = nom === 'TimeoutError' || nom === 'AbortError' ? 'silence' : 'reseau'
     return {
-      ok: false, motif: 'reseau',
-      message: `${dire('reseau')} (${(cause as Error).message ?? 'sans détail'})`,
+      ok: false, motif,
+      message: `${dire(motif)} (${(cause as Error).message ?? 'sans détail'})`,
     }
   }
 

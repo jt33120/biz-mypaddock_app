@@ -318,8 +318,10 @@ export const CROISEMENTS: readonly Croisement[] = [
     note: `Un pas par mois, du premier au dernier geste consigné. ${CONSIGNES}`,
   },
 
-  /* ─ FINANCE ─ `depense` est la seule des trois sources d'argent qui porte un
-     poste ; voir `argentNonCompte`, plus bas, qui le chiffre et le dit. */
+  /* ─ FINANCE ─ `depense` est la seule des QUATRE sources d'argent qui porte un
+     poste ; voir `argentNonCompte`, plus bas, qui chiffre les trois autres et le
+     dit. La quatrième, le prix d'achat de la moto, y est entrée le 3 septembre
+     2026 — c'est la plus grosse, et c'est celle qui manquait. */
   {
     domaine: 'finance', axe: 'poste', mot: 'Poste',
     phrase: (a) => `Ce que ${saisonDite(a)} ${saisonAccorde(a)} coûté, poste par poste.`,
@@ -919,11 +921,17 @@ export const circuitsChronometres = async (
 /**
  * L'ARGENT QUI N'EST PAS DANS CE TRACÉ, ET IL FAUT LE DIRE — chiffré.
  *
- * TROIS SOURCES D'ARGENT DANS CE PRODUIT, UNE SEULE PORTE UN POSTE. `depense`
- * porte `poste` (huit valeurs) ; `intervention.cout_centimes` (l'atelier, FR-43)
- * et `equipement.cout_centimes` n'en portent AUCUN — et ce n'est pas un oubli de
- * ce lot, c'est vrai depuis que l'écran de budget existe. « Par poste » n'a donc
- * jamais montré tout l'argent d'une saison.
+ * QUATRE SOURCES D'ARGENT DANS CE PRODUIT, UNE SEULE PORTE UN POSTE. `depense`
+ * porte `poste` (huit valeurs) ; `intervention.cout_centimes` (l'atelier, FR-43),
+ * `equipement.cout_centimes` et `machine.prix_achat_centimes` n'en portent AUCUN
+ * — et ce n'est pas un oubli de ce lot, c'est vrai depuis que l'écran de budget
+ * existe. « Par poste » n'a donc jamais montré tout l'argent d'une saison.
+ *
+ * ⚠ ELLES ÉTAIENT TROIS JUSQU'AU 3 SEPTEMBRE 2026, ET LA QUATRIÈME EST LA PLUS
+ * GROSSE. « Il n'y a pas le prix d'achat de la moto, c'est important » : cette
+ * phrase énumérait l'atelier et l'équipement en passant sous silence ce que la
+ * machine a coûté. Une liste d'exceptions à laquelle il manque la principale est
+ * pire qu'une liste absente — celle-là, on la croit complète.
  *
  * ⚠ ON NE CHANGE PAS LE MODÈLE POUR ÇA ICI. Poser un poste sur deux tables
  * demanderait une migration, un chemin de saisie de plus et une reprise des
@@ -937,10 +945,12 @@ export const circuitsChronometres = async (
  * parfaitement compté, et une phrase qui exagère ses trous se fait ignorer aussi
  * vite qu'une phrase qui les cache.
  *
- * ⚠ ET L'ÉQUIPEMENT SANS DATE D'ACHAT FAIT SA PROPRE CLAUSE. `achete_le` est
- * nullable — c'est un MOIS, et souvent on ne s'en souvient pas : le ranger dans
- * la saison choisie l'attribuerait à une année au hasard, l'omettre le ferait
- * disparaître. Il se dit donc à part, comme « Sans mois » se dit à part.
+ * ⚠ ET CE QUI N'A PAS DE DATE D'ACHAT FAIT SA PROPRE CLAUSE — pour l'équipement
+ * comme pour la moto. `achete_le` et `achetee_le` sont nullables : c'est un MOIS,
+ * et souvent on ne s'en souvient pas — surtout d'une moto prise d'occasion il y a
+ * six ans. Le ranger dans la saison choisie l'attribuerait à une année au hasard,
+ * l'omettre le ferait disparaître. Il se dit donc à part, comme « Sans mois » se
+ * dit à part.
  *
  * ⚠ ET SOUS « TOUTES LES SAISONS », LA CLAUSE DE DATE SE RETIRE — ce n'est pas
  * la même chose que de la laisser sans filtre d'année. La version précédente
@@ -975,13 +985,54 @@ export const argentNonCompte = async (
       `SELECT sum(cout_centimes) AS total FROM equipement WHERE achete_le IS NULL`)
     : { total: 0 }
 
+  /* ⚠ ET LA MOTO ELLE-MÊME, QUI MANQUAIT — « Il n'y a pas le prix d'achat de la
+     moto, c'est important », Julian, 3 septembre 2026.
+     Cette phrase existe pour nommer L'ARGENT QUE LE TRACÉ NE VOIT PAS, et elle
+     omettait la plus grosse somme qu'un pilote engage : ce que la machine a
+     coûté à entrer au garage. Elle annonçait « hors de ce tracé : 145,90 €
+     d'atelier, 900 € d'équipement » à quelqu'un qui a aussi posé 7 500 € sur la
+     moto — donc elle donnait une liste d'exceptions dont la principale était
+     absente, ce qui est pire qu'une liste absente : on la croit complète.
+
+     ⚠ ELLE N'ENTRE PAS DANS LE TRACÉ POUR AUTANT, ET C'EST LA MÊME RAISON QU'EN
+     BASE. `prix_achat_centimes` ne vit pas dans `depense` parce qu'une dépense
+     appartient à une saison (AD-18) : l'achat d'une moto gardée cinq ans
+     écraserait le budget de la première année et disparaîtrait des quatre
+     suivantes (migration 20260820000002). Sa place est donc exactement ici —
+     dans la phrase qui dit « cet argent ne porte aucun poste » — et nulle part
+     ailleurs. La citer ne la compte pas ; c'est tout l'objet de cette fonction.
+
+     Elle suit la forme de l'équipement, qui a déjà tranché les mêmes cas : sous
+     une saison choisie, seules les motos achetées CETTE saison-là, et celles
+     sans mois d'achat se disent à part ; sous TOUTES, une seule somme, datée ou
+     non — il n'y a plus rien à mettre à part quand aucune année n'est écartée. */
+  const bm = bornes('substr(achetee_le, 1, 4)', annees, 'texte')
+  const moto = await db.get<{ total: number | null }>(
+    annees.length
+      ? `SELECT sum(prix_achat_centimes) AS total FROM machine
+          WHERE achetee_le IS NOT NULL${bm.et}`
+      : `SELECT sum(prix_achat_centimes) AS total FROM machine`,
+    bm.params)
+
+  const motoSansDate = annees.length
+    ? await db.get<{ total: number | null }>(
+      `SELECT sum(prix_achat_centimes) AS total FROM machine WHERE achetee_le IS NULL`)
+    : { total: 0 }
+
   const morceaux: string[] = []
   const a = atelier.total ?? 0
   const e = equipe.total ?? 0
   const o = orphelin.total ?? 0
+  const m = moto.total ?? 0
+  const ms = motoSansDate.total ?? 0
   if (a > 0) morceaux.push(`${formaterEuros(a)} d'atelier`)
   if (e > 0) morceaux.push(`${formaterEuros(e)} d'équipement`)
   if (o > 0) morceaux.push(`${formaterEuros(o)} d'équipement sans date d'achat`)
+  // « de moto » et pas « d'achat de moto » : la phrase énumère déjà des postes,
+  // et le mot « achat » y ferait croire à une catégorie de dépense — ce que
+  // cette somme n'est justement pas.
+  if (m > 0) morceaux.push(`${formaterEuros(m)} de moto`)
+  if (ms > 0) morceaux.push(`${formaterEuros(ms)} de moto sans date d'achat`)
   if (!morceaux.length) return null
   // La phrase se construit en LISTE plutôt qu'en accord : « 145,90 € d'atelier ne
   // porte » et « 145,90 € d'atelier et 320 € d'équipement ne portent » auraient

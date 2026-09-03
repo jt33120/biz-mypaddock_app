@@ -10,9 +10,28 @@ et je continue. Chaque entrée dit ce qui est bloqué, par quoi, et ce que ça d
 **Ce qui attend :** poser le secret `GEMINI_IMAGE` dans Supabase → Project Settings →
 Edge Functions → Secrets.
 
-**Pourquoi c'est bloqué :** les crédits ont été épuisés le 19 août 2026
-(`429 · prepayment credits are depleted`). Tant qu'ils ne sont pas rechargés, poser la clé
-ne servirait à rien — la fonction appellerait et recevrait un refus.
+**Pourquoi c'est bloqué — et ce point a changé le 3 septembre 2026.** Tu as écrit « je
+pense avoir des crédits clé Gemini ». C'est possible, et ça ne change rien : **le secret
+n'est pas posé sur le projet**. Ce n'est plus une hypothèse, c'est lu dans les journaux.
+
+La fonction n'a qu'une seule branche qui lise `pilote.quota_sprites` puis compte
+`generation` : celle qui s'exécute quand `GEMINI_IMAGE` est absent. Ces deux requêtes
+apparaissent dans les journaux à chaque fois que tu as tapé « En faire un portrait »
+(2 sept. 06:36, 3 sept. 05:06 et 05:34), à 500 ms du démarrage de la fonction. Aucun appel
+n'est jamais parti chez Gemini — donc aucun crédit n'a jamais été consommé, ni le 19 août
+ni depuis.
+
+Le refus du 19 août (`429 · prepayment credits are depleted`) reste vrai pour ce jour-là.
+Mais la panne d'aujourd'hui est en amont : pas de clé, pas d'appel.
+
+**Ce qu'il faut faire, dans cet ordre :**
+
+1. Poser le secret (Supabase → Project Settings → Edge Functions → Secrets), ou en ligne
+   de commande : `supabase secrets set GEMINI_IMAGE=… --project-ref oghmwkiklwaptjfouprx`.
+2. Retaper « En faire un portrait ». Si les crédits sont bien là, le portrait sort. S'ils
+   ne le sont pas, tu liras **« Le modèle d'image a refusé la demande »** avec le code
+   exact — plus jamais « le serveur est resté injoignable », qui était faux et t'a coûté
+   deux semaines de diagnostic (voir § 14).
 
 **Ce que ça débloque :** la fabrique de portraits pixel (récit 3bis.3). Tout le reste est
 en place et vérifié : fonction déployée, quota de 3 par compte, réservation avant appel,
@@ -504,3 +523,47 @@ Les colonnes de la tenue, elles, n'ont besoin de rien : toutes les règles sont 
 
 **La leçon, en une ligne :** un lot qui touche `supabase/` n'est pas livré quand la PR est
 mergée. Il est livré quand la migration est appliquée ET la fonction redéployée.
+
+---
+
+## 14 · Pourquoi « le serveur est resté injoignable » était faux — corrigé le 3 septembre 2026
+
+**Tu n'as rien à faire ici.** C'est le compte rendu de la panne que ton code d'erreur a
+permis de trouver, et il vaut d'être gardé parce que la leçon se reproduira.
+
+**Ce que tu voyais :** un témoin qui tourne pendant une minute, puis *« Le serveur est
+resté injoignable. Rien n'a été décompté, et la photo est intacte. (Load failed) »*.
+
+**Ce qui se passait vraiment.** Le serveur répondait — deux fois, en 500 ms. Puis il se
+taisait 150 secondes et le runtime le tuait. La trace, relevée trois fois à l'identique :
+
+    booted (30 ms)
+    GET  /auth/v1/user                        200
+    GET  /rest/v1/pilote?select=quota_sprites 200   ← résolu
+    HEAD /rest/v1/generation?select=id        200   ← la passerelle répond…
+    … 150 s de silence …                            ← … mais la promesse, jamais
+    shutdown
+
+La branche « la fabrique n'est pas ouverte » ornait son refus de deux nombres, lus en deux
+allers-retours. Le second était une requête **HEAD** — et une réponse HEAD n'a pas de corps,
+là où le client Deno en attend un. La promesse ne se réglait jamais. Safari, lui, abandonne
+à 60 s avec `TypeError: Load failed`, que le client traduisait en « injoignable ».
+
+Donc : **la branche chargée de dire poliment « rien n'est branché » était précisément celle
+qui ne pouvait pas répondre.** Et c'est la seule que tu pouvais atteindre, faute de clé.
+
+**Ce qui a été corrigé** (fonction redéployée en v5, elle répond aujourd'hui en 0,4 s) :
+
+- la branche ne lit plus rien du tout — zéro `await` entre le jeton et la réponse ;
+- l'appel au modèle est borné à 100 s, sous la limite du runtime : un modèle lent rend
+  désormais ton créneau au lieu de le brûler ;
+- le téléphone attend 120 s, donc plus longtemps que le serveur — celui qui renonce en
+  premier doit être celui qui peut rembourser ;
+- une attente qui expire ne se dit plus « injoignable » : elle a son propre message, qui
+  ne promet pas ce qu'on ne sait pas ;
+- le type de l'image part avec elle. Il était écrit en dur à `image/jpeg` alors que le
+  téléphone envoie du **WebP**. Ce défaut n'avait jamais pu se montrer — aucun appel n'est
+  allé jusqu'au modèle — donc c'est ton premier portrait payant qui l'aurait découvert.
+
+**La leçon, en une ligne :** le chemin le plus dégradé d'un service doit être le moins cher
+et le plus sûr, pas celui qui fait du réseau pour orner un refus.

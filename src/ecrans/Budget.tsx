@@ -741,8 +741,15 @@ function LigneMateriel({ db, e, genre, onEcrit }: {
            été une règle à retenir de plus, pour rien.
 
            « Retirer » tout court, lui, reste et détruit vraiment : il oublie la
-           pièce d'équipement. Il porte donc le rouge, et pas ses voisins. */
-        <div className="rang actions-materiel">
+           pièce d'équipement. Il porte donc le rouge, et pas ses voisins.
+
+           ⚠ ET `rang` A QUITTÉ CE DIV LE 3 SEPTEMBRE 2026. Il posait
+           `justify-content: space-between` sur ce qui est devenu une grille de
+           colonnes égales — inerte aujourd'hui, trompeur demain pour qui lirait
+           la classe en croyant qu'elle règle encore quelque chose. C'est ce rang
+           que Julian montrait en disant « les boutons c'est n'importe quoi » :
+           trois commandes de trois largeurs, poussées aux deux bords. */
+        <div className="actions-materiel">
           <button className="lien" onClick={() => fichier.current?.click()}>
             {e.photo_chemin ? 'Remplacer la photo' : 'Photographier'}
           </button>
