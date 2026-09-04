@@ -758,7 +758,7 @@ function LigneMateriel({ db, e, genre, onEcrit }: {
               seul : conditionner la dépense sur la colonne, c'est offrir un
               chemin qui ne peut pas aboutir. */}
           {photoUrl && (
-            <Refaire db={db} aUnPortrait={!!e.sprite} enCours={enCours}
+            <Refaire aUnPortrait={!!e.sprite} enCours={enCours}
                      onFabriquer={() => void fabriquer()} />
           )}
           <button className="lien destructif" disabled={occupe}

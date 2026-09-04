@@ -112,8 +112,8 @@ Deno.serve(async (req) => {
   // cher et le plus sûr, pas celui qui fait deux appels authentifiés pour orner
   // un refus. Les deux nombres n'avaient d'ailleurs aucun lecteur : le client
   // rend `issue.message` et rien d'autre sur un échec (`Garage.tsx`,
-  // `Budget.tsx`), et ce qu'un compte inclut, il le sait déjà tout seul
-  // (`PORTRAITS_INCLUS`, confronté à la migration par un essai unitaire).
+  // `Budget.tsx`), et ce qu'un compte a en réserve, il le lit désormais tout
+  // seul auprès de `mon_solde()` — le compteur en haut à gauche vient de là.
   // Zéro `await` entre le jeton et la réponse : plus rien ne PEUT y pendre.
   const cle = Deno.env.get('GEMINI_IMAGE')
   if (!cle) return repondre({ refus: 'cle_absente' }, 503)

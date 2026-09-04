@@ -14,6 +14,7 @@ import {
   tenueDuJour, type GenreDeTenue, type PieceDeTenue, type TenueDuJour,
 } from './db/equipement'
 import { Depense } from './ecrans/Depense'
+import { Credits } from './ecrans/Credits'
 import { jaugeBudget, repereMensuel } from './db/budget'
 import { NoterUneDepense } from './ecrans/Budget'
 import { surCompte, type Identite } from './db/compte'
@@ -189,6 +190,11 @@ export default function App() {
   // est caché dessous.
   useEffect(() => { if (db || panne) retirerLEcranDeChargement() }, [db, panne])
   const [ecran, setEcran] = useState<Ecran>('accueil')
+  /* Le compteur de crédits se relit sur ce signal. Il n'écoute rien en continu :
+     un solde bouge sur un geste payant ou sur un ajout côté serveur, et tenir
+     une connexion ouverte pour un nombre qui change trois fois par an serait
+     payer cher un rafraîchissement que personne n'attend à la seconde. */
+  const [soldeSignal, setSoldeSignal] = useState(0)
   /** L'accueil ouvre une dépense libre ; une journée conserve son rattachement.
    *  Sans ce témoin, le dernier roulage resté en mémoire gagnerait en silence. */
   const [depenseLibre, setDepenseLibre] = useState(false)
@@ -287,6 +293,13 @@ export default function App() {
 
 
   const rafraichir = useCallback(async (base: Db) => {
+    /* ⚠ LE SOLDE SE RELIT ICI ET PAS AILLEURS, parce qu'ici est déjà la liste
+       exacte des moments où il peut avoir bougé : à l'ouverture, à chaque
+       écriture, au retour au premier plan. Garder un portrait passe par
+       `onEcrit`, donc par ce chemin — un compteur branché sur un abonnement à
+       part aurait fini par rater le seul instant qui compte, celui où le crédit
+       vient d'être dépensé. */
+    setSoldeSignal((n) => n + 1)
     setListe(await listerRoulages(base))
     // AD-6 : l'accueil se recalcule À L'OUVERTURE et à chaque écriture. Rien ne
     // tourne pendant que l'application est fermée, donc rien ne peut avoir
@@ -585,6 +598,12 @@ export default function App() {
       )}
       <div className="ecran" data-environnement={ENVIRONNEMENT}
            data-abri={abri ? (abri.menace ? 'menace' : 'persistant') : 'inconnu'}>
+        {/* ⚠ EN HAUT À GAUCHE, ET DANS LA COQUE — donc sur tous les écrans. Les
+            crédits se dépensent au garage et dans l'équipement, et se liront
+            demain ailleurs : un compteur posé sur l'écran où l'on dépense se
+            découvre au moment où il est trop tard pour en tenir compte. Il ne
+            s'affiche pas sans compte — voir `Credits.tsx`, qui dit pourquoi. */}
+        <Credits signal={soldeSignal} />
         {/* ⚠ ELLE SE DIT UNE FOIS ET NE SE REDIT PLUS — récit 22.3. Elle porte
             la seule chose que le pilote ne peut pas déduire de l'écran : ce qui
             vivait sur son téléphone est maintenant aussi ailleurs. Elle ne

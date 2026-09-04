@@ -97,7 +97,18 @@ await page.click('text=Refaire le portrait pixel')
 await page.waitForSelector('text=ce que ça consomme', { timeout: 20_000 })
 const annonce = (await page.textContent('.garage-titre .bloc')).replace(/\s+/g, ' ').trim()
 console.log('③ annonce :', annonce)
-verifier('l\'annonce dit le prix', /0,16\s*€/.test(annonce), annonce)
+/* ⚠ ELLE EXIGEAIT « 0,16 € », ET CE PRIX A QUITTÉ L'ÉCRAN LE 3 SEPTEMBRE 2026.
+   « Ne pas marquer 16 cts, faire un système de crédit » — Julian. Le centime
+   n'a pas disparu du produit : `generation.cout_centimes` l'enregistre toujours,
+   parce que c'est la seule base honnête pour fixer un prix de vente. Il a
+   disparu de l'ANNONCE, parce qu'il ne servait pas à décider : il demandait au
+   pilote de convertir un prix d'achat en jugement sans lui dire ce qui lui
+   reste. Ce qui est épinglé ici est donc ce que l'annonce doit dire désormais —
+   un coût en crédits, l'unité que le pilote dépense — et l'ABSENCE du centime,
+   qui est l'autre moitié de la demande et qu'une garde sur le seul mot
+   « crédit » laisserait revenir sans bruit. */
+verifier('l\'annonce dit le coût en crédits', /\bcrédits?\b/i.test(annonce), annonce)
+verifier('l\'annonce ne parle plus en euros', !/€|centimes?\b/i.test(annonce), annonce)
 // ⚠ CETTE ASSERTION ÉPINGLAIT LA MAUVAISE PHRASE, et c'est ce qui a laissé le
 //    défaut vivre : elle exigeait « en a 3 inclus » d'un essai qui tourne SANS
 //    COMPTE. Elle validait donc, à l'endroit exact où le produit promettait un

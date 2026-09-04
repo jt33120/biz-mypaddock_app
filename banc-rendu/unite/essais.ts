@@ -107,7 +107,7 @@ import { direLAbri, type Abri } from '../../src/db/abri'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
-import { COUT_PORTRAIT_CENTIMES, PORTRAITS_INCLUS } from '../../src/pixel/portrait'
+import { CREDITS_ACCUEIL, CREDITS_PORTRAIT } from '../../src/db/credits'
 // Les écrans et la feuille de style LUS À LA LETTRE — récit 21.3. Rien dans le
 // code ne relie un libellé de bouton à la classe qui l'habille : c'est du texte
 // dans du JSX, et un oubli n'y fait ni erreur de type ni écran cassé. Il rend
@@ -2624,29 +2624,108 @@ const essais = [
       'Legal.tsx ne cite plus le bouton par son nom exact')
   }),
 
-  doit('l\'annonce du coût d\'un portrait dit le vrai quota du serveur', () => {
-    // Deux dépôts que rien ne relie : le nombre ANNONCÉ avant de dépenser vit
-    // dans portrait.ts, le nombre qui AUTORISE vraiment vit dans une migration
-    // Postgres. Le jour où l'un bouge, l'écran se met à mentir sans que rien ne
-    // casse — et c'est un mensonge sur de l'argent.
-    const migration = Object.entries(MIGRATIONS)
-      .find(([c]) => c.includes('portrait_et_quota'))?.[1] ?? ''
-    const defaut = migration.match(/quota_sprites\s+smallint\s+not null\s+default\s+(\d+)/i)?.[1]
-    vrai(!!defaut, 'le défaut de quota_sprites est introuvable dans la migration')
-    egal(PORTRAITS_INCLUS, Number(defaut), 'portraits inclus annoncés vs défaut serveur')
+  doit("l'annonce du coût d'un portrait dit le vrai solde du serveur", () => {
+    /* Deux dépôts que rien ne relie : le nombre ANNONCÉ avant de dépenser vit
+       dans `db/credits.ts`, le nombre qui AUTORISE vraiment vit dans une
+       migration Postgres. Le jour où l'un bouge, l'écran se met à mentir sans
+       que rien ne casse — et c'est un mensonge sur de l'argent.
 
-    // ⚠ ET LE PRIX N'AVAIT AUCUNE GARDE, alors qu'il est celui des deux nombres
-    // qui s'affiche EN EUROS. `vrai(COUT_PORTRAIT_CENTIMES > 0)` ne disait qu'une
-    // chose — que le portrait n'est pas annoncé gratuit — et laissait passer
-    // n'importe quel montant faux. Ce qui décompte vraiment est
-    // `plafond.cout_unitaire_centimes`, dans le filet monétaire : c'est lui que
-    // l'écran promet au pilote avant qu'il tape.
-    const filet = Object.entries(MIGRATIONS)
-      .find(([c]) => c.includes('filet_monetaire'))?.[1] ?? ''
-    const cout = filet.match(/cout_unitaire_centimes\s+integer\s+not null\s+default\s+(\d+)/i)?.[1]
-    vrai(!!cout, 'le défaut de cout_unitaire_centimes est introuvable dans la migration')
-    egal(COUT_PORTRAIT_CENTIMES, Number(cout), 'prix annoncé en euros vs coût unitaire du serveur')
-    vrai(COUT_PORTRAIT_CENTIMES > 0, 'un portrait annoncé gratuit est un portrait qui surprend')
+       ⚠ CET ESSAI A CHANGÉ D'UNITÉ LE 3 SEPTEMBRE 2026, PAS DE RAISON D'ÊTRE.
+       Il confrontait `PORTRAITS_INCLUS` à `pilote.quota_sprites` et
+       `COUT_PORTRAIT_CENTIMES` à `plafond.cout_unitaire_centimes`. Les deux
+       colonnes de quota n'existent plus — il n'y a qu'un solde, en crédits — et
+       le centime ne s'affiche plus nulle part (« Ne pas marquer 16 cts »,
+       Julian). Ce sont donc les nombres en CRÉDITS qui se confrontent
+       maintenant, et c'est exactement la même garde : ce que l'écran promet
+       doit être ce que le serveur applique. */
+    const credits = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('un_seul_solde_en_credits'))?.[1] ?? ''
+    vrai(!!credits, 'la migration du solde en crédits est introuvable')
+
+    const lu = (colonne: string) => credits
+      .match(new RegExp(`${colonne}\\s+integer not null default\\s+(\\d+)`, 'i'))?.[1]
+
+    const accueil = lu('credits_accueil')
+    vrai(!!accueil, 'le défaut de credits_accueil est introuvable dans la migration')
+    egal(CREDITS_ACCUEIL, Number(accueil), 'crédits d\'accueil annoncés vs défaut serveur')
+
+    const prix = lu('credits_sprite')
+    vrai(!!prix, 'le défaut de credits_sprite est introuvable dans la migration')
+    egal(CREDITS_PORTRAIT, Number(prix), 'prix annoncé en crédits vs prix appliqué par le serveur')
+    vrai(CREDITS_PORTRAIT > 0, 'un portrait annoncé gratuit est un portrait qui surprend')
+
+    /* ⚠ ET LE CENTIME N'A PAS DISPARU DE LA BASE, seulement de l'écran. C'est
+       la distinction qui tient tout ce lot : le centime MESURE ce que ça coûte à
+       Julian — seule base honnête pour fixer un prix de vente (A-FAIRE §6 ③) —
+       le crédit SE DÉPENSE. Effacer `cout_centimes` du registre en même temps
+       que l'affichage aurait rendu ce prix indéterminable pour toujours. */
+    vrai(/credits\s+integer not null default/i.test(credits),
+      'le registre ne dit plus combien de crédits une ligne a consommés')
+  }),
+
+  doit("un acte qui ne dessine rien n'a pas à nommer un prompt", () => {
+    /* ⚠ CET ESSAI VIENT D'UN DÉFAUT QUI N'AURAIT PU SE MONTRER QUE LE JOUR DE
+       LA MISE EN SERVICE. `reserver_manuel`, écrite le 25 août, insère dans
+       `generation` sans renseigner `version` ni `modele` — deux colonnes alors
+       `not null` sans défaut. CHAQUE recherche de manuel aurait donc échoué en
+       500, avant même d'appeler Mistral.
+
+       Il est resté invisible trois semaines parce que `MISTRAL_API_KEY` n'a
+       jamais été posée : la fonction refuse en `cle_absente` AVANT d'atteindre
+       la réservation. C'est la même forme de piège que le `mimeType` écrit en
+       dur côté sprite — un défaut qu'un interrupteur cache, et que le PREMIER
+       usage réel découvre. Trouvé en éprouvant le contrat des réservations
+       après le passage aux crédits, pas à la relecture.
+
+       Ce que la garde retient n'est pas « la fonction doit remplir ces
+       colonnes » : c'est que la contrainte doit être POSÉE LÀ OÙ ELLE A UN SENS.
+       Une recherche de manuel n'a pas de version de prompt — l'exiger d'elle
+       était le défaut. Et la contrainte conditionnelle RENFORCE le sprite au
+       passage : avant, `not null` acceptait une chaîne vide. */
+    const manuel = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('un_manuel_n_a_pas_de_prompt'))?.[1] ?? ''
+    vrai(!!manuel, 'la migration qui libère version/modele est introuvable')
+
+    for (const colonne of ['version', 'modele'])
+      vrai(new RegExp(`alter column ${colonne}\\s+drop not null`, 'i').test(manuel),
+        `\`generation.${colonne}\` reste obligatoire pour tous les actes : le manuel ne peut pas réserver`)
+
+    // Et le sprite, lui, doit toujours dire d'où il sort — sinon on ne saurait
+    // plus sur quelle grille spritifier, ni rejouer une génération.
+    vrai(/check \(acte <> 'sprite' or \(version is not null and modele is not null\)\)/i.test(manuel),
+      'un sprite peut désormais naître sans dire son prompt ni son modèle')
+  }),
+
+  doit('personne ne peut se créditer soi-même', () => {
+    /* ⚠ LA GARDE VIENT D'UN DÉFAUT RÉEL, PAYÉ LE 19 AOÛT 2026 : la politique de
+       `pilote` était `for all`, et un simple `PATCH /rest/v1/pilote` portait
+       `quota_sprites` à 32767 — 5 242 € en un appel, relevable autant de fois
+       qu'on veut. Le solde en crédits rouvrirait exactement le même trou s'il
+       était écrivable par le compté.
+
+       Trois propriétés le ferment, et les trois se lisent dans la migration :
+       le registre des crédits accordés n'a QUE une politique de lecture ;
+       `crediter()` est retirée à tous les rôles joignables depuis un
+       navigateur ; et le solde se DÉRIVE au lieu d'être stocké, donc il n'y a
+       aucune colonne à écrire même si l'on trouvait un chemin. */
+    const credits = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('un_seul_solde_en_credits'))?.[1] ?? ''
+
+    const politiques = [...credits.matchAll(/create policy[^;]*?on credit_accorde\s+for (\w+)/gi)]
+      .map((m) => m[1].toLowerCase())
+    egal(politiques, ['select'],
+      'credit_accorde a une politique autre que la lecture : le compté peut se créditer')
+
+    vrai(/revoke all on function crediter\([^)]*\) from [^;]*authenticated/i.test(credits),
+      '`crediter` reste joignable depuis un navigateur')
+
+    // Le solde est une FONCTION, pas une colonne. Une colonne `credits` sur
+    // `pilote` serait une surface d'écriture de plus, et c'est précisément
+    // celle qui avait été trouvée ouverte.
+    vrai(/create or replace function solde_credits/i.test(credits),
+      'le solde ne se dérive plus : il est redevenu une colonne, donc écrivable')
+    vrai(!/alter table pilote add column if not exists credits\s+integer/i.test(credits),
+      'un solde stocké est réapparu sur `pilote` — il dérivera du registre')
   }),
 
   /* ─── RÉCIT 17.1 — UNE JOURNÉE ANNONCÉE NE SE COMPTE PAS COMME VÉCUE ──────

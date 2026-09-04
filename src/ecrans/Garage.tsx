@@ -298,7 +298,7 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
             {corriger ? 'Annuler la modification' : machine.annee ? 'Modifier la moto' : "Ajouter l'année"}
           </button>
           {photoUrl && (
-            <Refaire db={db} aUnPortrait={!!machine.sprite} enCours={enCours}
+            <Refaire aUnPortrait={!!machine.sprite} enCours={enCours}
                      onFabriquer={() => void fabriquer()} />
           )}
         </div>

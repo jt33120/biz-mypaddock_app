@@ -33,6 +33,10 @@ Mais la panne d'aujourd'hui est en amont : pas de clé, pas d'appel.
    exact — plus jamais « le serveur est resté injoignable », qui était faux et t'a coûté
    deux semaines de diagnostic (voir § 14).
 
+**Ton compte ne compte plus ses crédits** depuis le 3 septembre (§ 6) : il est en illimité,
+et le compteur en haut à gauche affiche ∞. Rien ne t'arrêtera au troisième essai — sauf le
+plafond global des 24 h, qui protège ta facture et pas ton quota.
+
 **Ce que ça débloque :** la fabrique de portraits pixel (récit 3bis.3). Tout le reste est
 en place et vérifié : fonction déployée, quota de 3 par compte, réservation avant appel,
 spritification déterministe. Il ne manque que la clé.
@@ -277,63 +281,75 @@ bibliothèque.
 
 ---
 
-## 6 · Le système de crédit — ta décision de monétisation à écrire
+## 6 · Le système de crédit — ✅ TRANCHÉ ET EN LIGNE le 3 septembre 2026
 
-**Ton idée, du 19 août :** « On va avoir pas mal de fonctionnalités IA : analyse de vidéo,
-génération d'image. Penser à un système de crédit pour ceux qui veulent ces fonctionnalités
-ou pas. Ne pas l'inclure dans un premium qui pourrait déborder, et quand plus de crédit, ça
-s'arrête. À la place ou au-dessus d'un freemium ? »
+**Ta décision, mot pour mot :** « Ne pas marquer 16 cts, faire un système de crédit et ce
+compte test en illimité, avec un compteur en haut à gauche qui peut se faire rajouter. Un
+crédit couvre un appel IA en gros sur la clé Gemini, la clé Mistral gratuite pour le moment. »
 
-**Ce que le code fait DÉJÀ, et qui va dans ton sens.** Le mécanisme existe, il n'est
-simplement pas achetable :
+Elle referme les deux premiers manques que cette entrée décrivait depuis le 19 août — un
+solde générique au lieu d'un quota par fonctionnalité, et un prix en crédits par acte.
 
-- `pilote.quota_sprites` — un solde, par compte, défaut 3.
-- `generation` — un registre : une ligne par appel, avec son coût réel en centimes. **Aucune
-  politique d'insertion** : seule la fonction serveur y écrit. Un compteur que le compté peut
-  écrire ne compte rien.
-- `plafond` — un plafond global sur 24 h, en base et non compilé, plus le prix unitaire.
-- `reserver_generation()` — réserve **avant** d'appeler, sous verrou consultatif, et refuse
-  si le solde ou le plafond est atteint. « Quand plus de crédit, ça s'arrête » est déjà vrai.
+**Ce qui est en place** (migration `20260903000001`, appliquée et vérifiée) :
 
-**Ce qui manque, et c'est exactement ce que tu décris :**
+| | |
+|---|---|
+| Un seul solde | Fini `quota_sprites` (3) et `quota_manuels` (5) : deux portefeuilles pour un pilote qui n'en voit qu'un. Les deux colonnes sont supprimées. |
+| Le solde se **dérive** | Accueil + accordés − consommés. Aucune colonne ne le stocke : un solde stocké et un registre finissent par se contredire, et c'est le registre qui a raison. |
+| Un portrait | **1 crédit** (`plafond.credits_sprite`) |
+| Une recherche de manuel | **0 crédit** (`plafond.credits_manuel`) — la clé Mistral est gratuite pour le moment |
+| Crédits d'accueil | **3** par compte (`plafond.credits_accueil`) |
+| Ton compte | **illimité** (`pilote.credits_illimites`) |
+| Le compteur | En haut à gauche, sur tous les écrans. Absent sans compte. |
 
-1. **Un solde générique au lieu d'un quota par fonctionnalité.** `quota_sprites` est nommé
-   d'après une seule fonctionnalité. L'analyse de vidéo arriverait avec `quota_videos`, et on
-   aurait deux portefeuilles là où le pilote en voit un. À renommer en un solde unique, avec
-   un prix en crédits par acte — une génération d'image n'a aucune raison de coûter autant
-   qu'une minute de vidéo analysée.
-2. **De quoi en acheter.** C'est la seule vraie brique manquante, et elle demande un compte
-   marchand.
-3. **Le prix.** Le coût réel est connu et déjà écrit ligne par ligne dans `generation` : c'est
-   la seule base honnête pour fixer un tarif, et elle sera mesurée avant d'être devinée.
+**Les trois prix sont des DONNÉES, pas du code.** Le jour où Mistral se met à facturer, tu
+passes `credits_manuel` à 1 — sans redéploiement, sans PR, sans moi :
 
-**⚠ CORRECTION — L'ARGUMENT QUI ÉTAIT ÉCRIT ICI ÉTAIT PÉRIMÉ, ET IL VENAIT DE MOI.**
+```sql
+update plafond set credits_manuel = 1;
+```
 
-Cette entrée disait : « le produit s'ouvre onze fois par an, donc l'abonnement mensuel est une
-machine à résiliation ». C'est faux depuis le 18 août 2026, et la rétractation est écrite noir
-sur blanc dans `_bmad/custom/mypaddock-contraintes.md` §3 : **onze est le nombre de ROULAGES,
-pas le nombre d'ouvertures.** On en avait tiré un rythme d'usage qui n'a jamais été mesuré.
-« Aucun nombre ne remplace celui-là, et c'est délibéré. »
+**Pour te rajouter des crédits** (ou en donner à quelqu'un). Chaque ajout laisse une trace
+avec son motif, parce qu'un solde que personne ne peut expliquer est un solde auquel personne
+ne croit :
 
-Conséquence directe : **l'abonnement n'est plus disqualifié d'office.** Je l'avais pourtant
-répété comme un acquis, ici et de vive voix — c'est le genre d'argument qui s'installe parce
-qu'il sonne bien, et qui survit à sa propre réfutation.
+```sql
+select crediter('4ab5b551-e695-41f9-9f90-8009887574e2', 20, 'test de recette');
+```
 
-Ce qui reste vrai, et qui est plus étroit : **le moment de saisie au paddock** est rare —
-gants aux mains, plein soleil, sans réseau. C'est une contrainte d'interface, pas un argument
-de tarification.
+Elle rend le nouveau solde. Un montant **négatif** est accepté — c'est ainsi qu'on reprend un
+geste commercial ou qu'on corrige une erreur, et le registre garde la trace des deux sens.
+`crediter` est retirée à tous les rôles joignables depuis un navigateur : c'est la leçon du
+19 août, où un `PATCH /rest/v1/pilote` portait un quota à 32767, soit 5 242 € en un appel.
 
-**Ce qui est vraiment écarté, et pour un tout autre motif : le pass saison.** La revue produit
-lui reproche de fabriquer un coût échoué — « j'ai payé, il faut que ça serve » — c'est-à-dire
-exactement la pression à rouler que l'interdit n°4 proscrit. Et le PRD juge ce défaut PIRE
-qu'une mécanique de jeu, parce qu'il est invisible dans l'interface : rien à l'écran ne le
-montre, il n'agit que dans la tête du pilote.
+**⚠ « ILLIMITÉ » PORTE SUR LE SOLDE, PAS SUR LA FACTURE.** Ton compte ne consomme aucun
+crédit, mais il reste sous le plafond global des 24 h — 5 € par jour, tous comptes confondus,
+soit une trentaine de portraits. C'est le seul garde-fou contre une boucle qui partirait en
+vrille sur ta vraie clé, et le retirer pour un compte de test serait le retirer précisément
+là où on fait des bêtises. Il se relève en base si la recette l'exige :
 
-**Ma recommandation, à confirmer par toi**, débarrassée de l'argument mort : crédit prépayé
-pour tout ce qui appelle une IA, noyau gratuit et sans limite. Deux raisons qui tiennent
-toutes seules — il **facture exactement ce qui coûte**, et il ne crée aucun coût échoué. À
-trancher quand un vrai utilisateur aura demandé une de ces fonctionnalités : c'est le seul
-moment où la réponse coûte moins qu'elle ne rapporte.
+```sql
+update plafond set par_jour_centimes = 2000;
+```
+
+**Le centime n'a pas disparu, il a quitté l'écran.** `generation.cout_centimes` enregistre
+toujours le coût réel, acte par acte. C'est délibéré et c'est le point ③ ci-dessous : le prix
+de vente se fixera sur des relevés, pas sur une intuition.
+
+**Ce qui reste, et c'est toujours ta décision : VENDRE.** Il n'y a aucun moyen d'acheter des
+crédits — il faut un compte marchand, et c'est le seul point de cette entrée que le code ne
+peut pas trancher à ta place. Ma recommandation n'a pas bougé : crédit prépayé pour tout ce
+qui appelle une IA, noyau gratuit et sans limite. Il facture exactement ce qui coûte, et il ne
+crée aucun coût échoué — contrairement au pass saison, que la revue produit écarte parce qu'il
+fabrique une pression à rouler (« j'ai payé, il faut que ça serve »), invisible dans
+l'interface et donc impossible à corriger par elle.
+
+**⚠ Rappel de l'argument mort, pour qu'il ne revienne pas.** Cette entrée a longtemps dit
+« le produit s'ouvre onze fois par an, donc l'abonnement est une machine à résiliation ».
+C'est faux : **onze est le nombre de ROULAGES, pas d'ouvertures**
+(`_bmad/custom/mypaddock-contraintes.md` §3). L'abonnement n'est donc pas disqualifié
+d'office. Ce qui reste vrai, et qui est plus étroit : le moment de saisie **au paddock** est
+rare, gants aux mains et sans réseau — une contrainte d'interface, pas de tarification.
 
 ---
 

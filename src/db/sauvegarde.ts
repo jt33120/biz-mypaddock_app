@@ -297,12 +297,19 @@ export const sauvegarder = async (
   //
   // La table `pilote` n'a plus qu'une politique de LECTURE depuis le filet
   // monétaire, et c'est volontaire : avec `for all`, un simple PATCH posait
-  // `quota_sprites` à 32767 — 5 242 € de générations d'image. Un quota que le
+  // `quota_sprites` à 32767 — 5 242 € de générations d'image. Un compteur que le
   // compté peut écrire ne compte rien.
+  //
+  // ⚠ `quota_sprites` N'EXISTE PLUS (migration 20260903000001) : il n'y a qu'un
+  // solde, en crédits, et il ne vit sur aucune colonne écrivable — il se dérive
+  // du registre des crédits accordés moins celui des actes consommés. La leçon,
+  // elle, n'a pas bougé d'un mot, et c'est pour ça que ce paragraphe reste :
+  // c'est ce défaut-là qui a fermé la table à l'écriture, et qui explique
+  // pourquoi la sauvegarde doit passer par autre chose qu'un `upsert`.
   //
   // La garantie passe donc par une fonction `security definer` SANS AUCUN
   // PARAMÈTRE : elle lit l'identité dans le jeton et laisse les défauts de la
-  // table poser le quota. Le client ne peut ni désigner un autre pilote, ni
+  // table faire le reste. Le client ne peut ni désigner un autre pilote, ni
   // choisir ce qu'il vaut.
   //
   // La ligne est de toute façon posée par le déclencheur sur auth.users ; ceci
