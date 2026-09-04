@@ -121,6 +121,10 @@ const ECRANS = import.meta.glob('../../src/**/*.tsx',
 const SOURCES = import.meta.glob('../../src/**/*.{ts,tsx}',
   { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 import FEUILLE from '../../src/styles/systeme.css?raw'
+// Le décor de démarrage vit dans le document, pas dans React : c'est la seule
+// façon de le lire, et la barre qu'il porte n'existe nulle part ailleurs.
+import INDEX from '../../index.html?raw'
+import { DUREE_MINIMALE_MS } from '../../src/chargement'
 import {
   appelleUneDestruction, boutonsDe, detruit, ditLaDestruction, gestesDestructifs,
 } from '../destructif.mjs'
@@ -2694,6 +2698,51 @@ const essais = [
     // plus sur quelle grille spritifier, ni rejouer une génération.
     vrai(/check \(acte <> 'sprite' or \(version is not null and modele is not null\)\)/i.test(manuel),
       'un sprite peut désormais naître sans dire son prompt ni son modèle')
+  }),
+
+  doit("la barre du démarrage ne peut pas se remplir avant que le décor parte", () => {
+    /* ⚠ CET ESSAI GARDE UN ACCORD ENTRE DEUX FICHIERS QUE RIEN NE RELIE : le
+       plancher de trois secondes est une constante TypeScript, et l'animation
+       qui le parcourt est une durée écrite dans la feuille inline d'index.html.
+       Si l'une bouge sans l'autre, la barre se remplit trop tôt — donc elle
+       promet la fin de l'attente avant la fin de l'attente — ou reste inachevée
+       alors que le décor s'en va. Aucun des deux ne casse quoi que ce soit, et
+       aucun ne se voit ailleurs qu'au démarrage, où personne ne regarde. */
+    const duree = INDEX.match(/animation: chJauge (\d+)ms/)?.[1]
+    vrai(!!duree, "l'animation de la barre est introuvable dans le décor")
+    egal(Number(duree), DUREE_MINIMALE_MS,
+      "l'animation de la barre et le plancher de l'écran ont divergé")
+
+    /* Le plancher lui-même, posé par Julian : « laisser 3 sec minimum ». C'est
+       le genre de nombre qu'on rabote un jour « pour gagner du temps », sans
+       savoir qu'il a été demandé. */
+    egal(DUREE_MINIMALE_MS, 3000, 'le plancher de trois secondes a bougé')
+
+    /* ⚠ ET LA DERNIÈRE CELLULE N'APPARTIENT PAS AU TEMPS. L'animation s'arrête
+       à 29 crans sur 30 ; le trentième est posé par le script au moment où le
+       décor part vraiment. C'est toute la différence entre une barre qui mesure
+       une horloge et une barre qui promet la fin de l'attente : si les deux
+       nombres se rejoignent, la barre atteint son bout au chronomètre et ment
+       sur une ouverture encore en cours. */
+    vrai(/steps\(29\)/.test(INDEX), "la barre ne garde plus de cellule pour le travail")
+    vrai(/\.ch-barre\.ch-plein \.ch-jauge/.test(INDEX),
+      'la règle qui pose la dernière cellule a disparu du décor')
+    const module = Object.entries(SOURCES)
+      .find(([c]) => c.endsWith('/chargement.ts'))?.[1] ?? ''
+    vrai(/classList\.add\('ch-plein'\)/.test(module),
+      'le script ne pose plus la dernière cellule : la barre reste inachevée pour toujours')
+
+    /* ⚠ ET LE DÉCOR N'ATTEND PLUS `db`. Il partait dès la base ouverte, donc
+       AVANT que l'accueil ait lu sa saison : la scène s'effaçait sur un écran
+       qui finissait de s'assembler. C'est précisément ce que Julian demandait —
+       « la rendre utile et fonctionnelle en préchargeant tout ce qui est
+       nécessaire ». Sans cette garde, la condition se resserre à `db` au
+       premier refactor et les trois secondes redeviennent du temps mort. */
+    const app = Object.entries(ECRANS).find(([c]) => c.endsWith('/App.tsx'))?.[1] ?? ''
+    vrai(/if \(pretPremierEcran \|\| panne\) retirerLEcranDeChargement\(\)/.test(app),
+      'le décor est reparti sur une condition plus faible que le premier écran prêt')
+    vrai(/void rafraichir\(db\)\.finally\(\(\) => setPretPremierEcran\(true\)\)/.test(app),
+      "le premier écran ne se déclare plus prêt sur la première lecture de la saison")
   }),
 
   doit('personne ne peut se créditer soi-même', () => {

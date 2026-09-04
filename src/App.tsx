@@ -182,13 +182,26 @@ export default function App() {
      était demandé à chaque démarrage et le booléen était jeté. */
   const [abri, setAbri] = useState<Abri | null>(null)
   const [panne, setPanne] = useState<string | null>(null)
+  /* La saison est LUE, pas seulement la base ouverte. C'est la dernière des
+     cinq étapes de `chargement.ts`, et la seule que le décor n'attendait pas. */
+  const [pretPremierEcran, setPretPremierEcran] = useState(false)
 
-  // ⚠ LE DÉCOR PART QUAND IL Y A QUELQUE CHOSE DERRIÈRE, et « quelque chose »
-  // inclut la PANNE : un écran de chargement qui tourne indéfiniment sur un
-  // navigateur qui a refusé le stockage est le pire des deux mondes — le pilote
-  // attend une application qui ne viendra jamais, et le message qui le lui dirait
-  // est caché dessous.
-  useEffect(() => { if (db || panne) retirerLEcranDeChargement() }, [db, panne])
+  /* ⚠ LE DÉCOR PART QUAND IL Y A QUELQUE CHOSE DERRIÈRE, et « quelque chose »
+     inclut la PANNE : un écran de chargement qui tourne indéfiniment sur un
+     navigateur qui a refusé le stockage est le pire des deux mondes — le pilote
+     attend une application qui ne viendra jamais, et le message qui le lui dirait
+     est caché dessous.
+
+     ⚠ ET « QUELQUE CHOSE » N'EST PLUS `db`. La condition était la base OUVERTE,
+     donc le décor s'effaçait pendant que l'accueil lisait encore sa saison : on
+     voyait la scène partir sur un écran qui finissait de s'assembler. Elle est
+     maintenant le premier écran RÉELLEMENT prêt — « la rendre utile et
+     fonctionnelle en préchargeant tout ce qui est nécessaire », Julian, 4
+     septembre 2026. Les trois secondes de plancher servent à ça au lieu de
+     s'écouler à vide. */
+  useEffect(() => {
+    if (pretPremierEcran || panne) retirerLEcranDeChargement()
+  }, [pretPremierEcran, panne])
   const [ecran, setEcran] = useState<Ecran>('accueil')
   /* Le compteur de crédits se relit sur ce signal. Il n'écoute rien en continu :
      un solde bouge sur un geste payant ou sur un ajout côté serveur, et tenir
@@ -314,7 +327,15 @@ export default function App() {
        liste : ce sont déjà tous les moments où le produit gagne de la matière. */
     setPorte(await aDeQuoiAnalyser(base))
   }, [])
-  useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
+  /* ⚠ C'EST LA PREMIÈRE PASSE QUI LIBÈRE LE DÉCOR, et le `.finally` est
+     délibéré : même si une lecture échoue, le décor doit partir. Le retenir sur
+     un échec rendrait l'application inatteignable pour une saison illisible —
+     exactement le défaut que le filet de `.catch` ci-dessus existe pour
+     empêcher, et qu'on rouvrirait trois lignes plus bas. */
+  useEffect(() => {
+    if (!db) return
+    void rafraichir(db).finally(() => setPretPremierEcran(true))
+  }, [db, rafraichir])
 
   /* L'abri se relit au retour au premier plan et quand l'invitation arrive :
      l'événement `beforeinstallprompt` est tiré une fois, tôt, et il ne repasse
