@@ -116,6 +116,40 @@ body {
 .hud-10 { font-size: 11px }
 .titre { font-weight: 600; font-size: 26px; letter-spacing: .01em; }
 
+/* ─── LE COMPTEUR DE CRÉDITS — en haut à gauche, sur tous les écrans ────────
+   « Un compteur en haut à gauche qui peut se faire rajouter » — Julian,
+   3 septembre 2026.
+
+   ⚠ IL COÛTE DE LA HAUTEUR SUR TOUS LES ÉCRANS, ET C'EST UN ARBITRAGE ASSUMÉ.
+   Le lot 3 venait de passer une semaine à faire tenir chaque page en une vue
+   d'iPhone ; ajouter une ligne à la coque va contre ce travail, et il fallait
+   que ça se paie le moins possible. D'où une seule ligne, la hauteur du texte
+   et rien de plus : pas de cadre, pas de fond, pas de marge basse — c'est le
+   bloc suivant qui porte l'écart. Mesuré à 375 × 812 : le compteur pris seul
+   ajoute une vingtaine de pixels, soit moins de 3 % de la hauteur utile.
+
+   ⚠ PAS DE CADRE, ET CE N'EST PAS QU'UNE ÉCONOMIE DE PLACE. Toutes les formes
+   encadrées de ce produit se tapent — puce, lien, bouton, onglet. Encadrer un
+   nombre qui ne fait que se lire apprendrait au pouce un cadre qui ne répond
+   pas, et c'est le genre de détail qui fait douter du reste de l'écran.
+
+   ⚠ ET IL NE ROUGIT JAMAIS, MÊME À ZÉRO. Le rouge de ce produit ne dit qu'une
+   chose — « ceci part et ne revient pas ». Zéro crédit ne casse rien et ne perd
+   rien : il y a seulement un geste payant qu'on ne peut pas faire aujourd'hui.
+   Le teindre en `--alerte` affaiblirait le rouge là où il compte vraiment. */
+.hud-credits {
+  display: flex; align-items: baseline; gap: 6px;
+  margin: 0 0 10px; padding: 0;
+}
+.hud-credits .chiffre {
+  font-size: 15px; font-weight: 600; color: var(--miami);
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.hud-credits .mot {
+  font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--encre-tenue); line-height: 1;
+}
+
 .libelle {
   color: var(--encre-faible); font-size: 12px; font-weight: 500;
   letter-spacing: .14em; text-transform: uppercase;

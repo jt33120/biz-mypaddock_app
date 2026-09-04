@@ -54,12 +54,16 @@ export type Issue =
 const MOTS: Record<string, string> = {
   sans_compte: "Le portrait se fabrique sur le serveur, donc il demande un compte. "
     + 'La photo, elle, reste sur ce téléphone et ne dépend de rien.',
-  quota: 'Le nombre de portraits inclus est atteint pour ce compte. '
+  /* ⚠ ELLE PARLAIT DE « PORTRAITS INCLUS » — un plafond par fonctionnalité qui
+     n'existe plus. Il n'y a qu'un solde, en crédits, et il sert aussi bien un
+     portrait qu'une recherche de manuel : dire « portraits » ferait chercher un
+     compteur de portraits qu'aucun écran ne montre. */
+  quota: "Il ne reste pas assez de crédits sur ce compte pour cet appel. "
     + 'La photo réelle continue de tenir la scène du garage.',
   plafond_global: "La fabrique a atteint son plafond de la journée, tous comptes confondus. "
     + 'Elle rouvrira demain, et rien n\'a été décompté de ton côté.',
   cle_absente: "La fabrique de portraits n'est pas encore ouverte. "
-    + 'Rien n\'a été facturé, et la photo reste en place.',
+    + 'Rien n\'a été décompté, et la photo reste en place.',
   photo_trop_lourde: "Cette image est trop lourde pour partir. "
     + 'Une photo prise au téléphone passe sans difficulté.',
   sans_photo: "Aucune image n'est partie.",
@@ -244,43 +248,40 @@ export const genererPortrait = async (
 }
 
 /**
- * ⚠ CE QUE COÛTE UN PORTRAIT, POUR POUVOIR LE DIRE AVANT D'APPELER.
+ * ⚠ CE QUE COÛTE UN PORTRAIT NE SE DIT PLUS D'ICI.
  *
- * Ces deux nombres ne servent QU'À ANNONCER : le serveur reste seul juge, il
+ * Ce qui reste vrai, et qui a motivé ces nombres : le serveur est seul juge, il
  * réserve sous verrou avant d'appeler le modèle, et l'application n'a aucun
- * moyen de dépenser toute seule (AD-15). Ils sont ici parce qu'un bouton nommé
- * « Refaire », posé en haut d'un écran, transforme un tap accidentel en dépense
- * — et qu'un produit qui prélève sans avoir dit ce qu'il prélève est un produit
- * qu'on n'ouvre plus.
+ * moyen de dépenser toute seule (AD-15). L'annonce existe parce qu'un bouton
+ * nommé « Refaire », posé en haut d'un écran, transforme un tap accidentel en
+ * dépense — et qu'un produit qui prélève sans avoir dit ce qu'il prélève est un
+ * produit qu'on n'ouvre plus. Elle est toujours faite ; elle est faite ailleurs.
  *
- * ⚠ ILS PEUVENT MENTIR SI ON LES OUBLIE. `PORTRAITS_INCLUS` recopie le défaut de
- * `pilote.quota_sprites` posé par la migration 20260819000010 ; le jour où ce
- * défaut change là-bas, l'annonce d'ici devient fausse sans que rien ne casse.
- * Un essai unitaire relit donc la migration et les confronte — c'est la seule
- * chose qui relie deux dépôts que rien d'autre ne relie.
+ * ⚠ ILS ONT DÉMÉNAGÉ DANS `db/credits.ts` LE 3 SEPTEMBRE 2026, et ils ont changé
+ * d'unité en chemin. `COUT_PORTRAIT_CENTIMES` valait 16 et s'affichait « environ
+ * 0,16 € » ; `PORTRAITS_INCLUS` valait 3 et recopiait `pilote.quota_sprites`.
+ * Les deux colonnes qu'ils reflétaient n'existent plus : il n'y a qu'un solde,
+ * en crédits, et un crédit couvre un appel IA.
  *
- * Le coût, lui, vient de A-FAIRE §1 : ≈ 0,16 € par portrait chez le fournisseur
- * d'images. Il est APPROXIMATIF et l'écran le dit — annoncer un prix exact qu'on
- * ne facture pas serait pire que d'annoncer un ordre de grandeur vrai.
- *
- * ⚠ ET LE PRIX SE CONFRONTE COMME LE QUOTA. Il n'avait aucune garde alors qu'il
- * est le seul des deux nombres à s'écrire EN EUROS à l'écran : le
- * `cout_unitaire_centimes … default 16` du filet monétaire (migration
- * 20260819000012) est ce qui décompte vraiment, et le jour où il bouge là-bas,
- * l'écran d'ici annonce un prix que personne ne facture. Le même essai unitaire
- * relit les deux.
+ * Le centime, lui, n'a pas disparu — il vit toujours dans
+ * `generation.cout_centimes`, où il mesure ce que l'acte coûte VRAIMENT. Il n'a
+ * simplement plus de lecteur côté écran, et une constante compilée sans lecteur
+ * est une constante qui dérive en silence. Ce qui la remplace est confronté à la
+ * base par le même essai unitaire, sur les nombres qui comptent désormais :
+ * `CREDITS_PORTRAIT` contre `plafond.credits_sprite`, `CREDITS_ACCUEIL` contre
+ * `plafond.credits_accueil`.
  */
-export const COUT_PORTRAIT_CENTIMES = 16
-export const PORTRAITS_INCLUS = 3
 
-/** Ce qui a déjà été fabriqué depuis ce compte, lu dans les lignes descendues.
- *  La table `generation` descend et ne remonte jamais : c'est le serveur qui
- *  l'écrit, et c'est ce qui rend ce compte crédible. Hors ligne ou sans compte
- *  elle est vide, donc ce chiffre vaut zéro — il ne bloque rien, il énonce. */
-export const portraitsFaits = async (db: PowerSyncDatabase): Promise<number> => {
-  const r = await db.get<{ n: number }>(`SELECT count(*) AS n FROM generation`)
-  return r.n ?? 0
-}
+/* ⚠ IL Y AVAIT ICI UN `portraitsFaits`, ET IL N'A PLUS D'APPELANT DEPUIS QUE LE
+   SOLDE VIENT DU SERVEUR. Il comptait les lignes de `generation` descendues pour
+   composer « dont 2 ont déjà servi ». `mon_solde()` répond maintenant le seul
+   chiffre dont l'écran a besoin, et le composer une deuxième fois en local
+   rouvrirait la divergence que ce lot vient de fermer : deux comptes du même
+   fait finissent toujours par se contredire, et c'est le moins relu qui ment.
+
+   C'est le même motif qui a retiré `portraitsRestants` juste en dessous. Une
+   fonction exportée sans appelant n'est pas neutre : elle a l'air d'être la
+   façon de faire, et c'est celle-là qu'on rappelle six mois plus tard. */
 
 /* ⚠ IL Y AVAIT ICI UN `portraitsRestants`, ET IL N'AVAIT AUCUN APPELANT.
    Il soustrayait les portraits faits d'un quota SUPPOSÉ — or ce quota peut
