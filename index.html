@@ -54,6 +54,44 @@
       @keyframes chFloorD { from { background-position: 50% 0 } to { background-position: 50% 90px } }
       @keyframes chLight  { 0%, 25% { background-color: #3DE0FF } 25.01%, 100% { background-color: #070B1A } }
       @keyframes chLisere { 0%, 86% { background-color: #3DE0FF } 86.01%, 100% { background-color: #FF2E9A } }
+      /* LA BARRE. Un cadre d'un pixel et un remplissage qui avance par CELLULES,
+         jamais en continu : le reste de la scène est en pixels carrés, et une
+         barre lisse y viendrait d'une autre famille. `--ch-cellules` est posé
+         par le script — 0 à 30 — et rien d'autre ne bouge. */
+      .ch-barre {
+        /* 30 cellules de 8 px, plus 2 px de marge intérieure et 2 px de cadre
+           de chaque côté : 240 + 4 + 4. Centrée sur les 390 px de la scène. */
+        position: absolute; left: 71px; top: 730px; width: 248px; height: 14px;
+        border: 2px solid #3DE0FF; box-sizing: border-box; padding: 2px;
+      }
+      /* ⚠ ELLE EST ANIMÉE PAR CSS, ET C'EST UNE MESURE QUI L'A IMPOSÉ. La
+         première version avançait en JavaScript, dans une boucle
+         `requestAnimationFrame`, pour refléter cinq étapes d'ouverture
+         réellement franchies. Relevé sur le banc : la barre GELAIT à 8 cellules
+         sur 30 de 800 ms à 2 900 ms. L'ouverture du moteur SQLite bloque le fil
+         principal — c'est justement ce qui prend du temps — donc `rAF` ne tourne
+         plus, donc la barre ne bouge plus exactement pendant les deux secondes
+         où elle est le plus regardée. Une barre immobile se lit comme une panne,
+         ce qui est pire que pas de barre du tout.
+         Une animation CSS, elle, vit sur le compositeur : elle continue pendant
+         que le fil principal peine, comme les bandes de la route juste au-dessus
+         qui n'ont jamais cessé de défiler. */
+      .ch-jauge {
+        height: 100%; width: 0; background: #3DE0FF;
+        /* `steps(29)` : la barre avance par CELLULES, jamais en continu — le
+           reste de la scène est en pixels carrés, une barre lisse y viendrait
+           d'une autre famille. 29 et non 30 : la DERNIÈRE cellule n'appartient
+           pas au temps, elle appartient au travail. Voir `.ch-plein`. */
+        animation: chJauge 3000ms steps(29) forwards;
+      }
+      @keyframes chJauge { from { width: 0 } to { width: 232px } }
+      /* ⚠ LA TRENTIÈME CELLULE NE SE GAGNE PAS AU CHRONOMÈTRE. Elle est posée
+         par le script, au moment exact où le décor s'en va — c'est-à-dire quand
+         la base est ouverte ET la saison lue. Tant que le travail dure au-delà
+         des trois secondes, la barre reste à 29/30 : visiblement pas finie,
+         parce qu'elle ne l'est pas. C'est la seule promesse qu'elle fait, et
+         c'est la seule qu'elle peut tenir. */
+      .ch-barre.ch-plein .ch-jauge { animation: none; width: 240px; }
       /* La sortie : une coupe douce, jamais un fondu long — l'application est
          prête, la faire attendre son propre décor serait absurde. */
       #chargement.ch-parti { opacity: 0; pointer-events: none; transition: opacity .18s linear; }
@@ -61,6 +99,11 @@
         /* Rien ne bouge, et les trois feux restent ALLUMÉS : la scène doit
            rester composée, pas amputée. Consigne du handoff. */
         [data-om-anim="1"], .ch-lisere { animation: none !important; }
+        /* La barre, elle, GARDE son animation : c'est la seule chose de cet
+           écran qui informe, et `prefers-reduced-motion` demande d'éviter le
+           mouvement décoratif, pas de retirer l'information. Elle avance par
+           crans de 8 px, sans défilement ni clignotement — le mouvement qui
+           déclenche les nausées n'est pas celui-là. */
         [data-om-light="1"] { background-color: #3DE0FF !important; }
         #chargement.ch-parti { transition: none; }
       }
@@ -86,9 +129,35 @@
            pixel près (0 différence sur 8 816 pixels opaques). Les sources sont
            dans src/assets/chargement/.
 
-           ⚠ AUCUN INDICATEUR DE PROGRESSION, et c'est une contrainte de produit,
-           pas un oubli : ni barre, ni pourcentage, ni rond qui tourne, ni le mot
-           « chargement ». Ce produit ne compte rien et ne presse personne.
+           ⚠ IL Y A MAINTENANT UNE BARRE, ET CE PARAGRAPHE DISAIT LE CONTRAIRE.
+           Il interdisait « ni barre, ni pourcentage, ni rond qui tourne » au nom
+           d'une règle du produit : « ce produit ne compte rien et ne presse
+           personne ». Julian l'a levée le 4 septembre 2026 — « ajouter une barre
+           de chargement, la rendre utile et fonctionnelle en préchargeant tout
+           ce qui est nécessaire ».
+
+           La règle, elle, n'est pas morte : elle portait sur le PILOTE. Ce que
+           le produit s'interdit, c'est de compter ce qu'il fait, de le noter, de
+           le ranger sur une échelle — pas de dire où en est SA PROPRE ouverture.
+           La barre ne mesure personne : elle mesure la machine, et elle répond à
+           la seule question qu'on se pose devant un écran qui dure, « est-ce que
+           ça avance ». Un décor de trois secondes sans réponse à cette
+           question-là est précisément ce qui fait fermer une application.
+
+           ⚠ CE QU'ELLE PROMET, ET C'EST LA SEULE CHOSE QU'ELLE PROMET : la fin
+           de l'attente. Elle n'annonce aucune durée, aucun pourcentage, aucun
+           « bientôt fini ». L'attente dure au moins trois secondes — c'est le
+           plancher posé par Julian — et l'animation parcourt ce plancher. Mais
+           elle s'arrête à 29 cellules sur 30 : la dernière est posée par le
+           script au moment où le décor s'en va réellement, c'est-à-dire quand la
+           base est ouverte ET la saison lue. Une ouverture plus longue que trois
+           secondes laisse donc la barre visiblement inachevée, parce qu'elle ne
+           l'est pas.
+           Le témoin d'attente du produit (`Attente.tsx`) s'interdit la barre
+           pour la raison inverse, et cette règle tient toujours : là-bas,
+           personne ne sait combien de temps prend un appel au modèle, donc toute
+           échelle serait inventée. Ici, le plancher est connu et le reste est
+           gardé par le travail.
            ═══════════════════════════════════════════════════════════════════ -->
       <div id="chargement" aria-hidden="true">
         <div class="ch-scene">
@@ -133,6 +202,11 @@
         <div data-om-anim="1" data-om-light="1" style="width:20px;height:20px;background-color:#070B1A;animation:chLight 2.4s linear infinite;animation-delay:0.6s;"></div>
         <div data-om-anim="1" data-om-light="1" style="width:20px;height:20px;background-color:#070B1A;animation:chLight 2.4s linear infinite;animation-delay:1.2s;"></div>
         </div>
+
+        <!-- Sous les trois feux, dans le bas de la scène : c'est là qu'une borne
+             d'arcade met la sienne, et c'est le seul endroit qui ne recouvre ni
+             le titre ni la moto. -->
+        <div class="ch-barre" id="ch-barre"><div class="ch-jauge"></div></div>
 
         </div>
       </div>
