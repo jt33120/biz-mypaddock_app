@@ -186,10 +186,15 @@ première publicité.
 
 ## 5 · La récolte — DÉPLOYÉE, et volontairement muette
 
-**Fait le 19 août 2026.** Le service tourne sur Railway, projet `mypaddock-recolte`, service
-`recolte`, racine `recolte/`, sonde de santé sur `/sante` :
+**Fait le 19 août 2026. DÉMÉNAGÉ le 5 septembre 2026** — voir § 15, qui dit pourquoi et ce
+qu'il te reste à faire. Le service tourne sur Railway, projet `mypaddock_api` (à renommer
+`mypaddock`), service `recolte`, racine `recolte/`, sonde de santé sur `/sante` :
 
-    https://recolte-production.up.railway.app/sante
+    https://recolte-production-ff41.up.railway.app/sante
+
+⚠ L'ancienne adresse `recolte-production.up.railway.app` répond encore : elle appartient au
+service de l'ancien projet, qui n'a pas été supprimé. Les deux tournent en parallèle, et les
+deux sont muets — c'est voulu le temps que tu tranches (§ 15).
 
 **Deux interrupteurs, indépendants, tous les deux fermés — vérifié en ligne :**
 
@@ -241,7 +246,7 @@ remplace-le d'un clic dans le tableau de bord — rien d'autre n'en dépend.
 **Déclencher un tour, une fois les clés posées :**
 
     curl -X POST -H "Authorization: Bearer <RECOLTE_JETON>" \
-      https://recolte-production.up.railway.app/recolter
+      https://recolte-production-ff41.up.railway.app/recolter
 
 **Ce qu'il ne fera jamais :** écraser une correction du pilote. Une ligne marquée
 `corrige_par_pilote` n'est pas réécrite — une extraction par IA est une reconstruction, pas
@@ -583,3 +588,82 @@ qui ne pouvait pas répondre.** Et c'est la seule que tu pouvais atteindre, faut
 
 **La leçon, en une ligne :** le chemin le plus dégradé d'un service doit être le moins cher
 et le plus sûr, pas celui qui fait du réseau pour orner un refus.
+
+---
+
+## 15 · Railway — un seul projet MyPaddock, et ce qui reste de ta main
+
+**Ta demande du 5 septembre 2026 :** « merge both projects to have only one project for
+mypaddock with all the backend intelligence with it. Even if sth is not currently used keep
+it as an archive. »
+
+**⚠ RAILWAY NE DÉPLACE PAS UN SERVICE D'UN PROJET À L'AUTRE.** Il n'y a pas de « move » :
+fusionner veut dire RECRÉER. C'est ce qui décide de la direction, et elle n'est pas
+symétrique :
+
+| direction | services à reconstruire | ce qu'on risque |
+|---|---|---|
+| garder `mypaddock_api`, y amener `recolte` | **1** | l'URL de la récolte change (elle n'est appelée par aucun code) |
+| garder `mypaddock-recolte`, y amener les 7 | **7** | on perd `mypaddockapi-production.up.railway.app`, l'API de valuation |
+
+D'où le choix : **`mypaddock_api` survit**, et il ne reste qu'à le renommer.
+
+**⚠ ET CE SONT DEUX DOS DIFFÉRENTS, PAS UN SYSTÈME.** Il faut le savoir avant de les voir
+côte à côte : ils ne partagent ni dépôt, ni base, ni réseau privé.
+
+| | `recolte` | les sept autres |
+|---|---|---|
+| dépôt | `biz-mypaddock_app` (le carnet), racine `recolte/` | `biz-MyPaddock_api` |
+| langage | Node | Python / FastAPI |
+| base | Supabase `oghmwkiklwaptjfouprx` (le carnet) | deux autres projets Supabase |
+| objet | récolte des règles de circuits | valuation moto US, crawlers, entraînement HNN |
+
+Les réunir donne **un seul tableau de bord**, pas un seul système. C'est bien ce que tu
+demandais, et c'est utile — mais aucune des deux moitiés ne gagne à parler à l'autre.
+
+**Ce qui est fait, et vérifié en ligne :**
+
+- service `recolte` créé dans `mypaddock_api`, même dépôt, même branche `main`, même racine
+  `recolte/`, même commande `node index.mjs`, même sonde `/sante`, mêmes déclencheurs de
+  rebuild (`recolte/**`) ;
+- `GET /sante` → `{"pret":false,"refus":"base non configurée"}` — identique à l'ancien ;
+- `POST /recolter` sans jeton et avec un mauvais jeton → `401 {"refus":"jeton"}` ;
+- les sept services d'origine n'ont pas bougé : `valuation` répond toujours (`/docs` en 200).
+
+**Ce qui reste à ta main — quatre gestes, dans cet ordre :**
+
+1. **Copier trois variables** depuis l'ancien service vers le nouveau. Je ne peux pas les
+   lire : Railway me renvoie les NOMS et masque les valeurs (`valuesRedacted`), et c'est une
+   bonne chose pour `RECOLTE_JETON` — un secret que je n'ai jamais vu vaut mieux qu'un secret
+   que j'ai relu.
+
+   | variable | pourquoi je ne l'ai pas posée |
+   |---|---|
+   | `RECOLTE_JETON` | secret, jamais lu |
+   | `MISTRAL_MODELE` | tu l'as choisi ; le défaut du code est `mistral-small-latest` et je ne veux pas le deviner à ta place |
+   | `RECOLTE_PLAFOND` | idem, défaut du code : 20 |
+
+   `NODE_ENV` et `SUPABASE_URL` sont déjà posées — les deux se savent sans rien lire.
+
+   ⚠ **Ne recopie PAS `RECOLTE_RACINE`.** Elle est posée sur l'ancien service et **n'est lue
+   nulle part dans le code** (`grep` sur `recolte/` : zéro occurrence). C'est une variable
+   morte ; la recopier la ferait vivre un an de plus.
+
+2. **Renommer le projet** `mypaddock_api` → `mypaddock`, dans le tableau de bord. L'API ne
+   me donne pas le renommage de projet. Le renommage ne touche aucun domaine : ils
+   appartiennent aux services.
+
+3. **Supprimer le projet `mypaddock-recolte`.** ⚠ C'est le seul geste irréversible de la
+   liste, et c'est pour ça que je ne l'ai pas fait. Tant qu'il existe, les deux récoltes
+   tournent en parallèle — sans danger, elles sont muettes toutes les deux — et tu peux
+   revenir en arrière d'un clic.
+
+4. **Reprendre le joli domaine.** Une fois l'ancien projet supprimé,
+   `recolte-production.up.railway.app` se libère : tu peux retirer le suffixe `-ff41` dans les
+   réglages du nouveau service. Le `-ff41` existe seulement parce que le nom était pris au
+   moment de la création. Repasse alors ce fichier à l'ancienne adresse (§ 5).
+
+**Ce qui n'a PAS été touché, et qui reste tel quel comme tu l'as demandé :** les cinq
+services hors ligne ou en échec de `mypaddock_api` — `Training_HNN`, `crawler_discover_US`,
+`crawler_crawl_US`, `scraper_postprocessing`, `gamme_discovery`. Ils gardent leur
+configuration, leurs variables et leur historique. C'est l'archive.
