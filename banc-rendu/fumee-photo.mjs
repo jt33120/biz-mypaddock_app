@@ -4,9 +4,11 @@ import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
 import fs from 'node:fs'
 import { photoDEssai } from './photo-essai.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -52,6 +54,7 @@ console.log('① bloc photos présent, hors ligne : oui')
 // LE FORMAT D'UNE PHOTO D'IPHONE : 8064 × 6048 = 48,8 Mpx, soit trois fois le
 // plafond de canevas de Safari. C'est le cas NOMINAL, pas le cas limite.
 const grande = await photoDEssai()
+await ouvrirTousLesPlis(page)
 await page.setInputFiles('input[type=file]', grande)
 await page.waitForSelector('.case-album img', { timeout: 60_000 })
 const v = await page.$eval('.case-album img', n => ({ src: n.src.slice(0, 5), w: n.naturalWidth, h: n.naturalHeight }))

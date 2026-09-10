@@ -6,9 +6,11 @@
 // que la présence de ce qui rapporte.
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -30,6 +32,7 @@ if (await page.isVisible('section.recap')) await page.click('text=Retour au roul
 await page.waitForSelector('text=Meilleur tour du jour', { timeout: 20_000 })
 
 // ── ① Elle ne se compose pas toute seule : c'est un geste.
+await ouvrirTousLesPlis(page)
 console.log('① avant composition :', await page.isVisible('text=Préparer le chargement'))
 await page.click('text=Préparer le chargement')
 await page.waitForSelector('.checklist', { timeout: 20_000 })

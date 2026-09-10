@@ -20,7 +20,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ICI = path.dirname(fileURLToPath(import.meta.url))
-export const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+// Même échappatoire que `unite.mjs` : le poste de travail reste le défaut, et
+// `CHROME` permet à une machine sans `/Applications` de fabriquer la fixture.
+// Sans elle, ce générateur est le seul maillon qui empêche le banc entier de
+// tourner ailleurs — et une fixture qu'on ne peut pas fabriquer redevient une
+// fixture qu'on doit trouver, ce que ce fichier existe précisément pour éviter.
+export const CHROME = process.env.CHROME
+  ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const DOSSIER = path.join(ICI, '.fixtures')
 const FICHIER = path.join(DOSSIER, 'grande.jpg')
 

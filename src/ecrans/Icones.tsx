@@ -1,7 +1,7 @@
-import { Wrench, ChartNoAxesCombined, Package, HardHat, Bike, Trash2, Pencil, CalendarDays, Camera, Wallet, Trophy, TriangleAlert } from 'lucide-react'
+import { Wrench, ChartNoAxesCombined, ChartColumn, House, UserRound, Package, HardHat, Bike, Trash2, Pencil, CalendarDays, Camera, Wallet, Trophy, TriangleAlert } from 'lucide-react'
 import type { Nom } from './dessins'
 export { GRILLE, chemins, dessins, type Nom } from './dessins'
-const ICONES = { cle: Wrench, courbe: ChartNoAxesCombined, caisse: Package, casque: HardHat, moto: Bike, poubelle: Trash2, crayon: Pencil, calendrier: CalendarDays, photo: Camera, portefeuille: Wallet, trophee: Trophy, impact: TriangleAlert }
+const ICONES = { barres: ChartColumn, maison: House, pilote: UserRound, cle: Wrench, courbe: ChartNoAxesCombined, caisse: Package, casque: HardHat, moto: Bike, poubelle: Trash2, crayon: Pencil, calendrier: CalendarDays, photo: Camera, portefeuille: Wallet, trophee: Trophy, impact: TriangleAlert }
 /** Consistent, smooth interface icons. The adjacent label owns the accessible name. */
 export function Icone({ nom, taille = 20, titre, className }: { nom: Nom; taille?: number; titre?: string; className?: string }) {
   const Dessin = ICONES[nom]

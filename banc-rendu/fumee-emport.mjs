@@ -8,9 +8,11 @@
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
 import { photoDEssai } from './photo-essai.mjs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -83,11 +85,16 @@ await page.click('text=Saisir mon premier roulage')
 await page.fill('.champ[placeholder="Pau-Arnos"]', 'Pau-Arnos')
 await page.click('text=Continuer')
 await enregistrerSession()
+await ouvrirTousLesPlis(page)
 await page.setInputFiles('input[type=file]', await photoDEssai())
 await page.waitForSelector('.case-album img', { timeout: 60_000 })
 
 // ── ① Sans compte, hors ligne : l'emport est là.
 await onglet('COMPTE')
+// Sur l'écran du COMPTE, « Sauvegarde » et « Données et confidentialité » se
+// replient depuis le lot 3, comme « Diagnostic et aide » avant elles : l'écran
+// mesurait 2130 px pour 759 utiles. Ce qu'on vient lire est DEDANS.
+await ouvrirTousLesPlis(page)
 await page.waitForSelector('text=emporter ta saison', { timeout: 10_000 })
 console.log('① atteignable sans compte, hors ligne :', await page.isVisible('text=emporter ta saison'))
 console.log('   annoncé avant le geste :', (await page.textContent('.compte:has-text("emporter") .libelle:nth-of-type(2)')

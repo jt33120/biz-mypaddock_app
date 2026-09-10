@@ -30,6 +30,11 @@ streams:
       - SELECT * FROM plan_si_alors WHERE pilote_id = auth.user_id()
       - SELECT * FROM geste        WHERE pilote_id = auth.user_id()
       - SELECT * FROM photo        WHERE pilote_id = auth.user_id()
+      # Comme le document et la photo : seules les MÉTADONNÉES descendent. Les
+      # octets vivent dans le bucket privé `videos` (AD-4). C'est cette ligne
+      # qui rend vraie la clause « lecture sur un second appareil » du récit
+      # 23.10 — sans elle la vidéo monte et ne redescend jamais, en silence.
+      - SELECT * FROM video        WHERE pilote_id = auth.user_id()
       # L'ÉQUIPEMENT est une racine au même titre que la machine : la
       # combinaison existe sans moto et survit à la vente de la moto.
       - SELECT * FROM equipement   WHERE pilote_id = auth.user_id()

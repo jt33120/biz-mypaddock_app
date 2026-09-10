@@ -14,7 +14,8 @@
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -34,7 +35,9 @@ const onglet = async (n) => {
     await page.click('summary:has-text("Diagnostic et aide")')
   return page.click('.compte .lien:has-text("Instruments et sonde")')
 }
-const pret = () => page.waitForFunction(() => !document.body.textContent.includes('chargement…'), null, { timeout: 60_000 })
+// Wait for the completed startup and the actual advice, not obsolete loading copy.
+const pret = () => page.waitForFunction(() => !document.getElementById('chargement')
+  && !!document.querySelector('.conseil .texte'), null, { timeout: 60_000 })
 
 // FR-36 : depuis l'épique 4, la fin d'une saisie ouvre LE RÉCAPITULATIF, pas le
 // bilan — il se compose tout seul et s'affiche sans avoir été demandé. Les

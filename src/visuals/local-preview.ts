@@ -16,7 +16,7 @@ export async function prepareLocalPreview(db: PowerSyncDatabase) {
       await tx.execute('INSERT INTO machine (id, marque, modele, annee, sprite) VALUES (?, ?, ?, ?, ?)', [m.id, m.marque, m.modele, m.annee, m.sprite])
     }
     for (const e of snapshot.equipement) {
-      await tx.execute('INSERT INTO equipement (id, nom, categorie) VALUES (?, ?, ?)', [e.id, e.nom, e.categorie])
+      await tx.execute('INSERT INTO equipement (id, nom, categorie, genre) VALUES (?, ?, ?, ?)', [e.id, e.nom, e.categorie, e.genre ?? null])
     }
   })
 }

@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { changerCompteDeChargement } from '../visuals/splash-cache'
 
 /**
  * LE COMPTE — récit 1.2.
@@ -42,10 +43,14 @@ export const identite = (): Identite | null => {
 const retenir = (s: Session | null) => {
   if (!s?.user) return
   const i: Identite = { id: s.user.id, email: s.user.email ?? null }
+  if (identite()?.id !== i.id) changerCompteDeChargement()
   try { localStorage.setItem(CLE, JSON.stringify(i)) } catch { /* quota : tant pis */ }
 }
 
-const oublier = () => { try { localStorage.removeItem(CLE) } catch { /* rien à faire */ } }
+const oublier = () => {
+  if (identite()?.id) changerCompteDeChargement()
+  try { localStorage.removeItem(CLE) } catch { /* rien à faire */ }
+}
 
 /** L'identité courante, et ses changements. Émet immédiatement l'état connu —
  *  y compris hors ligne, où il n'y a rien à demander à personne. */

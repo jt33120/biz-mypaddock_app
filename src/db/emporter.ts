@@ -49,11 +49,12 @@ export const FORMAT = 1
  */
 const TABLES = ORDRE
 
-/** Une photo dont le retrait est demandé n'est plus une donnée à emporter. Le
- * tombstone reste dans la base uniquement pour finir l'effacement Storage ;
- * l'exporter révélerait encore son chemin et la ressusciterait à la restauration. */
+/** Une photo — ou une vidéo — dont le retrait est demandé n'est plus une donnée
+ * à emporter. Le tombstone reste dans la base uniquement pour finir l'effacement
+ * Storage ; l'exporter révélerait encore son chemin et la ressusciterait à la
+ * restauration. Les deux tables portent le même `etat` et la même clause. */
 const filtreEmport = (table: string) =>
-  table === 'photo' ? ` WHERE etat != 'a_supprimer'` : ''
+  table === 'photo' || table === 'video' ? ` WHERE etat != 'a_supprimer'` : ''
 
 /** Rendue au banc : c'est la clause « l'emport sort ce que la sauvegarde
  *  envoie » qui protège contre la divergence, pas la bonne volonté. */
@@ -172,6 +173,21 @@ export const composer = async (
   if (absentes.length)
     manques.push(`${absentes.length} photo(s) sans copie dans ce téléphone — `
       + `elles vivent au serveur, à ces chemins : ${absentes.map((p) => p.chemin_objet).join(', ')}`)
+
+  // ⚠ LES VIDÉOS NE SONT JAMAIS JOINTES, ET CE N'EST PAS UN OUBLI.
+  // Une vignette en base64 pèse 400 Ko et la partie lisible du fichier lui
+  // survit. Le quota vidéo est de 500 Mo : les encoder ici produirait un JSON
+  // de 700 Mo qu'aucun éditeur n'ouvre, que le navigateur ne sait pas composer
+  // en mémoire, et qui échouerait au moment précis où le pilote croit sauver
+  // son carnet. Leurs LIGNES partent — identifiants, liens vers la chute et la
+  // journée, poids, durée, chemin — donc les relations sont conservées et
+  // l'emport reste exploitable. Ce qui manque est dit, comme le reste.
+  const videos = (donnees.video ?? []) as { chemin_objet: string }[]
+  if (videos.length)
+    manques.push(`${videos.length} vidéo(s) : leurs octets ne rentrent pas dans un fichier `
+      + `de carnet et ne sont jamais joints. Les lignes et leurs liens sont ici ; `
+      + `les fichiers vivent au stockage privé, à ces chemins : `
+      + `${videos.map((v) => v.chemin_objet).join(', ')}`)
 
   const contenu: Record<string, unknown> = {
     produit: 'MyPaddock',

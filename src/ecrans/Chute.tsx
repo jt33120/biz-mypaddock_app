@@ -9,6 +9,12 @@ import {
 import {
   lirePhoto, oublierPhoto, photosDeLaChute, verserPlusieurs, type Echec, type Photo,
 } from '../db/photos'
+import {
+  DUREE_MAX_MS, lienVideoDistante, lireVideoLocale, oublierVideo, placeVideo,
+  verserVideo, videosDeLaChute, type PlaceVideo, type Video,
+} from '../db/video'
+import { comprimer } from '../video/comprimer'
+import { formaterPoids } from '../db/emporter'
 import { enCentimes, formaterEuros } from '../db/depot'
 import type { Categorie } from '../db/atelier'
 import { Icone } from './Icones'
@@ -196,6 +202,7 @@ function UneChute({ db, c, ouverte, machineId, date, onEcrit }: {
           </div>
           {recit && <p className="texte faible">{recit}</p>}
           <PhotosDeChute db={db} chuteId={c.id} onEcrit={onEcrit} />
+          <VideosDeChute db={db} chuteId={c.id} onEcrit={onEcrit} />
           <ReparationsDeChute db={db} chuteId={c.id} machineId={machineId}
                               dateRoulage={date}
                               onEcrit={async () => { await chargerCout(); await onEcrit() }} />
@@ -485,6 +492,216 @@ function PhotosDeChute({ db, chuteId, onEcrit }: {
         {occupe ? 'préparation…' : 'Ajouter des photos'}
       </button>
       <input ref={fichier} type="file" accept="image/*" multiple hidden disabled={occupe}
+             onChange={(e) => { void verser(e.target.files); e.target.value = '' }} />
+    </div>
+  )
+}
+
+/**
+ * LA VIDÉO DU CRASH — récit 23.10.
+ *
+ * ⚠ TROIS CHOSES SE DISENT ICI QUI NE SE DISENT NULLE PART AILLEURS DANS LE PRODUIT,
+ * et aucune n'est décorative :
+ *
+ * ① L'ATTENTE, AVANT DE LA SUBIR. Comprimer se fait en rejouant la vidéo une
+ *    fois : trente secondes de crash prennent trente secondes. Une application
+ *    qui se fige sans rien dire pendant trente secondes se fait retaper, puis
+ *    fermer. Le bouton annonce donc la durée au lieu de la laisser découvrir.
+ *
+ * ② LA PLACE, AVANT LE GESTE. Le quota est une clause du récit, et « explicite »
+ *    ne veut pas dire « appliqué » mais « connu avant d'agir ». Un pilote qui
+ *    découvre la limite en la heurtant a déjà attendu sa compression pour rien.
+ *
+ * ③ CE QUI EST RÉELLEMENT ARRIVÉ AU FICHIER. Une vidéo gardée telle quelle parce
+ *    que l'appareil ne sait pas ré-encoder n'est pas la même pièce qu'une vidéo
+ *    comprimée : elle mange le quota bien plus vite. Le taire laisserait croire
+ *    à une compression qui n'a pas eu lieu (UX-DR8).
+ */
+function VideosDeChute({ db, chuteId, onEcrit }: {
+  db: PowerSyncDatabase
+  chuteId: string
+  onEcrit: () => void
+}) {
+  const [videos, setVideos] = useState<Video[]>([])
+  const [sources, setSources] = useState<Record<string, string>>({})
+  const [place, setPlace] = useState<PlaceVideo | null>(null)
+  const [mot, setMot] = useState<{ genre: 'info' | 'erreur'; texte: string } | null>(null)
+  const [aRetirer, setARetirer] = useState<string | null>(null)
+  // Seules les URL fabriquées localement se révoquent : un lien signé n'est pas
+  // un objet du navigateur, et le révoquer ne ferait rien de bon.
+  const vivantes = useRef<string[]>([])
+  const fichier = useRef<HTMLInputElement>(null)
+
+  useEffect(() => () => {
+    vivantes.current.forEach(URL.revokeObjectURL)
+    vivantes.current = []
+  }, [])
+
+  const charger = useCallback(async () => {
+    const l = await videosDeLaChute(db, chuteId)
+    const suivantes: Record<string, string> = {}
+    const fabriquees: string[] = []
+    for (const v of l) {
+      // Le coffre de CE téléphone d'abord. Sur un second appareil il est vide :
+      // la ligne est descendue par synchronisation, les octets sont restés au
+      // stockage, et c'est le lien signé qui rend la vidéo regardable.
+      const f = await lireVideoLocale(v)
+      if (f) {
+        const u = URL.createObjectURL(f)
+        suivantes[v.id] = u
+        fabriquees.push(u)
+        continue
+      }
+      const distante = await lienVideoDistante(v)
+      if (distante) suivantes[v.id] = distante
+    }
+    setVideos(l)
+    setSources((anciennes) => {
+      Object.values(anciennes).forEach((u) => {
+        if (u.startsWith('blob:')) URL.revokeObjectURL(u)
+      })
+      vivantes.current = fabriquees
+      return suivantes
+    })
+    setPlace(await placeVideo(db))
+  }, [db, chuteId])
+  // ⚠ UNE LECTURE QUI ÉCHOUE DOIT LE DIRE. Sans ce `catch`, un refus de SQLite
+  // laissait le bloc entier vide — ni vidéo, ni quota, ni message — c'est-à-dire
+  // exactement l'écran d'un dossier sans vidéo. Un échec qui ressemble à un
+  // succès est le pire des deux.
+  useEffect(() => {
+    void charger().catch(() => setMot({
+      genre: 'erreur',
+      texte: 'La liste des vidéos n’a pas pu être lue. Recharge l’écran pour réessayer.',
+    }))
+  }, [charger])
+
+  const [verser, occupe] = useGeste(async (fichiers: FileList | null) => {
+    const choisi = fichiers?.[0]
+    if (!choisi) return
+    setMot({ genre: 'info', texte: 'Préparation de la vidéo… cela prend le temps du clip.' })
+    const prete = await comprimer(choisi, DUREE_MAX_MS)
+    if ('refus' in prete) { setMot({ genre: 'erreur', texte: prete.refus }); return }
+
+    const versee = await verserVideo(db, { chuteId }, prete.blob, {
+      duree_ms: prete.duree_ms, largeur: prete.largeur, hauteur: prete.hauteur,
+    })
+    if ('refus' in versee) { setMot({ genre: 'erreur', texte: versee.refus }); return }
+
+    try { await charger() } catch {
+      setMot({ genre: 'info', texte: 'Vidéo enregistrée. Recharge l’écran pour la voir.' })
+      onEcrit()
+      return
+    }
+    setMot({
+      genre: 'info',
+      texte: prete.reencodee
+        ? `Vidéo enregistrée (${formaterPoids(prete.blob.size)}). Elle partira au stockage `
+          + `au retour du réseau, et reprendra où elle s’arrête si la connexion coupe.`
+        : `Vidéo enregistrée telle quelle (${formaterPoids(prete.blob.size)}) : cet appareil `
+          + `ne sait pas la ré-encoder. Elle occupe donc plus de place qu’une vidéo comprimée.`,
+    })
+    onEcrit()
+  })
+
+  const retirer = async (v: Video) => {
+    setMot(null)
+    try {
+      const resultat = await oublierVideo(db, v.id)
+      if (resultat.statut === 'en_attente' && resultat.motif === 'base_locale') {
+        setMot({
+          genre: 'erreur',
+          texte: 'La vidéo n’a pas été retirée. Elle reste dans le carnet et sur ce téléphone : réessaie.',
+        })
+        return
+      }
+      // Le tombstone est durable : la vidéo ne doit pas réapparaître si sa
+      // relecture échoue juste après.
+      setVideos((l) => l.filter((x) => x.id !== v.id))
+      setARetirer(null)
+      try { await charger() } catch { /* retrait déjà persisté */ }
+      onEcrit()
+      setMot({
+        genre: 'info',
+        texte: resultat.statut === 'en_attente'
+          ? resultat.motif === 'finalisation_locale'
+            ? 'Retrait enregistré. La vidéo n’est plus dans le carnet ; le nettoyage local reprendra à la prochaine ouverture.'
+            : 'Retrait enregistré. La vidéo n’est plus dans le carnet ; ses copies finiront d’être supprimées au retour du réseau.'
+          : 'Vidéo retirée du carnet, du téléphone et du stockage quand elle y était sauvegardée.',
+      })
+    } catch {
+      setMot({
+        genre: 'erreur',
+        texte: 'La vidéo n’a pas été retirée. Elle reste dans le carnet : réessaie.',
+      })
+    }
+  }
+
+  return (
+    <div className="pile sous-dossier-crash">
+      {videos.length > 0 && (
+        <div className="pile videos-crash">
+          {videos.map((v, i) => (
+            <div key={v.id} className="case-video-crash">
+              {sources[v.id]
+                ? <video src={sources[v.id]} controls playsInline preload="metadata"
+                         aria-label={`Vidéo du crash ${i + 1}`} />
+                : <span className="note">
+                    Vidéo sauvegardée. Elle se regardera au retour du réseau.
+                  </span>}
+              {aRetirer === v.id ? (
+                <div className="pile confirmation-photo-crash">
+                  <p className="note">
+                    Elle disparaît du carnet maintenant. Ses copies locale et distante sont
+                    supprimées maintenant ou dès le retour du réseau.
+                  </p>
+                  <button type="button" className="lien destructif"
+                          onClick={() => { void retirer(v) }}>
+                    Retirer la vidéo
+                  </button>
+                  <button type="button" className="lien"
+                          onClick={() => setARetirer(null)}>
+                    Garder la vidéo
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="lien destructif"
+                        onClick={() => setARetirer(v.id)}
+                        aria-label={`retirer la vidéo ${i + 1}`}>
+                  Retirer la vidéo
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {mot && (
+        <p className={mot.genre === 'erreur' ? 'mot-erreur' : 'note'}
+           role={mot.genre === 'erreur' ? 'alert' : 'status'}>
+          {mot.texte}
+        </p>
+      )}
+      {place && (
+        <p className="note">
+          {/* ⚠ `formaterPoids` ne descend jamais sous « 1 Ko » — c'est voulu là où
+              il pèse un fichier, et faux ici : annoncer « 1 Ko » quand rien n'est
+              stocké, c'est facturer au pilote une place qu'il n'occupe pas. */}
+          {place.utilises
+            ? `Vidéo : ${formaterPoids(place.utilises)} sur ${formaterPoids(place.quota)}.`
+            : `Vidéo : aucune pour l’instant. La limite est de ${formaterPoids(place.quota)}.`}
+          {' '}Une vidéo dure {Math.round(DUREE_MAX_MS / 1000)} secondes au plus.
+        </p>
+      )}
+      {/* ⚠ SA PROPRE CLASSE, ET C'EST UN BANC QUI L'A EXIGÉ. Réutiliser
+          `ajout-photo-crash` rendait `button.ajout-photo-crash` ambigu : la
+          fumée du crash visait deux éléments au lieu d'un et s'arrêtait net.
+          Deux gestes différents dans un même dossier ont besoin de deux noms,
+          pour le banc comme pour qui lit l'écran. */}
+      <button type="button" className="lien ajout-video-crash" disabled={occupe}
+              onClick={() => fichier.current?.click()}>
+        {occupe ? 'préparation…' : 'Ajouter une vidéo'}
+      </button>
+      <input ref={fichier} type="file" accept="video/*" hidden disabled={occupe}
              onChange={(e) => { void verser(e.target.files); e.target.value = '' }} />
     </div>
   )

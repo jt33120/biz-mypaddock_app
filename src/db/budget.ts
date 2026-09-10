@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { nouvelId } from './ids'
 import { marquerSaisie } from './mesures'
+import type { GenreDeTenue } from './equipement'
 import { anneeSaison, type Cible } from './depot'
 
 /**
@@ -160,7 +161,7 @@ export const moisDuJour = (jour: string | null | undefined): string | null => {
  * ⚠ LE JOUR D'UNE DÉPENSE NE SORT PAS DE L'ANNÉE QUE LE BUDGET MONTRE.
  *
  * `saison_annee` se dérive du jour à la saisie et ne bouge plus (AD-18), et les
- * DEUX lectures du budget — `parPoste`, `parMois` — filtrent sur une seule
+ * La lecture du budget — `parPoste` — filtre sur une seule
  * année : celle que le garage affiche, l'année en cours. Un jour corrigé vers
  * décembre dernier fabriquait donc une ligne parfaitement écrite, parfaitement
  * envoyée, et VISIBLE NULLE PART — pendant que le raccourci de l'accueil
@@ -250,15 +251,6 @@ export const grouperParMois = (lignes: DepenseDatee[]): LigneMois[] => {
     // ferait du mois le plus cher une tête de liste, donc un verdict.
     .sort((a, b) => (a.mois === null ? 1 : b.mois === null ? -1 : a.mois < b.mois ? -1 : 1))
 }
-
-/** Ce que chaque mois d'une saison a coûté. La requête ne groupe rien : elle
- *  sort les trois colonnes, et le groupement — donc la règle — vit dans une
- *  fonction pure qu'un essai peut faire rougir. */
-export const parMois = async (
-  db: PowerSyncDatabase, annee: number,
-): Promise<LigneMois[]> => grouperParMois(
-  await db.getAll<DepenseDatee>(
-    `SELECT date_jour, poste, montant_centimes FROM depense WHERE saison_annee = ?`, [annee]))
 
 /**
  * LE REPÈRE MENSUEL — la décision de Julian du 25 août, moitié « mois ».
@@ -377,16 +369,50 @@ export const declarerEquipement = async (
   e: {
     nom: string; categorie: CategorieEquipement
     acheteLe?: string | null; centimes?: number | null; note?: string | null
+    /** ⚠ LE GENRE SE POSE MAINTENANT DÈS LA DÉCLARATION — 3 septembre 2026,
+     *  rapporté depuis le téléphone : « le choix casque combinaison doit être
+     *  saisi quand on ajoute l'équipement ». Il ne s'y posait pas, et il fallait
+     *  donc déclarer la pièce, la retrouver dans la liste, puis taper une puce
+     *  sous elle. Deux gestes séparés par une lecture, pour un fait qu'on
+     *  connaît au moment où l'on tape le nom.
+     *
+     *  Il reste FACULTATIF et il reste CORRIGEABLE : `poserGenreEquipement` ne
+     *  disparaît pas, la puce sous la pièce non plus. Poser à la déclaration ne
+     *  ferme rien — ça évite seulement d'y revenir. */
+    genre?: GenreDeTenue | null
   },
 ) => {
   const id = nouvelId()
   await db.execute(
-    `INSERT INTO equipement (id, nom, categorie, achete_le, cout_centimes, note)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO equipement (id, nom, categorie, achete_le, cout_centimes, note, genre)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, e.nom.trim(), e.categorie, e.acheteLe || null, e.centimes ?? null,
-      e.note?.trim() || null])
+      e.note?.trim() || null,
+      // Le genre n'a de sens que sous la protection — la même frontière qu'à la
+      // correction. Une glacière déclarée « casque » serait proposée comme tenue.
+      e.categorie === 'protection' ? (e.genre ?? null) : null])
   await marquerSaisie(db)
   return id
+}
+
+/**
+ * DIRE QU'UNE PIÈCE EST UN CASQUE, OU UNE COMBINAISON.
+ *
+ * ⚠ CE CHEMIN EST UNE MISE À JOUR AVANT D'ÊTRE UNE SAISIE, et c'est le cas
+ * NOMINAL : les pièces à qualifier existent déjà dans le carnet. Un genre qui ne
+ * se poserait qu'à la déclaration aurait laissé inerte tout le dispositif de
+ * tenue pour quiconque avait saisi son équipement avant lui — c'est-à-dire pour
+ * tout le monde.
+ *
+ * `null` est un appel PLEIN : le même geste retire ce qu'il a posé. Une pièce
+ * mal qualifiée doit pouvoir cesser de l'être sans qu'on la supprime — et la
+ * supprimer coûterait la dépense qu'elle porte.
+ */
+export const poserGenreEquipement = async (
+  db: PowerSyncDatabase, id: string, genre: GenreDeTenue | null,
+) => {
+  await db.execute(`UPDATE equipement SET genre = ? WHERE id = ?`, [genre, id])
+  await marquerSaisie(db)
 }
 
 export const oublierEquipement = (db: PowerSyncDatabase, id: string) =>

@@ -4,6 +4,7 @@ import {
   type Cercle as Donnees, type LigneCercle, type Membre,
 } from '../db/cercle'
 import { formaterChrono } from '../db/depot'
+import { TeteRepli } from './Repli'
 import type { Identite } from '../db/compte'
 
 /**
@@ -24,6 +25,8 @@ export function Cercle({ identite, circuit }: {
   identite: Identite | null; circuit: string | null
 }) {
   const [liste, setListe] = useState<Donnees[]>([])
+  /** Le pli de la note « sans compte » — voir son commentaire au rendu. */
+  const [ouvert, setOuvert] = useState(false)
   const [actif, setActif] = useState<Donnees | null>(null)
   const [gens, setGens] = useState<Membre[]>([])
   const [lignes, setLignes] = useState<LigneCercle[]>([])
@@ -56,12 +59,23 @@ export function Cercle({ identite, circuit }: {
 
   if (!identite) {
     return (
+      /* ⚠ REPLIÉ — lot 3, 2 septembre 2026. 158 px sur le bilan d'une journée pour
+         un paragraphe qui n'offre AUCUN geste : il explique qu'une fonction
+         demande un compte, à quelqu'un qui n'en a pas et qui est venu lire sa
+         journée. Ce n'est pas un fait de la journée, c'est une note de bas de
+         page — elle garde sa place et cesse de prendre un cinquième d'écran.
+         Elle n'est pas retirée : « le seul endroit du produit qui demande un
+         compte » est une promesse du produit sur lui-même, et une promesse qu'on
+         efface est une promesse qu'on ne tient plus. */
       <div className="bloc pile">
-        <div className="libelle">cercle</div>
-        <p className="texte">
-          Le cercle demande un compte et une connexion — c'est le seul endroit du produit qui
-          les demande. Tout le reste fonctionne au paddock, sans réseau.
-        </p>
+        <TeteRepli titre="cercle" etat="demande un compte"
+                   ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+        {ouvert && (
+          <p className="texte">
+            Le cercle demande un compte et une connexion — c'est le seul endroit du produit qui
+            les demande. Tout le reste fonctionne au paddock, sans réseau.
+          </p>
+        )}
       </div>
     )
   }

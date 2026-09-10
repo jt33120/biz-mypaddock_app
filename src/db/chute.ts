@@ -149,6 +149,11 @@ export const oublierChute = async (db: PowerSyncDatabase, id: string) => {
     if (!chute) return false
     await tx.execute(`UPDATE intervention SET chute_id = NULL WHERE chute_id = ?`, [id])
     await tx.execute(`UPDATE photo SET chute_id = NULL WHERE chute_id = ?`, [id])
+    // La vidéo survit pour la même raison, et elle garde son `roulage_id` : la
+    // pièce reste celle de la JOURNÉE, qui est ce qui s'est réellement passé.
+    // La détruire ferait payer une correction de saisie par la perte de la
+    // seule chose qu'on ne peut pas refilmer.
+    await tx.execute(`UPDATE video SET chute_id = NULL WHERE chute_id = ?`, [id])
     await tx.execute(`DELETE FROM chute WHERE id = ?`, [id])
     const { n } = await tx.get<{ n: number }>(
       `SELECT count(*) AS n FROM chute WHERE roulage_id = ?`, [chute.roulage_id])

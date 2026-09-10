@@ -9,6 +9,7 @@ export default defineConfig(({ mode, command }) => {
   // Le nom vient d'UNE SEULE source, y compris pour le manifeste (récit 0.3).
   const env = loadEnv(mode, process.cwd(), '')
   const name = env.VITE_APP_NAME || 'MyPaddock'
+  const { tokens: designTokens } = JSON.parse(readFileSync(new URL('./design/tokens.json', import.meta.url), 'utf8')) as { tokens: Record<string, string> }
 
   /**
    * ⚠ LE BANC SERT LES EN-TÊTES DE PRODUCTION, ET C'EST UNE LEÇON PAYÉE.
@@ -101,8 +102,8 @@ export default defineConfig(({ mode, command }) => {
           scope: '/',
           display: 'standalone',
           orientation: 'portrait',
-          background_color: '#10131c',
-          theme_color: '#10131c',
+          background_color: designTokens.nuit,
+          theme_color: designTokens.nuit,
           icons: [
             { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },

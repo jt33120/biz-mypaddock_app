@@ -115,6 +115,40 @@ body {
 .hud-10 { font-size: 11px }
 .titre { font-weight: 600; font-size: 26px; letter-spacing: .01em; }
 
+/* ─── LE COMPTEUR DE CRÉDITS — en haut à gauche, sur tous les écrans ────────
+   « Un compteur en haut à gauche qui peut se faire rajouter » — Julian,
+   3 septembre 2026.
+
+   ⚠ IL COÛTE DE LA HAUTEUR SUR TOUS LES ÉCRANS, ET C'EST UN ARBITRAGE ASSUMÉ.
+   Le lot 3 venait de passer une semaine à faire tenir chaque page en une vue
+   d'iPhone ; ajouter une ligne à la coque va contre ce travail, et il fallait
+   que ça se paie le moins possible. D'où une seule ligne, la hauteur du texte
+   et rien de plus : pas de cadre, pas de fond, pas de marge basse — c'est le
+   bloc suivant qui porte l'écart. Mesuré à 375 × 812 : le compteur pris seul
+   ajoute une vingtaine de pixels, soit moins de 3 % de la hauteur utile.
+
+   ⚠ PAS DE CADRE, ET CE N'EST PAS QU'UNE ÉCONOMIE DE PLACE. Toutes les formes
+   encadrées de ce produit se tapent — puce, lien, bouton, onglet. Encadrer un
+   nombre qui ne fait que se lire apprendrait au pouce un cadre qui ne répond
+   pas, et c'est le genre de détail qui fait douter du reste de l'écran.
+
+   ⚠ ET IL NE ROUGIT JAMAIS, MÊME À ZÉRO. Le rouge de ce produit ne dit qu'une
+   chose — « ceci part et ne revient pas ». Zéro crédit ne casse rien et ne perd
+   rien : il y a seulement un geste payant qu'on ne peut pas faire aujourd'hui.
+   Le teindre en `--alerte` affaiblirait le rouge là où il compte vraiment. */
+.hud-credits {
+  display: flex; align-items: baseline; gap: 6px;
+  margin: 0 0 10px; padding: 0;
+}
+.hud-credits .chiffre {
+  font-size: 15px; font-weight: 600; color: var(--miami);
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.hud-credits .mot {
+  font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--encre-tenue); line-height: 1;
+}
+
 .libelle {
   color: var(--encre-faible); font-size: 12px; font-weight: 500;
   letter-spacing: .14em; text-transform: uppercase;
@@ -163,7 +197,7 @@ body {
    Un rouge qui sert à deux choses ne sert plus à rien.
 
    ⚠ ET LA COULEUR N'EST JAMAIS SEULE (UX-DR8). Deux signes la doublent PARTOUT,
-   sur les 17 gestes rouges du produit : le MOT dit ce qui part — retirer,
+   sur les 19 gestes rouges du produit : le MOT dit ce qui part — retirer,
    supprimer, effacer, oublier — et la FORME — filet plein sur tout le tour,
    texte de la même teinte — se distingue du secondaire même pour un œil qui ne
    sépare pas les rouges des gris. Retirer l'un des deux ramène le défaut que
@@ -171,9 +205,10 @@ body {
 
    ⚠ CE COMMENTAIRE AJOUTAIT UN TROISIÈME SIGNE, « la CONFIRMATION en deux temps
    reste entière », ET C'ÉTAIT FAUX POUR LA MOITIÉ D'ENTRE EUX. Les deux temps
-   existent pour 5 gestes — une journée de roulage et tout ce qu'elle emporte,
-   une chute, le compte entier, une photo de l'album et une photo de crash —
-   soit 10 boutons rouges sur 17, l'ouvrant et le confirmant. Les 7 autres partent au premier tap :
+   existent pour 6 gestes — une journée de roulage et tout ce qu'elle emporte,
+   une chute, le compte entier, une photo de l'album, une photo de crash et une
+   vidéo de crash —
+   soit 12 boutons rouges sur 19, l'ouvrant et le confirmant. Les 7 autres partent au premier tap :
    « Retirer ce que la sonde a écrit », et six « retirer » au bout d'une ligne
    de liste (une horloge, une pièce d'atelier, une pièce d'équipement, une ligne
    de chargement, une tâche d'avant d'y aller, une chose qu'on venait chercher).
@@ -186,7 +221,13 @@ body {
    SEULE, parce que la seule suppression de photo qui existait jusque-là
    emportait la journée entière.
 
-   Ces 17 se répartissent en 6 `.bouton.destructif` et 11 `.lien.destructif`, et
+   ⚠ ET LA VIDÉO DE CRASH SUIT LA PHOTO, POUR UNE RAISON PLUS FORTE — récit 23.10.
+   Une photo de crash ne se retape pas ; une vidéo de crash ne se retape ni ne se
+   refilme, et elle peut de surcroît être en cours de versement au moment où on
+   la retire. Sa confirmation dit donc, comme celle de la photo, que les deux
+   copies partent — maintenant ou au retour du réseau.
+
+   Ces 19 se répartissent en 6 `.bouton.destructif` et 13 `.lien.destructif`, et
    un essai unitaire recompte les trois nombres écrits ici. Un commentaire est la
    mémoire du défaut dans ce dépôt : celui-ci décrivait une garde qu'on croyait
    tenue et qui ne tenait qu'à moitié, et c'est pire qu'une garde absente, parce
@@ -196,13 +237,17 @@ body {
   border: 1px solid var(--alerte); box-shadow: none;
   min-height: var(--cible-min); font-weight: 600; letter-spacing: .06em;
 }
-/* Le même geste posé en lien — « retirer » au bout d'une ligne de liste. Il
-   n'a pas de cadre à teindre : le trait sous le mot le porte, sinon le rouge
-   se lirait comme un lien visité et non comme une perte. */
-.lien.destructif {
-  color: var(--alerte); text-decoration-color: var(--alerte);
-  text-underline-offset: 2px;
-}
+/* Le même geste posé en lien — « retirer » au bout d'une ligne de liste.
+   ⚠ SON PORTEUR DE ROUGE A CHANGÉ LE 2 SEPTEMBRE 2026, et il fallait qu'il
+   change. Ce commentaire disait : « il n'a pas de cadre à teindre : le trait
+   sous le mot le porte ». Le lien a maintenant un cadre, et il n'a plus de
+   trait — la phrase était donc devenue fausse dans ses deux moitiés, et un
+   commentaire faux sur le rouge du produit est le pire endroit où en laisser un.
+   Le cadre teint remplace le trait teint, et la crainte d'origine tombe avec :
+   un cadre rouge ne peut pas se lire comme un lien visité, puisqu'il n'y a plus
+   de lien souligné nulle part à confondre avec lui. Le mot reste rouge aussi :
+   la couleur ne porte jamais seule (UX-DR8). */
+.lien.destructif { color: var(--alerte); border-color: var(--alerte); }
 
 /* ─── LES MOLETTES — le geste ne change pas, seule la peau s'allège ───────── */
 .molettes { display: flex; gap: 10px; align-items: stretch; }
@@ -248,7 +293,50 @@ body {
 .circuit .nom { font-size: 16px }
 .circuit .libelle { color: var(--encre-tenue) }
 
-.puces { display: flex; flex-wrap: wrap; gap: 8px }
+/* ─── UN RANG DE COMMANDES EST UNE GRILLE, PLUS UN TAS ─────────────────────
+   « les boutons c'est n'importe quoi, revois l'organisation et le layout des
+   boutons de l'app » — Julian, 3 septembre 2026, capture à l'appui.
+
+   Ce qu'on voyait sur la capture : MAINTENANCE et FINANCE sur une ligne,
+   PERFORMANCE seul en dessous, les trois de largeurs différentes ; Casque large
+   comme son mot, Combinaison large comme le sien ; « Remplacer la photo »,
+   « retirer » et « Déclarer une pièce » chacun à SA largeur, empilés en escalier.
+   Aucune de ces largeurs ne voulait dire quoi que ce soit : elles disaient la
+   longueur du mot, et rien d'autre. Un écran où la taille d'une commande ne
+   signifie rien est un écran qu'on relit à chaque fois, gants aux mains.
+
+   ⚠ `flex-wrap: wrap` EST CE QUI PRODUISAIT L'ESCALIER, et ce n'est pas une
+   erreur de réglage : c'est ce que `wrap` FAIT. Il pose les enfants à leur
+   largeur naturelle et retourne à la ligne quand ça déborde. Le résultat est
+   correct au pixel près et illisible d'un coup d'œil.
+
+   ⚠ GRILLE ET NON `flex: 1 1 <base>`, ET LA DIFFÉRENCE SE VOIT SUR LA DERNIÈRE
+   LIGNE. En flex, les enfants d'une ligne incomplète s'étirent pour la remplir :
+   huit catégories donneraient trois cellules de 109 px, puis trois, puis DEUX de
+   167 px — la dernière ligne trahit la grille des deux premières. `auto-fit`
+   pose des colonnes de largeur égale une fois pour toutes ; une ligne incomplète
+   laisse ses colonnes vides au lieu de gonfler celles qui restent.
+
+   96 px est le plancher d'une colonne : à 375 px de large — le plus petit iPhone
+   visé — il en tient trois, ce qui est le nombre de choix des deux rangs les plus
+   vus du produit (MAINTENANCE · FINANCE · PERFORMANCE, puis Moto · Catégorie ·
+   Mois). Un mot trop long pour sa colonne passe à la ligne DANS sa cellule, et
+   ses voisines s'alignent sur sa hauteur : une commande plus haute, jamais une
+   grille cassée. */
+.puces, .actions-materiel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+/* Les enfants remplissent leur cellule, en largeur comme en hauteur. Sans ça,
+   `.lien` garderait son `align-self: flex-start` — il est fait pour une commande
+   isolée dans une colonne, où s'étirer sur toute la largeur serait grotesque —
+   et rouvrirait l'escalier à l'intérieur même de la grille. */
+.puces > *, .actions-materiel > * {
+  align-self: stretch;
+  justify-content: center;
+  text-align: center;
+}
 .puce {
   min-height: var(--cible-min); padding: 10px 16px;
   font-size: 13px; font-weight: 500; letter-spacing: .06em;
@@ -313,12 +401,20 @@ body {
 .legal .titre { font-size: 24px; margin-top: 8px; }
 .legal .texte { max-width: 62ch; line-height: 1.55; }
 .legal .note { max-width: 62ch; }
-.legal .lien { display: inline; padding: 0; }
+/* Dans une PHRASE, un lien redevient un lien : le cadre découperait un mot au
+   milieu d'un paragraphe. C'est le seul contexte du produit où le soulignement
+   est la forme juste — celle d'un document, parce que c'en est un. */
+.legal .lien { display: inline; padding: 0; border: 0; text-decoration: underline; }
 
 /* Le lien de réarrangement est DISCRET par exigence, pas par goût : FR-15
    interdit qu'il ressemble à une étape d'installation. Il se trouve quand on le
    cherche et ne se remarque pas quand on ne le cherche pas. */
-.lien.discret { font-size: 11px; color: var(--encre-tenue); align-self: flex-start; }
+.lien.discret {
+  font-size: 11px; color: var(--encre-tenue); align-self: flex-start;
+  /* Sans cadre : un cadre le rendrait aussi visible que les commandes qu'il
+     doit justement ne pas concurrencer. */
+  border: 0; text-decoration: underline; padding: 6px 0;
+}
 
 /* LA COURBE. Rien de lissé, rien de flou : `crispEdges` sur le tracé comme sur
    les points, et une hauteur fixe pour que trois roulages et quinze occupent la
@@ -391,11 +487,21 @@ body {
 }
 .onglet {
   flex: 1; min-height: var(--cible-min);
-  display: flex; align-items: center; justify-content: center;
+  /* En COLONNE depuis que les cinq portent un glyphe : le mot au-dessus, le
+     dessin dessous. Les deux onglets sans mot (accueil, compte) n'ont qu'un
+     enfant et se centrent donc exactement comme avant. */
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px;
   font-family: var(--face); font-size: 12px; font-weight: 600; letter-spacing: .12em;
   color: var(--encre-tenue); background: none; border: none; cursor: pointer;
   border-top: 2px solid transparent;
 }
+/* ⚠ 8,5 px ET .06em D'INTERLETTRE, ET C'EST MESURÉ. Le mot le plus large est
+   ROULAGES : à 12 px et .12em il occupait 73,2 px des 75 disponibles, et il n'y
+   avait plus de place pour autre chose. Sous le glyphe il n'a plus besoin de
+   porter l'onglet à lui seul — il le NOMME, le dessin le montre — donc il
+   rétrécit, et huit caractères repassent largement dans la case. */
+.onglet .mot { font-size: 8.5px; letter-spacing: .06em; line-height: 1; }
 .onglet[data-actif='1'] { color: var(--miami); border-top-color: var(--miami) }
 
 /* ─── LE GARAGE ────────────────────────────────────────────────────────────
@@ -470,6 +576,87 @@ body {
   font-weight: 600; color: var(--encre); margin-bottom: 4px;
 }
 
+/* ─── LA TENUE DU JOUR — MOTO, CASQUE, COMBINAISON EN UNE SEULE IMAGE ───────
+   « faire des genre de skin comme un jeux vidéo » — Julian, 1er septembre 2026.
+
+   ⚠ UNE GRILLE, PAS TROIS VIGNETTES. Trois cadres autonomes posés côte à côte
+   se lisent comme trois objets rangés dans une caisse. Une seule grille, un
+   seul filet de séparation, une seule respiration : c'est ce qui fait passer
+   l'ensemble de « mon matériel » à « ma tenue », et c'est la demande.
+
+   ⚠ AUCUNE JAUGE, AUCUNE PASTILLE, AUCUN PALIER, et aucune place n'est teintée
+   selon qu'elle est remplie. Trois cases alignées appellent un compteur plus
+   fort que n'importe quel autre écran de ce produit — le refus est donc écrit
+   ici comme dans le composant. Une place vide n'est pas un manque à combler,
+   c'est une pièce dont le pilote n'a rien dit.
+
+   Le bloc vit à l'identique sur le bilan et sur l'écran de préparation : il
+   n'appartient donc à aucun des deux, et ne porte le nom d'aucun écran. */
+.tenue { display: flex; flex-direction: column; gap: 14px; }
+
+/* Le filet passe en FOND et les cellules le recouvrent : un `gap` de 1 px fait
+   toutes les séparations d'un coup, là où quatre bordures se doubleraient à
+   chaque rencontre — c'est le même montage que les trois chiffres du garage. */
+.tenue-scene {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  background: var(--filet);
+}
+.tenue-piece {
+  background: var(--surface); padding: 10px;
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+/* La moto prend la rangée entière, et ce n'est pas une hiérarchie : son sprite
+   est LARGE là où le casque et la combinaison sont hauts. Comprimée à 150 px
+   sur un écran de 375, elle devient une tache.
+
+   ⚠ AUCUNE LIGNE D'HORIZON ICI, à la différence de la scène du garage. Elle a
+   été essayée et retirée : posée en `::after` sur la cellule, elle se peint
+   PAR-DESSUS le sprite — au garage, c'est le sprite qui passe au-dessus parce
+   que la ligne appartient au conteneur, pas à la case. Un décor qui barre le
+   sujet ne se rattrape pas par un `z-index` de plus : la grille et son filet
+   suffisent à faire tenir les trois places ensemble. */
+.tenue-piece[data-place="moto"] { grid-column: 1 / -1; }
+/* `pixelated` est ce qui rend le sprite légitime : agrandi au plus proche
+   voisin il reste net, un lissage le trahirait en photo floue.
+   `contain` dans un cadre de ratio fixe est l'autre moitié — une combinaison
+   haute et un casque carré cohabitent sans qu'aucun des deux soit rogné, et
+   les deux places gardent la même hauteur quelles que soient les images. */
+.tenue-sprite {
+  width: 100%; aspect-ratio: 1 / 1; object-fit: contain;
+  display: block; image-rendering: pixelated;
+}
+/* Une place vide occupe EXACTEMENT le cadre d'un portrait : sans ça, déclarer
+   un casque ferait sauter toute la page, et le geste ressemblerait à une casse.
+   Les hachures sont celles de la silhouette du garage — même absence, même
+   dessin — et le mot est toujours écrit par-dessus : la couleur ne porte jamais
+   le sens seule. */
+.tenue-absente {
+  width: 100%; aspect-ratio: 1 / 1;
+  display: grid; place-items: center; text-align: center; padding: 8px;
+  /* Ce texte est le SEUL porteur du sens de la case : il se lit à la même
+     force qu'un libellé, pas à celle d'une note de bas de page. */
+  font-size: 11px; line-height: 1.35; color: var(--encre-faible);
+  background: repeating-linear-gradient(-45deg, var(--surface-haute) 0 6px, transparent 6px 12px);
+}
+.tenue-piece[data-place="moto"] .tenue-sprite,
+.tenue-piece[data-place="moto"] .tenue-absente { aspect-ratio: 16 / 9; }
+/* Le nom de la PLACE d'abord, la pièce ensuite. `anywhere` parce qu'un nom
+   d'équipement n'a pas de limite connue — « Combinaison Ixon Vortex 3 » sort
+   par la droite d'une colonne de 150 px, et une lettre qui dépasse d'un écran
+   de 375 est un défaut déjà payé une fois sur la ligne d'équipement. */
+.tenue-nom {
+  font-size: 12px; line-height: 1.35; color: var(--encre-faible);
+  overflow-wrap: anywhere;
+}
+.tenue-nom b {
+  display: block; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase;
+  font-weight: 600; color: var(--encre-tenue);
+}
+/* Même raison, et elle vaut pour les puces du choix : les noms d'équipement
+   sont bien plus longs que « CBR 1000 RR », et une puce d'un seul mot très
+   long refuse de se réduire sous sa largeur intrinsèque. */
+.tenue .puce { max-width: 100%; overflow-wrap: anywhere; }
+
 .garage .chiffres {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--filet);
 }
@@ -485,10 +672,79 @@ body {
 /* Global, et pas par écran : la première version vivait deux fois, enfermée
    dans `.garage` et `.compte`, et le troisième écran qui s'en servait retombait
    sur le bouton gris du système. */
+/* ⚠ LE SOULIGNEMENT EST TOMBÉ — 2 septembre 2026, rapporté depuis le téléphone :
+   « les boutons texte soulignés sont très moches ». Il l'était, et pas seulement
+   à l'œil : trois liens soulignés empilés sous chaque pièce d'équipement se
+   lisent comme du texte qu'on aurait oublié de mettre en forme, pas comme trois
+   gestes. Le trait sous un mot est la convention d'un DOCUMENT ; ici ce sont des
+   commandes, et le produit en a déjà une forme — la puce, cadre d'un pixel sur
+   `--filet`, angles vifs. Le lien la rejoint : une seule famille de commande à
+   apprendre au lieu de deux, et l'écran cesse de ressembler à une page web de
+   1998 posée dans une borne d'arcade.
+   Il garde ce qui le distingue de la puce : plus petit, sourd, jamais allumé —
+   une puce dit un ÉTAT choisi, un lien déclenche un GESTE. */
 .lien {
-  background: none; border: 0; color: var(--encre-tenue); font: inherit; font-size: 13px;
-  text-decoration: underline; align-self: flex-start; padding: 6px 0; cursor: pointer;
+  background: none; border: 1px solid var(--filet); color: var(--encre-faible);
+  font: inherit; font-size: 12px; letter-spacing: .06em;
+  text-decoration: none; align-self: flex-start; padding: 8px 12px; cursor: pointer;
   min-height: var(--cible-min);
+}
+.lien:active { border-color: var(--miami); color: var(--encre); }
+
+/* ─── LE TÉMOIN D'ATTENTE ──────────────────────────────────────────────────
+   Un carré évidé dont un seul côté est allumé, qui tourne par CRANS. Le reste
+   du produit est en pixels carrés et `crispEdges` : un cercle lissé tournant en
+   continu viendrait d'une autre famille visuelle, et deux familles sur un même
+   écran se remarquent avant le contenu.
+
+   ⚠ IL S'ARRÊTE SI LE SYSTÈME LE DEMANDE. `prefers-reduced-motion` n'est pas un
+   confort : une rotation permanente déclenche des nausées chez une partie des
+   gens, et un pilote qui a réglé son téléphone pour les éviter ne s'attend pas à
+   ce qu'une application de carnet le lui impose. Le témoin reste alors VISIBLE
+   et immobile — retirer le repère laisserait l'attente sans signe du tout. */
+/* ⚠ IL A ÉTÉ UN CARRÉ ÉVIDÉ PENDANT UNE JOURNÉE, ET IL SE LISAIT « CASE À
+   COCHER ». Un carré de 14 px cerné d'un trait de 2 px, posé à gauche d'un mot,
+   dans un bouton lui-même encadré : c'est le dessin universel d'une case, et
+   « ▢ FABRICATION » se lit comme une option qu'on n'a pas cochée, pas comme un
+   travail en cours. La rotation aurait dû le dire — sauf qu'un carré qui tourne
+   par crans ressemble, à cette taille, à un carré immobile.
+
+   Trois pixels dont un seul est allumé, et l'allumé avance : il n'existe aucune
+   commande de ce produit qui ressemble à ça, donc aucune confusion possible. Et
+   c'est le dessin le plus natif qu'on puisse faire ici — le reste du produit est
+   fait de carrés pleins alignés sur une grille (`dessins.ts`, `crispEdges`).
+
+   ⚠ IL RESTE LISIBLE ARRÊTÉ. `prefers-reduced-motion` n'est pas un confort : une
+   animation permanente déclenche des nausées chez une partie des gens. Figé, le
+   témoin garde son premier pixel allumé et les deux autres éteints — donc une
+   marque présente, et pas un espace vide où l'on se demande si l'écran a planté. */
+.attente {
+  width: 4px; height: 4px; flex: 0 0 auto; display: block;
+  margin-right: 16px; /* la place des deux pixels dessinés en `box-shadow` */
+  background: var(--miami);
+  box-shadow: 8px 0 0 var(--filet-vif), 16px 0 0 var(--filet-vif);
+  animation: attente-chasse .9s steps(1) infinite;
+}
+/* Centré : le témoin est presque toujours SEUL dans un bouton, à la place du
+   libellé qu'il remplace — et un libellé de bouton est centré. `flex-start`
+   le collait au bord gauche d'une cellule dont le texte, lui, est centré. */
+.attente-rang { gap: 8px; justify-content: center; align-items: center; }
+@keyframes attente-chasse {
+  0%, 33% {
+    background: var(--miami);
+    box-shadow: 8px 0 0 var(--filet-vif), 16px 0 0 var(--filet-vif);
+  }
+  34%, 66% {
+    background: var(--filet-vif);
+    box-shadow: 8px 0 0 var(--miami), 16px 0 0 var(--filet-vif);
+  }
+  67%, 100% {
+    background: var(--filet-vif);
+    box-shadow: 8px 0 0 var(--filet-vif), 16px 0 0 var(--miami);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .attente { animation: none; }
 }
 .garage .onglets { display: flex; gap: 0; border-bottom: 1px solid var(--filet); }
 .garage .onglets .onglet {
@@ -510,7 +766,15 @@ body {
   border-top: 1px solid var(--filet); padding-top: 14px;
 }
 .compte-groupe > .titre-section { margin-bottom: 2px; }
-.compte-diagnostic > summary {
+/* ⚠ SUR TOUT GROUPE REPLIABLE, PLUS SEULEMENT SUR LE DIAGNOSTIC — lot 3,
+   2 septembre 2026. Cette règle était scopée à `.compte-diagnostic`, le seul
+   `<details>` de l'écran ; « Sauvegarde » et « Données et confidentialité » en
+   sont devenus, et ils seraient sortis avec le triangle nu du navigateur, sans
+   cible de 44 px et sans alignement — trois sommaires voisins, deux allures.
+   Le sélecteur suit donc le RÔLE (un groupe qui se replie) et non l'un de ses
+   occupants. `.compte-diagnostic` reste comme prise, elle ne porte plus de
+   style. */
+.compte-groupe > summary {
   cursor: pointer; min-height: 44px; display: flex; align-items: center;
   list-style-position: inside;
 }
@@ -649,7 +913,9 @@ body {
    place d'un lieu dans la barre basse. */
 .tete { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .tete .reglages { display: flex; gap: 14px; }
-.tete .reglages .lien { min-height: auto; padding: 2px 0; }
+/* Deux mots dans l'en-tête, sur une ligne de base partagée : un cadre y
+   fabriquerait deux boîtes là où il n'y a de la place que pour du texte. */
+.tete .reglages .lien { min-height: auto; padding: 2px 0; border: 0; text-decoration: underline; }
 
 /* ⚠ CE COMMENTAIRE A TRANCHÉ LA BANDE CONTRE LA GRILLE, ET LA DÉCISION EST
    RETOURNÉE — 26 août 2026, récit 18.2. Il disait : « au paddock on en verse
@@ -826,10 +1092,25 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 }
 .case-photo-crash > .note { align-self: center; justify-self: center; padding: 8px; }
 .case-photo-crash > .lien { min-height: 44px; }
+/* La vidéo n'est PAS une case de grille comme la photo : une vignette se lit à
+   112 px, un clip ne se regarde pas à cette taille. Elle occupe donc la largeur
+   disponible, et `max-width: 100%` la borne — sans lui, la largeur intrinsèque
+   d'une vidéo 720p déborde le cadre à 375 px et pousse toute la page. */
+.videos-crash { gap: 10px; }
+.case-video-crash {
+  min-width: 0; border: 1px solid var(--filet); background: rgba(8,12,28,.6);
+  display: grid; gap: 4px; padding-bottom: 4px;
+}
+.case-video-crash video {
+  width: 100%; max-width: 100%; height: auto; display: block; background: #000;
+}
+.case-video-crash > .note { padding: 8px; }
+.case-video-crash > .lien { min-height: 44px; }
 .confirmation-photo-crash { padding: 8px; }
 .confirmation-photo-crash .lien,
 .confirmation-photo-crash .bouton { min-height: 44px; }
-.ajout-photo-crash { cursor: pointer; display: inline-flex; align-items: center; min-height: 44px; }
+.ajout-photo-crash,
+.ajout-video-crash { cursor: pointer; display: inline-flex; align-items: center; min-height: 44px; }
 .ligne-roulage-resultats { margin-left: auto; gap: 12px; }
 .marqueur-crash {
   display: inline-flex; align-items: center; gap: 5px;
@@ -923,12 +1204,42 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 /* Les actions d'une pièce d'équipement passent à la ligne plutôt que de sortir
    de l'écran : elles sont deux, trois ou quatre selon qu'il y a une photo et un
    portrait, et trois liens en une seule rangée débordent sur 390 px. */
-.actions-materiel { flex-wrap: wrap; gap: 4px 16px; }
+/* L'écart de 16 px séparait des mots soulignés qui, sans lui, se seraient
+   touchés. Chaque geste porte maintenant son cadre : c'est LUI qui sépare,
+   et 16 px de plus poussaient la troisième commande à la ligne à 375 px. */
+/* La grille est déclarée plus haut, avec `.puces` : les deux rangs ont le même
+   défaut à corriger et la même correction, et deux règles jumelles dans deux
+   coins de la feuille finissent par diverger. Il ne reste ici que ce qui lui est
+   propre. */
 /* L'annonce de coût du portrait s'ouvre SOUS la ligne d'actions et non dedans :
    comprimée entre « Photographier » et « retirer », elle rendait une colonne de
    texte de 90 px — c'est-à-dire une annonce qu'on ne lit pas, donc pas une
    annonce. Même règle qu'en tête de garage. */
-.actions-materiel > .bloc { flex: 1 0 100%; margin-top: 6px; }
+/* ⚠ NE REMETS PAS `grid-column-start: 1` SUR LE GESTE ROUGE. Essayé le
+   3 septembre 2026, et le rendu l'a réfuté en une capture.
+
+   L'intention était bonne : la grille venait de poser « retirer » à côté de
+   « Photographier », même taille, même hauteur, à un pouce d'écart — or la
+   feuille dit plus haut pourquoi le rouge a sa propre forme, « gants aux mains,
+   on tape la forme qu'on reconnaît avant d'avoir fini de lire la phrase ».
+   Forcer la première colonne renvoie bien le geste rouge à la ligne suivante.
+
+   Sauf qu'`auto-fit` EFFONDRE LES PISTES VIDES. Le geste rouge seul sur sa ligne
+   laisse la deuxième colonne vide sur toute la grille, `auto-fit` la supprime, il
+   ne reste qu'UNE colonne — et « retirer » devient une barre rouge pleine
+   largeur, c'est-à-dire la commande la plus voyante de l'écran. La règle
+   produisait exactement ce que son propre commentaire disait vouloir éviter.
+
+   Ce qui distingue le geste rouge reste donc ce qui le distinguait déjà, et qui
+   est éprouvé par un essai unitaire et une fumée : son cadre `--alerte`, son mot
+   rouge, et le mot lui-même (UX-DR8 — la couleur ne porte jamais seule). Sa
+   taille égale à celle de ses voisins n'est pas un accident, c'est la fin des
+   largeurs qui ne voulaient rien dire. */
+
+/* Le panneau d'annonce du coût prend TOUTE la largeur : c'est un bloc de lecture
+   posé sous les commandes, pas une quatrième commande. `1 / -1` est la
+   traduction en grille de ce que `flex: 1 0 100%` disait en flex. */
+.actions-materiel > .bloc { grid-column: 1 / -1; margin-top: 6px; text-align: left; }
 
 /* ─── LES ICÔNES — épique 20 ───────────────────────────────────────────────
    Un seul jeu, une seule grille (12 x 12, en aplats), et la couleur du texte
@@ -1008,7 +1319,20 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
    navigateur qu'il garde le défilement VERTICAL pour lui et nous laisse
    l'horizontal. Sans lui, une liste qu'on fait défiler s'entrouvre sous le
    pouce — le défaut qui rend ces listes détestables. */
-.ligne-glissante { touch-action: pan-y; overflow: hidden; }
+/* ⚠ PLUS SERRÉE QUE LE BLOC ORDINAIRE — lot 3, 2 septembre 2026, mesuré. Une
+   carte de journée pesait 134 px, et l'écran en empile trois à cinq : c'est le
+   premier poste de défilement de ROULAGES une fois le bilan replié. Un `.bloc`
+   générique s'aère à 16 px parce qu'il porte un contenu ; celle-ci porte DEUX
+   LIGNES et se lit d'un coup d'œil — le blanc n'y sépare rien, il éloigne
+   seulement la carte suivante.
+
+   ⚠ CE QUI N'A PAS BOUGÉ : la taille du chrono. C'est le chiffre qu'on vient
+   chercher dans cette liste, et le rétrécir pour gagner six pixels échangerait
+   la raison d'être de la carte contre du défilement. Les cibles tactiles non
+   plus : la carte entière est le bouton, et elle reste très au-dessus des 44 px.
+   Ce qui se retire ici est du VIDE, jamais un fait ni une prise. */
+.ligne-glissante { touch-action: pan-y; overflow: hidden; padding: 11px 13px; gap: 7px; }
+.ligne-glissante .glissable { gap: 6px; }
 .glissable { cursor: pointer; }
 
 /* ⚠ LES LANGUETTES SONT TOUJOURS DANS LE DOM, ET SEULEMENT REPLIÉES. Rendues
@@ -1031,7 +1355,11 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
 .languettes .lien {
   flex: 1; min-height: 56px; display: flex; align-items: center;
   justify-content: center; gap: 6px;
-  border-top: 1px solid var(--filet); text-decoration: none;
+  /* `border: 0` D'ABORD : le lien porte maintenant un cadre complet, et ici le
+     filet du haut est un SÉPARATEUR entre le tiroir et la ligne, pas le contour
+     d'un bouton. Sans cette remise à zéro, chaque languette se retrouvait
+     encadrée dans un tiroir qui n'a que deux languettes collées. */
+  border: 0; border-top: 1px solid var(--filet); text-decoration: none;
 }
 
 /* ─── LE TÉMOIN DE SAUVEGARDE — récit 22.3 ─────────────────────────────────
@@ -1119,3 +1447,42 @@ button.bloc.atelier { width: 100%; text-align: left; cursor: pointer; align-item
    réagit au doigt invite à taper dessus, et taper dessus voudrait dire
    « atteint ». */
 .objectifs .ligne-atelier { align-items: center; }
+
+/* ─── L'ANALYSE — LES TROIS RANGÉES QUI FONT LA PHRASE ─────────────────────
+   Domaine, axe, période : trois rangées de `.puce` qui se lisent de haut en bas
+   comme une phrase de trois mots. L'écart ENTRE les rangées est plus grand que
+   l'écart entre les puces d'une même rangée (8 px dans `.puces`) — sans ça,
+   trois rangées se lisent comme UNE rangée qui aurait débordé, et le pilote
+   croit choisir dans un seul jeu.
+
+   Le filet du bas sépare CE QU'ON CHOISIT de CE QU'ON LIT. Sans lui, la rangée
+   des saisons et le titre du tracé se suivent au même écart, et le titre a l'air
+   d'une quatrième rangée. L'écran retire le cadre entier quand les trois rangées
+   se sont tues, pour ne pas dessiner un trait au-dessus de rien.
+
+   ⚠ AUCUNE CLASSE DE TRACÉ ICI, et c'est délibéré. Les barres portent
+   `barre-argent`, la suite emprunte le `.courbe .trace` qui existe déjà : la
+   feuille garde donc UN SEUL endroit qui règle la taille d'un tracé, et `.trace`
+   n'est jamais déclarée au premier niveau. `.vignette` puis `.barre` ont coûté
+   deux défauts de ce genre en deux jours, dont un qui plaquait chaque barre
+   par-dessus la barre de navigation.
+
+   `.puces` enveloppe déjà (`flex-wrap`) : à 375 px la rangée du domaine tient
+   sur deux lignes quand ses trois mots sont là, et c'est la seule mise en page
+   qui n'en coupe aucun. La cible reste celle de `.puce` — `--cible-min`, 52 px,
+   au-delà des 44 px exigés. */
+.analyse-choix {
+  gap: 12px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--filet);
+}
+
+/* ⚠ `.note` N'EXISTE PAS AU PREMIER NIVEAU DE CETTE FEUILLE : elle n'est
+   habillée que sous un écran — `.garage .note`, `.compte .note`, `.depense
+   .note`. Une note posée hors de ces trois-là retombe sur le corps de texte,
+   16 px en `--encre`, c'est-à-dire aussi forte que ce qu'elle commente. Or
+   l'analyse en pose quatre sortes — la complétude, l'argent non compté, la note
+   du croisement, la légende de l'axe — et ce sont précisément les phrases qui
+   doivent se lire sans couvrir le tracé. Mêmes deux propriétés que les trois
+   autres écrans, au mot près : c'est un quatrième cas du même motif, pas un
+   réglage propre à l'analyse. */
+.analyse-ecran .note { color: var(--encre-tenue); font-size: 13px; }

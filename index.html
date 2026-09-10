@@ -42,14 +42,6 @@
         --ch-canvas: 100rem;
         --ch-exit: 180ms;
       }
-      @font-face {
-        font-family: "Barlow Condensed"; font-style: italic; font-weight: 700; font-display: swap;
-        src: url("/node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-700-italic.woff2") format("woff2");
-      }
-      @font-face {
-        font-family: "Barlow"; font-style: normal; font-weight: 500; font-display: swap;
-        src: url("/node_modules/@fontsource/barlow/files/barlow-latin-500-normal.woff2") format("woff2");
-      }
       html, body { margin: 0; padding: 0; background: var(--ch-ink); }
       #chargement {
         position: fixed; inset: 0; z-index: 9999; overflow: hidden;
@@ -57,9 +49,30 @@
         font-family: var(--ch-body); isolation: isolate;
       }
       .ch-art, .ch-scrim { position: absolute; inset: 0; width: 100%; height: 100%; }
-      .ch-art { object-fit: cover; object-position: 58% center; z-index: -2; }
+      .ch-art {
+        object-fit: cover; object-position: 58% center; z-index: -3;
+        filter: grayscale(1); animation: ch-cruise 7s linear infinite;
+      }
+      .ch-bike {
+        position: absolute; z-index: -1; left: 7%; top: 20%; width: 86%; height: 48%;
+        object-fit: contain; border-radius: var(--ch-space-2);
+        filter: drop-shadow(0 1rem 2rem var(--ch-ink));
+        animation: ch-ride 3.6s cubic-bezier(.2, .6, .4, 1) infinite;
+      }
+      .ch-bike[hidden] { display: none; }
+      .ch-personal .ch-art { opacity: .2; filter: grayscale(1) blur(4px); }
+      .ch-speed {
+        position: absolute; inset: 0; z-index: -1; pointer-events: none;
+        overflow: hidden; opacity: .32;
+      }
+      .ch-speed::before, .ch-speed::after {
+        content: ""; position: absolute; left: -35%; top: 63%; width: 28%; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--ch-paper));
+        animation: ch-streak 1.8s linear infinite;
+      }
+      .ch-speed::after { top: 68%; width: 42%; animation-delay: -.9s; animation-duration: 2.4s; }
       .ch-scrim {
-        z-index: -1;
+        z-index: -2;
         background: linear-gradient(180deg, var(--ch-ink) 0%, transparent 30%, var(--ch-shade) 52%, var(--ch-ink) 100%);
       }
       .ch-scene {
@@ -74,7 +87,7 @@
       }
       .ch-edition { color: var(--ch-mint); }
       .ch-footer { display: grid; gap: var(--ch-space-4); }
-      .ch-brand { margin: 0; max-width: 100%; font: italic 700 var(--ch-brand)/1 var(--ch-display); letter-spacing: -.035em; }
+      .ch-brand { margin: 0; max-width: 100%; font: 700 var(--ch-brand)/1.06 var(--ch-display); letter-spacing: -.045em; }
       .ch-tagline { margin: var(--ch-space-3) 0 0; color: var(--ch-muted); font-size: var(--ch-copy); }
       .ch-status { max-width: 22rem; }
       .ch-status-label { margin: 0 0 var(--ch-space-2); font-size: var(--ch-copy); font-weight: 500; }
@@ -85,15 +98,28 @@
       }
       .ch-noscript { margin: var(--ch-space-2) 0 0; max-width: 32rem; color: var(--ch-paper); font-size: var(--ch-copy); }
       @keyframes ch-pass { from { transform: translateX(-110%); } to { transform: translateX(420%); } }
+      @keyframes ch-cruise {
+        from { transform: translateX(-4%) scale(1.12); }
+        to { transform: translateX(4%) scale(1.12); }
+      }
+      @keyframes ch-ride {
+        0% { transform: translateX(-9%); opacity: .72; }
+        18%, 72% { opacity: 1; }
+        100% { transform: translateX(9%); opacity: .72; }
+      }
+      @keyframes ch-streak { to { transform: translateX(520%); } }
       #chargement.ch-parti { opacity: 0; pointer-events: none; transition: opacity var(--ch-exit) ease-out; }
       @media (min-width: 64rem) {
         .ch-scene { padding: var(--ch-space-5); }
         .ch-footer { grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem); align-items: end; gap: var(--ch-space-5); }
         .ch-status { padding-bottom: var(--ch-space-1); }
         .ch-noscript { grid-column: 1 / -1; }
+        .ch-bike { left: 20%; top: 15%; width: 60%; height: 60%; }
       }
       @media (prefers-reduced-motion: reduce) {
         .ch-rail::after { animation: none; transform: none; width: 100%; }
+        .ch-art, .ch-bike, .ch-speed::before, .ch-speed::after { animation: none; transform: none; }
+        .ch-speed { display: none; }
         #chargement.ch-parti { transition: none; }
       }
     </style>
@@ -103,9 +129,11 @@
     <div id="chargement">
       <img class="ch-art" src="/images/night-session.webp" alt="" fetchpriority="high" />
       <div class="ch-scrim" aria-hidden="true"></div>
+      <img id="ch-bike" class="ch-bike" alt="" hidden />
+      <div class="ch-speed" aria-hidden="true"></div>
       <div class="ch-scene">
         <div class="ch-topline" aria-hidden="true">
-          <span class="ch-edition">Night Session</span>
+          <span class="ch-edition">En piste</span>
           <span>Carnet de roulage</span>
         </div>
         <div class="ch-footer">
@@ -121,6 +149,8 @@
         </div>
       </div>
     </div>
+    <!-- Classic and deliberately tiny: no React dependency, no inline-script CSP exception. -->
+    <script src="/splash-cache.js"></script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

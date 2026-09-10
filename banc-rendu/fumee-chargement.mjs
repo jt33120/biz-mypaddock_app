@@ -10,7 +10,8 @@ const sortie = process.argv[2] ?? '/tmp/chargement.png'
 const racine = sortie.slice(0, -extname(sortie).length)
 await mkdir(dirname(sortie), { recursive: true })
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const erreurs = []
 
@@ -18,6 +19,7 @@ const erreurs = []
 const sceneSeule = async (viewport, reducedMotion = 'no-preference') => {
   const page = await nav.newPage({ viewport, deviceScaleFactor: 1, reducedMotion })
   await page.route('**/*', (route) => route.request().resourceType() === 'script'
+    && /^\/(?:src\/main\.tsx|assets\/index-[^/]+\.js)$/.test(new URL(route.request().url()).pathname)
     ? route.fulfill({ contentType: 'application/javascript', body: '' })
     : route.continue())
   await page.goto(base, { waitUntil: 'domcontentloaded' })
@@ -41,13 +43,13 @@ for (const [width, height] of [[390, 844], [768, 1024], [1440, 960]]) {
       overflow: document.documentElement.scrollWidth > innerWidth,
       titreVisible: marque.left >= 0 && marque.right <= innerWidth,
       renduImage: getComputedStyle(document.querySelector('.ch-art')).imageRendering,
-      fonte: document.fonts.check('italic 700 32px "Barlow Condensed"'),
+      fonte: getComputedStyle(document.querySelector('.ch-brand')).fontFamily,
     }
   })
   assert.equal(rendu.overflow, false, `horizontal overflow at ${width}`)
   assert.equal(rendu.titreVisible, true, `brand clipped at ${width}`)
   assert.notEqual(rendu.renduImage, 'pixelated')
-  assert.equal(rendu.fonte, true, 'local display font is available before React')
+  assert.match(rendu.fonte, /-apple-system|BlinkMacSystemFont|SF Pro Display|Segoe UI/, 'system display font before React')
   await page.screenshot({ path: width === 390 ? sortie : `${racine}-${width}.png` })
   console.log(`✓ scène avant React, statut accessible et mise en page ${width} px`)
   await page.close()
@@ -55,6 +57,7 @@ for (const [width, height] of [[390, 844], [768, 1024], [1440, 960]]) {
 
 const calme = await sceneSeule({ width: 390, height: 844 }, 'reduce')
 assert.equal(await calme.locator('.ch-rail').evaluate(el => getComputedStyle(el, '::after').animationName), 'none')
+assert.equal(await calme.locator('.ch-art').evaluate(el => getComputedStyle(el).animationName), 'none')
 await calme.close()
 console.log('✓ mouvement réduit : indicateur immobile')
 

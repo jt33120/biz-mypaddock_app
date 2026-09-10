@@ -1,6 +1,7 @@
 import type { PowerSyncDatabase } from '@powersync/web'
 import { jeton, seDeconnecter } from './compte'
 import { viderLeCoffre } from './coffre'
+import { bloquerChargementPersonnel } from '../visuals/splash-cache'
 
 /**
  * EFFACER SON COMPTE — NFR-6, FR-27. Le jumeau de l'emport.
@@ -86,6 +87,8 @@ export const effacerAuServeur = async (): Promise<Issue> => {
 export const effacerLeTelephone = async (
   db: PowerSyncDatabase,
 ): Promise<{ photos: number; cles: number }> => {
+  // Invalidate pending thumbnail decodes before erasing their source files.
+  bloquerChargementPersonnel()
   // ① Les octets des fichiers — DANS LES DEUX MAGASINS. Ils ne sont dans aucune
   //    base : rien d'autre ne les emporterait.
   //
@@ -106,7 +109,9 @@ export const effacerLeTelephone = async (
   // ② La base locale ET sa file d'envoi. `disconnectAndClear` coupe la
   //    synchronisation avant de vider : sans la coupure, le moteur réécrirait
   //    ce qu'il vient de recevoir.
-  try { await db.disconnectAndClear() } catch { /* déjà déconnectée */ }
+  // Keep the privacy marker and the local retry state if SQLite refuses. A
+  // failed wipe must not make surviving account rows look like anonymous data.
+  await db.disconnectAndClear()
 
   // ③ Les réglages.
   const cles = effacerLesReglages()

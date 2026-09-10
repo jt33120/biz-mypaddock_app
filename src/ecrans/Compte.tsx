@@ -125,22 +125,42 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
             ) : <Anonyme db={db} onLegal={onLegal} />}
           </section>
 
-          <section className="compte compte-groupe" aria-labelledby="compte-sauvegarde">
-            <h2 id="compte-sauvegarde" className="titre-section"><CloudDownload size={19} aria-hidden="true" /> Sauvegarde</h2>
+          {/* ⚠ DEUX GROUPES DE PLUS SE REPLIENT — lot 3, 2 septembre 2026. Cet
+              écran mesurait 2130 px pour 759 utiles, le pire chiffre du produit,
+              et ces deux-là en prenaient 954. On ne vient pas ici pour LIRE : on
+              y vient pour une course précise — se connecter, emporter sa saison,
+              régler ce qui part. Quatre intitulés qu'on parcourt du pouce sont
+              exactement la forme d'un écran de réglages ; quatre sections
+              dépliées sont une notice.
+
+              ⚠ `<details>` ET PAS `TeteRepli`, ET C'EST DÉLIBÉRÉ. Le groupe
+              « Diagnostic et aide » juste en dessous en est un depuis toujours :
+              c'est LA convention de cet écran. Y poser le composant de pli des
+              autres écrans donnerait deux mécanismes côte à côte, deux signes
+              différents à trois centimètres l'un de l'autre, sur le seul écran
+              où l'on cherche déjà quelque chose. Le natif ne demande d'ailleurs
+              aucun état, et un état de moins est un état qui ne peut pas mentir.
+
+              ⚠ ET « CONNEXION » RESTE DÉPLIÉ. C'est la course pour laquelle on
+              ouvre cet écran quand on n'a pas de compte, et replier ce pour quoi
+              on vient est le seul défaut que ce lot s'interdit depuis le début.
+              Une fois connecté il ne pèse plus que sa ligne d'adresse. */}
+          <details className="compte compte-groupe">
+            <summary className="titre-section"><CloudDownload size={19} aria-hidden="true" /> Sauvegarde</summary>
             {identite && supabaseConfigure && (
               <SauvegardeConnectee db={db} identite={identite} adoption={adoption} />
             )}
             <Emporter db={db} />
-          </section>
+          </details>
 
-          <section className="compte compte-groupe" aria-labelledby="compte-donnees">
-            <h2 id="compte-donnees" className="titre-section"><ShieldCheck size={19} aria-hidden="true" /> Données et confidentialité</h2>
+          <details className="compte compte-groupe">
+            <summary className="titre-section"><ShieldCheck size={19} aria-hidden="true" /> Données et confidentialité</summary>
             <EnvoiDesPhotos />
             <Mesures />
             <button type="button" className="lien" onClick={onLegal}>
               Lire les informations légales
             </button>
-          </section>
+          </details>
 
           <details className="compte compte-groupe compte-diagnostic">
             <summary className="titre-section"><SlidersHorizontal size={19} aria-hidden="true" /> Diagnostic et aide</summary>
@@ -195,24 +215,30 @@ function Effacer({ db, onEngager }: {
   const [occupe, setOccupe] = useState(false)
   const [souci, setSouci] = useState<string | null>(null)
   const [fini, setFini] = useState<{ objets: number; photos: number; cles: number } | null>(null)
+  const [serveurEfface, setServeurEfface] = useState<number | null>(null)
   const [etat, setEtat] = useState<BilanEnvoi>({})
 
   useEffect(() => { void etatLocal(db).then(setEtat).catch(() => {}) }, [db])
 
   const effacer = async () => {
     setOccupe(true); setSouci(null)
-    const serveur = await effacerAuServeur()
-    if (!serveur.ok) { setSouci(serveur.message); setOccupe(false); return }
-    // ⚠ LE POINT DE NON-RETOUR EST ICI, ET IL SE DIT AVANT D'AGIR. Le compte
-    // n'existe plus côté serveur : le pilote est engagé, et cet écran ne parle
-    // plus que de ça. Le signal part MAINTENANT parce que l'étape suivante
-    // déconnecte — donc rend l'identité nulle — et démonterait cette section au
-    // milieu de son propre travail.
-    onEngager()
-    // Et SEULEMENT MAINTENANT le local. Le serveur a confirmé.
-    const local = await effacerLeTelephone(db)
-    setFini({ objets: serveur.objets, ...local })
-    setOccupe(false)
+    let objets = serveurEfface
+    try {
+      if (objets === null) {
+        const serveur = await effacerAuServeur()
+        if (!serveur.ok) { setSouci(serveur.message); return }
+        objets = serveur.objets
+        setServeurEfface(objets)
+        onEngager()
+      }
+      // A retry only finishes this device: the server has already confirmed.
+      const local = await effacerLeTelephone(db)
+      setFini({ objets, ...local })
+    } catch {
+      setSouci(objets === null
+        ? "L'effacement du compte n'a pas pu être confirmé. Réessaie dans un instant."
+        : "Le compte a été effacé au serveur, mais le nettoyage de ce téléphone n'a pas abouti. Réessaie pour le terminer.")
+    } finally { setOccupe(false) }
   }
 
   if (fini) {
@@ -255,7 +281,7 @@ function Effacer({ db, onEngager }: {
         </button>
       ) : (
         <div className="bloc pile">
-          <div className="libelle">ce qui part, et ne revient pas</div>
+          <div className="libelle">{serveurEfface === null ? 'ce qui part, et ne revient pas' : 'terminer sur ce téléphone'}</div>
           <p className="texte">
             {lignes.length
               ? lignes.map(([t, n]) => direCombien(t, n)).join(' · ')
@@ -274,7 +300,7 @@ function Effacer({ db, onEngager }: {
               portrait ». Le geste qui détruit tout avait la forme du geste qu'on
               tape sans lire. */}
           <button className="bouton destructif" disabled={occupe} onClick={() => void effacer()}>
-            {occupe ? 'effacement…' : 'Effacer définitivement'}
+            {occupe ? 'effacement…' : serveurEfface === null ? 'Effacer définitivement' : 'Terminer le nettoyage de ce téléphone'}
           </button>
           {/* ⚠ LE SORTANT EST UN `.lien`, COMME AUX DEUX AUTRES CONFIRMATIONS.
               Il portait `.bouton` — le dégradé néon, plein, plus gros et plus
@@ -284,9 +310,9 @@ function Effacer({ db, onEngager }: {
               trois formes différentes pour un même geste sont trois choses à
               réapprendre. Le geste qu'on tape sans lire ne doit pas être celui
               qui décide. */}
-          <button className="lien" disabled={occupe} onClick={() => setOuvert(false)}>
+          {serveurEfface === null && <button className="lien" disabled={occupe} onClick={() => setOuvert(false)}>
             Garder mon compte
-          </button>
+          </button>}
         </div>
       )}
     </>

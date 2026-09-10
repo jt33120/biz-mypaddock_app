@@ -1,9 +1,11 @@
-# Night Session implementation
+# Garage Studio implementation
 
-1. Shared visual foundation: generated design tokens, bundled fonts, consistent icon set, buttons/forms/panels and responsive navigation.
-2. Entry and home: illustrated startup, home hero, useful racing-day hierarchy and complete loading/error/offline states.
-3. Garage and account: machine showcase, clean gear collection, restyled personal reference assets with safe local-only mapping.
-4. Every route: harmonized rides, forms, expenses, preparation, season, budget, maintenance, photo/lightbox and recap.
-5. Delivery evidence: 390/768/1440 screenshots and critique/correction loop, appropriate existing tests, production build and running localhost.
+The user's later native iOS direction supersedes the initial Night Session palette. These stories describe the resulting local implementation; remote release evidence remains pending in [VERIFICATION.md](VERIFICATION.md).
 
-Each visual story consumes design/design-spec.md and design/tokens.json, preserves functionality, has visible keyboard focus and is checked at all three widths with empty/loading/error and populated states as applicable.
+1. **Shared visual foundation.** Black/charcoal/white tokens, platform system typography (SF on Apple devices), Lucide icons, consistent rounded controls, keyboard focus and responsive five-tab navigation. Decorative pink/mint accents are removed; semantic error/warning colors remain.
+2. **Personal entry and home.** A pre-React startup presents a verified local thumbnail of the selected motorcycle, a horizontal pass and a reduced-motion alternative. Optional personalization never delays readiness. Owner-bound caching, account changes, erasure, storage denial and private-preview isolation are covered by focused checks.
+3. **Garage and account.** A clear machine showcase, readable stats and equipment cards, native account sections, and local portrait import with preview/cancel/save. The exact selected D1 motorcycle is reused; two built-in generations use the original helmet/suit photographs. Zero Gemini calls. Private assets stay outside Git and production output.
+4. **Every current route.** Harmonize rides, Analysis, daily outfit, expenses, preparation, season, budget, maintenance, photo/video views and recap. Preserve the 47 integrated upstream commits, including outfit genre selection, credit controls and collapsible sections. Saved imported portraits win consistently over development overrides.
+5. **Evidence and local handoff.** Two visual directions with review/correction loops, final 390/768/1440 captures, 203 passing unit checks and 32 browser suites each with a passing latest result. The final local production preview also passes startup, confidentiality and offline reload checks; these local results do not imply remote deployment.
+
+Each visual story follows [design-spec.md](design-spec.md) and [tokens.json](tokens.json), preserves database behavior, and covers applicable empty/loading/error and populated states. The startup cache is disposable presentation data; the SQLite database and original media remain authoritative. No source photograph is silently overwritten.

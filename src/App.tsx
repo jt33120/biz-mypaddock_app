@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowUpRight, CalendarDays, Flag, Gauge, House, MoreHorizontal, ShieldCheck, UserRound, Wrench } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, ChartNoAxesCombined, Flag, Gauge, House, MoreHorizontal, ShieldCheck, UserRound, Wrench } from 'lucide-react'
 import { ENVIRONNEMENT, EST_PRODUCTION, MOT_ENVIRONNEMENT, PRODUCT_NAME } from './product'
 import { demanderPersistance, ouvrirBase } from './db/powersync'
 import { direLAbri, lireAbri, proposerInstallation, surAbri, type Abri } from './db/abri'
@@ -7,11 +7,15 @@ import {
   ajouterSession, anneeSaison, bilanRoulage, coutDuRoulage, creerRoulage, depenseSaison, formaterChrono,
   classerRoulages, listerMachines, type Machine,
   circuitsProposes, enCentimes, formaterEcart, formaterEuros, listerRoulages, normaliserCircuits,
-  modifierRoulage, normaliserEtats, poserBudget, supprimerRoulage,
+  modifierRoulage, normaliserEtats, poserBudget, poserPieceDeTenue, supprimerRoulage,
   type ContenuDuRoulage, type Propose,
   type CoutRoulage,
 } from './db/depot'
+import {
+  tenueDuJour, type GenreDeTenue, type PieceDeTenue, type TenueDuJour,
+} from './db/equipement'
 import { Depense } from './ecrans/Depense'
+import { Credits } from './ecrans/Credits'
 import { jaugeBudget, repereMensuel } from './db/budget'
 import { NoterUneDepense } from './ecrans/Budget'
 import { surCompte, type Identite } from './db/compte'
@@ -20,7 +24,9 @@ import { adopter, estAdopte, marquerPremiereSauvegardeDite, premiereSauvegardeDi
 import { supabaseConfigure } from './db/supabase'
 import { ouverture } from './db/mesures'
 import { surRetourDeReseau, televerserEnAttente } from './db/photos'
+import { televerserVideosEnAttente } from './db/video'
 import { Photos } from './ecrans/Photos'
+import { TeteRepli } from './ecrans/Repli'
 import { Icone } from './ecrans/Icones'
 import { useGlissement } from './ecrans/glissement'
 import { Recap } from './ecrans/Recap'
@@ -46,7 +52,12 @@ import { televerserDocuments } from './db/documents'
 import { Chutes } from './ecrans/Chute'
 import { Preparation } from './ecrans/Preparation'
 import { retirerLEcranDeChargement } from './chargement'
+import { surveillerMotoDeChargement } from './visuals/splash-personalization'
 import { Circuit } from './ecrans/Circuit'
+import { Analyse, type DepartAnalyse } from './ecrans/Analyse'
+import {
+  argentParMoto, argentParPoste, gestesParMoto, journeesVecues, TOUTES_ANNEES,
+} from './db/analyse'
 import { Molettes } from './ecrans/Molettes'
 import { Sonde } from './ecrans/Sonde'
 import { useGeste } from './ecrans/geste'
@@ -54,7 +65,7 @@ import { Trophee } from './ecrans/Trophee'
 import { Journee } from './ecrans/Journee'
 import { aujourdhui, estAVenir, sePrepare } from './db/vecu'
 import { LOCAL_NIGHT_PREVIEW, prepareLocalPreview } from './visuals/local-preview'
-import { localPortraitData } from './visuals/local-portraits'
+import { localPortraitData, useLocalPortrait } from './visuals/local-portraits'
 import { estIllustrationImportee } from './visuals/import-illustration'
 
 type Db = ReturnType<typeof ouvrirBase>
@@ -70,7 +81,7 @@ export type Adoption =
   | { etat: 'faite' }
   | { etat: 'partielle'; refus: number; motif: string }
   | { etat: 'echec'; motif: string }
-type Ecran = 'accueil' | 'garage' | 'roulages' | 'nouveau' | 'modifier' | 'session' | 'bilan' | 'journee' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
+type Ecran = 'accueil' | 'garage' | 'roulages' | 'analyse' | 'nouveau' | 'modifier' | 'session' | 'bilan' | 'journee' | 'depense' | 'recap' | 'compte' | 'sonde' | 'legal' | 'circuit'
 type Bilan = Awaited<ReturnType<typeof bilanRoulage>>
 type Liste = Awaited<ReturnType<typeof listerRoulages>>
 
@@ -79,21 +90,114 @@ type Liste = Awaited<ReturnType<typeof listerRoulages>>
  *  Blanc/Jaune/Rouge. Seul le RANG est comparable d'une sortie à l'autre. */
 const GROUPES = ['Initiation', 'Intermédiaire', 'Confirmé', 'Expert']
 
+/**
+ * CE QUE L'ANALYSE A À MONTRER, EN QUATRE FAITS ET PAS EN UN BOOLÉEN.
+ *
+ * L'onglet se garde sur l'un, les portes pré-réglées se gardent chacune sur le
+ * SIEN. Un seul booléen aurait suffi à l'onglet et aurait laissé les trois liens
+ * promettre ce qu'ils n'ouvrent pas : un pilote qui n'a consigné que des gestes
+ * d'atelier a bien un onglet à ouvrir, et rien à répartir entre ses motos. Un lien
+ * qui annonce « ce que chaque moto t'a coûté » et qui ouvre autre chose ne se
+ * distingue pas d'un lien cassé — l'analyse retombe alors sur le premier
+ * croisement vivant, donc rien ne plante, et c'est justement ce qui rend le
+ * défaut invisible en essai et visible au doigt.
+ */
+type Porte = {
+  /** Au moins une dépense saisie, toutes saisons confondues. Garde le lien du
+   *  bilan de saison — FINANCE · POSTE. */
+  poste: boolean
+  /** Au moins une machine qui porte de l'argent — une dépense de cible
+   *  `machine`, ou une intervention chiffrée sans dépense (`argentParMoto` tient
+   *  la clause qui empêche de compter deux fois). Garde le lien du garage —
+   *  FINANCE · MOTO. */
+  moto: boolean
+  /** Les journées VÉCUES, au sens de `bilanSaison` — jamais celles à venir. */
+  journees: number
+  /** Au moins un geste d'atelier consigné. */
+  gestes: boolean
+}
+
+/**
+ * TROIS JOURNÉES VÉCUES, et c'est le seuil des ROULAGES SEULS — une dépense ou un
+ * geste d'atelier ouvrent l'onglet dès le premier.
+ *
+ * Une ou deux journées ne font pas un tracé : une composition de deux barres se
+ * lit déjà d'un coup d'œil dans la liste des roulages, et l'onglet n'ajouterait
+ * que le détour. C'est le MÊME TROIS que `POINTS_MINIMUM` (src/db/courbe.ts), et
+ * pour une raison voisine — deux points font toujours une droite, deux barres ne
+ * font pas une forme — mais ce n'est pas la MÊME question, et il n'est donc pas
+ * importé : si un tracé exigeait un jour quatre points, ce seuil-ci n'aurait
+ * aucune raison de le suivre.
+ */
+const ROULAGES_A_ANALYSER = 3
+
+/**
+ * ─── LE TEST DE L'ONGLET — UX-DR9 appliquée au cinquième ────────────────────
+ *
+ * « Un onglet apparaît QUAND IL A QUELQUE CHOSE À MONTRER. » La règle est déjà
+ * celle de la barre (voir son commentaire plus bas) ; ceci n'est que son test
+ * pour l'analyse, et il porte sur des FAITS SAISIS, jamais sur une date ni sur un
+ * réglage.
+ *
+ * ⚠ ET IL EST MESURÉ AVEC LES LECTURES DE L'ANALYSE ELLE-MÊME, pas avec des
+ * requêtes écrites pour l'occasion. Un onglet gardé par un compte et rempli par
+ * un autre finit par s'ouvrir sur un écran vide — c'est le défaut exact que ce
+ * dépôt vient de payer ailleurs : une colonne posée en base, lue par un écran,
+ * exigée par une fabrique, et écrite par personne. Ici les quatre lectures sont
+ * QUATRE DES ONZE qui remplissent l'écran (`src/db/analyse.ts`) : le garde et le
+ * contenu ne peuvent pas diverger sans que les deux bougent ensemble.
+ *
+ * ⚠ ET AUCUNE DES QUATRE N'EST COURT-CIRCUITÉE, alors qu'une seule suffirait
+ * souvent à trancher l'onglet. Un champ rendu `false` parce qu'« on n'avait plus
+ * besoin de le savoir » est un champ qui MENT à celui qui le lit ensuite — et
+ * `moto` le lit. Quatre agrégats sur une base locale ne se sentent pas ; un fait
+ * faux, si.
+ *
+ * Elles portent sur TOUTES LES SAISONS — `TOUTES_ANNEES` est le tableau vide, et
+ * il ne filtre rien. Un onglet qui apparaîtrait puis disparaîtrait au 1er janvier
+ * serait un onglet qui clignote une fois par an, sur une frontière que le pilote
+ * n'a pas posée.
+ */
+const aDeQuoiAnalyser = async (db: Db): Promise<Porte> => ({
+  // ⚠ SEULES LES LIGNES NON INCERTAINES COMPTENT, et c'est la règle de
+  // `tracesDisponibles` recopiée ici plutôt que contredite. Elle refuse un tracé
+  // fait UNIQUEMENT d'incertain — « une puce Mois qui n'ouvre que sur une barre
+  // Sans mois promet un découpage que la donnée ne porte pas ». Le garde, lui,
+  // comptait toutes les lignes : une seule dépense sans poste ET sans jour — une
+  // ligne d'avant le récit 19.2, ou restaurée d'une vieille sauvegarde — ouvrait
+  // donc l'onglet sur un écran que `tracesDisponibles` rendait vide. Le pilote
+  // tapait ANALYSE et tombait sur un blanc, ce qui se lit comme un plantage.
+  poste: (await argentParPoste(db, TOUTES_ANNEES)).some((l) => !l.incertain),
+  moto: (await argentParMoto(db, TOUTES_ANNEES)).some((l) => !l.incertain),
+  journees: (await journeesVecues(db, TOUTES_ANNEES)).length,
+  gestes: (await gestesParMoto(db, TOUTES_ANNEES)).some((l) => !l.incertain),
+})
+
+/** L'onglet : une dépense, ou trois journées vécues, ou un geste consigné.
+ *  `moto` n'y figure pas et n'a pas à y figurer — de l'argent sur une moto vient
+ *  soit d'une dépense, soit d'une intervention chiffrée, donc l'un des deux
+ *  autres est déjà vrai. L'ajouter ferait une quatrième condition qui ne peut
+ *  jamais décider seule, c'est-à-dire une condition qu'on croit lire. */
+const analysable = (p: Porte) =>
+  p.poste || p.journees >= ROULAGES_A_ANALYSER || p.gestes
+
 export default function App() {
   const [db, setDb] = useState<Db | null>(null)
   /* NFR-1, seconde moitié : l'état de la persistance se LIT quelque part. Il
      était demandé à chaque démarrage et le booléen était jeté. */
   const [abri, setAbri] = useState<Abri | null>(null)
   const [panne, setPanne] = useState<string | null>(null)
+  /* La saison est LUE, pas seulement la base ouverte. C'est la dernière des
+     cinq étapes de `chargement.ts`, et la seule que le décor n'attendait pas. */
+  const [pretPremierEcran, setPretPremierEcran] = useState(false)
 
-  // ⚠ LE DÉCOR PART QUAND IL Y A QUELQUE CHOSE DERRIÈRE, et « quelque chose »
-  // inclut la PANNE : un écran de chargement qui tourne indéfiniment sur un
-  // navigateur qui a refusé le stockage est le pire des deux mondes — le pilote
-  // attend une application qui ne viendra jamais, et le message qui le lui dirait
-  // est caché dessous.
-  useEffect(() => { if (db || panne) retirerLEcranDeChargement() }, [db, panne])
+  // Reveal the first fully loaded screen, or the recoverable storage error.
+  useEffect(() => {
+    if (pretPremierEcran || panne) retirerLEcranDeChargement()
+  }, [pretPremierEcran, panne])
   const [ecran, setEcran] = useState<Ecran>(LOCAL_NIGHT_PREVIEW ? 'garage' : 'accueil')
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }) }, [ecran])
+  const [soldeSignal, setSoldeSignal] = useState(0)
   /** L'accueil ouvre une dépense libre ; une journée conserve son rattachement.
    *  Sans ce témoin, le dernier roulage resté en mémoire gagnerait en silence. */
   const [depenseLibre, setDepenseLibre] = useState(false)
@@ -119,6 +223,22 @@ export default function App() {
    *  identifiant : le référentiel peut ne pas le connaître, et la fiche doit
    *  quand même s'ouvrir — c'est ce que le pilote y a fait qui la remplit. */
   const [circuitVu, setCircuitVu] = useState<string | null>(null)
+  /** Ce que l'analyse a à montrer — UX-DR9, voir `aDeQuoiAnalyser`. Il démarre
+   *  À VIDE : l'onglet n'apparaît qu'après la première lecture, jamais avant.
+   *  L'inverse — le supposer plein puis le retirer — ferait clignoter la barre au
+   *  démarrage, et une barre qui bouge sous le pouce fait taper à côté. */
+  const [porte, setPorte] = useState<Porte>(
+    { poste: false, moto: false, journees: 0, gestes: false })
+  /** LA MOLETTE PRÉ-TOURNÉE quand on entre par une porte, et `null` quand on
+   *  entre par l'onglet.
+   *
+   *  ⚠ IL SE REMET À `null` SUR L'ONGLET, et ce n'est pas de la propreté. L'écran
+   *  d'analyse se démonte quand on le quitte : à la remontée, il relit `depart`
+   *  pour son état initial. Gardé d'un passage à l'autre, le dernier raccourci
+   *  emprunté déciderait de ce que l'onglet ouvre — le pilote taperait ANALYSE et
+   *  retomberait sur la question qu'un lien lui avait posée trois écrans plus tôt.
+   *  L'onglet est le chemin NEUTRE, et il doit le rester. */
+  const [departAnalyse, setDepartAnalyse] = useState<DepartAnalyse | null>(null)
   /** L'ADOPTION SE FAIT TOUTE SEULE — « ça devrait se faire automatiquement
    *  aussi hein ». Son état est ici et non dans l'écran du compte : c'est
    *  l'application qui l'entreprend, l'écran ne fait que la raconter. */
@@ -158,6 +278,9 @@ export default function App() {
   // L'identité est lue en local et survit hors ligne : traverser un tunnel ne
   // déconnecte personne, ça suspend seulement la synchronisation.
   useEffect(() => { if (!LOCAL_NIGHT_PREVIEW) return surCompte(setIdentite) }, [])
+  useEffect(() => {
+    if (db) return surveillerMotoDeChargement(db)
+  }, [db, identite?.id, adoption])
 
   // La synchronisation continue ne s'allume qu'à TROIS conditions : un compte,
   // une instance à qui parler, et une base déjà adoptée une fois. La troisième
@@ -177,14 +300,36 @@ export default function App() {
 
 
   const rafraichir = useCallback(async (base: Db) => {
+    /* ⚠ LE SOLDE SE RELIT ICI ET PAS AILLEURS, parce qu'ici est déjà la liste
+       exacte des moments où il peut avoir bougé : à l'ouverture, à chaque
+       écriture, au retour au premier plan. Garder un portrait passe par
+       `onEcrit`, donc par ce chemin — un compteur branché sur un abonnement à
+       part aurait fini par rater le seul instant qui compte, celui où le crédit
+       vient d'être dépensé. */
+    setSoldeSignal((n) => n + 1)
     setListe(await listerRoulages(base))
     // AD-6 : l'accueil se recalcule À L'OUVERTURE et à chaque écriture. Rien ne
     // tourne pendant que l'application est fermée, donc rien ne peut avoir
     // manqué son rendez-vous — l'accueil est immunisé par construction.
     setSrc(await sourceAccueil(base, aujourdhui()))
     setConseil(await conseilDuJour(base, aujourdhui()))
+    /* ⚠ ET L'ONGLET D'ANALYSE SE RECALCULE ICI, avec tout le reste. Posé dans un
+       effet à lui, il aurait raté la seule chose qui compte : la PREMIÈRE
+       dépense, le PREMIER geste, la TROISIÈME journée — c'est-à-dire l'instant
+       exact où il doit apparaître. `rafraichir` part à l'ouverture, à chaque
+       écriture des roulages, au retour au premier plan et à l'ouverture de la
+       liste : ce sont déjà tous les moments où le produit gagne de la matière. */
+    setPorte(await aDeQuoiAnalyser(base))
   }, [])
-  useEffect(() => { if (db) void rafraichir(db) }, [db, rafraichir])
+  /* ⚠ C'EST LA PREMIÈRE PASSE QUI LIBÈRE LE DÉCOR, et le `.finally` est
+     délibéré : même si une lecture échoue, le décor doit partir. Le retenir sur
+     un échec rendrait l'application inatteignable pour une saison illisible —
+     exactement le défaut que le filet de `.catch` ci-dessus existe pour
+     empêcher, et qu'on rouvrirait trois lignes plus bas. */
+  useEffect(() => {
+    if (!db) return
+    void rafraichir(db).finally(() => setPretPremierEcran(true))
+  }, [db, rafraichir])
 
   /* L'abri se relit au retour au premier plan et quand l'invitation arrive :
      l'événement `beforeinstallprompt` est tiré une fois, tôt, et il ne repasse
@@ -297,6 +442,12 @@ export default function App() {
       // La reprise d'une suppression locale ne dépend pas d'un compte ; seul
       // l'envoi d'une nouvelle photo est court-circuité sans identité.
       void televerserEnAttente(db, identite?.id ?? null)
+      // ⚠ LA VIDÉO PASSE PAR LES MÊMES DEUX DÉCLENCHEURS, mais elle est la seule
+      // à REPRENDRE au lieu de recommencer : un clip coupé à 80 % sur la 4G du
+      // paddock repart de 80 % à la prochaine ouverture. C'est ce qui la rend
+      // durable — sans reprise, un fichier de cette taille ne finit jamais de
+      // monter et le carnet montrerait une pièce que le serveur n'a pas.
+      void televerserVideosEnAttente(db, identite?.id ?? null)
       if (identite) {
         // Les documents suivent le même chemin et les mêmes deux déclencheurs :
         // un manuel versé au paddock part au retour du réseau, pas avant.
@@ -409,10 +560,24 @@ export default function App() {
    * même bloc divergent à la première correction — c'est exactement ce que la
    * checklist s'interdit en se DÉPLAÇANT plutôt qu'en se dupliquant. Un seul
    * `<Photos>`, un seul `<Chutes>`, un seul `<BlocCout>`, un seul
-   * `<Visibilite>` : les deux écrans reçoivent le même nœud.
+   * `<Visibilite>`, une seule `<Tenue>` : les deux écrans reçoivent le même
+   * nœud.
+   *
+   * ⚠ LA TENUE ENTRE ICI POUR NE PAS SE FERMER APRÈS LA PREMIÈRE SESSION.
+   * Elle se déclare la veille, sur l'écran de préparation — et à la première
+   * trace saisie, `sePrepare` bascule et cet écran-là disparaît au profit du
+   * bilan. Montée dans le seul `<Journee>`, elle serait devenue INDÉCLARABLE et
+   * INCORRIGIBLE le soir même : on ne se souvient de noter sa combinaison qu'en
+   * relisant sa journée. C'est mot pour mot la porte qui s'est déjà refermée en
+   * silence sur les six chemins ci-dessus, et elle ne se rouvre qu'ici.
    */
   const gestesDeLaJournee = bilan && courant ? {
     photos: <Photos db={db} roulageId={courant} />,
+    /* La moto, le casque et la combinaison en une image. Le
+       roulage suffit : la tenue lit ses trois liens elle-même, et un
+       `machineId` passé en second aurait donné deux sources pour la même
+       moto. */
+    tenue: <Tenue db={db} roulageId={courant} />,
     chutes: (
       <Chutes db={db} roulageId={courant} machineId={bilan.machine_id} date={bilan.date}
               onEcrit={() => {
@@ -436,6 +601,7 @@ export default function App() {
   } : null
 
   const ongletActif = ecran === 'garage' ? 'garage'
+    : ecran === 'analyse' ? 'analyse'
     : ['compte', 'sonde', 'legal'].includes(ecran) ? 'compte'
     : ecran === 'accueil' || (ecran === 'depense' && depenseLibre) ? 'accueil'
     : 'roulages'
@@ -461,6 +627,12 @@ export default function App() {
       </header>
       <div className="ecran" data-ecran={ecran} data-environnement={ENVIRONNEMENT}
            data-abri={abri ? (abri.menace ? 'menace' : 'persistant') : 'inconnu'}>
+        {/* ⚠ EN HAUT À GAUCHE, ET DANS LA COQUE — donc sur tous les écrans. Les
+            crédits se dépensent au garage et dans l'équipement, et se liront
+            demain ailleurs : un compteur posé sur l'écran où l'on dépense se
+            découvre au moment où il est trop tard pour en tenir compte. Il ne
+            s'affiche pas sans compte — voir `Credits.tsx`, qui dit pourquoi. */}
+        {!LOCAL_NIGHT_PREVIEW && <Credits signal={soldeSignal} />}
         {/* ⚠ ELLE SE DIT UNE FOIS ET NE SE REDIT PLUS — récit 22.3. Elle porte
             la seule chose que le pilote ne peut pas déduire de l'écran : ce qui
             vivait sur son téléphone est maintenant aussi ailleurs. Elle ne
@@ -501,7 +673,17 @@ export default function App() {
         {ecran === 'roulages' && <Roulages db={db} liste={liste} onOuvrir={ouvrirRoulage}
                                             onModifier={(id) => { setAModifier(id); setEcran('modifier') }}
                                             onNouveau={() => setEcran('nouveau')}
-                                            onEcrit={() => void rafraichir(db)} />}
+                                            onEcrit={() => void rafraichir(db)}
+                                            onArgentParPoste={porte.poste
+                                              ? (annee) => {
+                                                // La porte ouvre sur LA saison qu'on regardait, pas
+                                                // sur celle que l'analyse choisirait par défaut.
+                                                setDepartAnalyse({
+                                                  domaine: 'finance', axe: 'poste', periode: [annee],
+                                                })
+                                                setEcran('analyse')
+                                              }
+                                              : null} />}
         {/* ⚠ LA LIGNE VIENT DE `liste`, ET C'EST VOULU : elle porte déjà le
             circuit, la date, le groupe et la machine, lus dans la même requête
             que la liste. Une seconde lecture par identifiant ferait un second
@@ -549,8 +731,15 @@ export default function App() {
             photos={gestesDeLaJournee.photos}
             chutes={gestesDeLaJournee.chutes}
             cout={gestesDeLaJournee.cout}
+            tenue={gestesDeLaJournee.tenue}
             visibilite={gestesDeLaJournee.visibilite}
             onCircuit={() => { setCircuitVu(bilan.circuit); setEcran('circuit') }}
+            onAnalyse={analysable(porte)
+              ? () => {
+                setDepartAnalyse({ domaine: 'performance', axe: 'circuit' })
+                setEcran('analyse')
+              }
+              : null}
           />
         )}
         {/* ⚠ LE MÊME ROULAGE, L'AUTRE MOITIÉ DU CHEMIN — récit 17.2. Ce n'est
@@ -568,6 +757,7 @@ export default function App() {
             photos={gestesDeLaJournee.photos}
             chutes={gestesDeLaJournee.chutes}
             cout={gestesDeLaJournee.cout}
+            tenue={gestesDeLaJournee.tenue}
             visibilite={gestesDeLaJournee.visibilite}
             onRecap={gestesDeLaJournee.onRecap}
             onAller={(vers) => {
@@ -601,7 +791,36 @@ export default function App() {
                      else if (courant) void ouvrirRoulage(courant)
                    }} />
         )}
-        {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
+        {ecran === 'garage' && (
+          <Garage db={db} onEcrit={() => void rafraichir(db)}
+                  /* LA PORTE DU GARAGE — FINANCE · MOTO, et elle n'existe que
+                     s'il y a de l'argent à répartir. `null` la retire : Garage
+                     ne rend rien du tout, plutôt qu'un lien gris. */
+                  onArgentParMoto={porte.moto
+                    ? () => {
+                        // ⚠ ELLE OUVRE SUR TOUTES LES SAISONS, ET SON LIBELLÉ NE NOMME
+                        // AUCUNE ANNÉE : « ce que chaque moto t'a coûté » se lit sur la
+                        // vie de la machine, pas sur l'exercice en cours, et le garage
+                        // lui-même n'est découpé par aucune saison. C'est aussi la seule
+                        // période sur laquelle l'écran a de la matière À COUP SÛR : le
+                        // garde qui a offert cette porte a été mesuré sur toutes
+                        // (`aDeQuoiAnalyser`), et ouvrir sur la saison la plus récente
+                        // pouvait donc tomber sur un écran vide.
+                        setDepartAnalyse({
+                          domaine: 'finance', axe: 'moto', periode: TOUTES_ANNEES,
+                        })
+                        setEcran('analyse')
+                      }
+                    : null} />
+        )}
+        {/* ⚠ L'ÉCRAN NE SE MONTE QUE SI L'ONGLET EXISTE, et ce n'est pas une
+            ceinture de plus. `Analyse` ne rend rien quand rien n'a de matière —
+            un écran blanc entre la barre du haut et celle du bas, qui se lit
+            comme un plantage. Le même test décide donc des deux : ce qui n'a pas
+            d'onglet n'a pas d'écran. */}
+        {ecran === 'analyse' && analysable(porte) && (
+          <Analyse db={db} depart={departAnalyse ?? undefined} />
+        )}
         {ecran === 'compte' && LOCAL_NIGHT_PREVIEW && <section className="bloc pile"><span className="libelle">Aperçu privé</span><h1 className="titre">Ton garage, en local.</h1><p className="texte">Cette copie permet de découvrir les nouveaux portraits de ta moto, de ta combinaison et de ton casque. Les modifications de cet aperçu restent sur ce navigateur.</p><a className="bouton secondaire" href="/">Revenir à l’application</a></section>}
         {ecran === 'compte' && !LOCAL_NIGHT_PREVIEW && <Compte db={db} identite={identite} adoption={adoption}
                                        onLegal={() => setEcran('legal')}
@@ -629,6 +848,17 @@ export default function App() {
           réorientation du 18 août, qui fait du garage le centre du produit — le
           garage a donc maintenant quelque chose à montrer, et c'est le TEST de
           la règle qui tranche, pas son exemple chiffré.
+
+          ⚠ ET ANALYSE EST LE PREMIER ONGLET DU PRODUIT QUI APPLIQUE VRAIMENT LA
+          RÈGLE — 1er septembre 2026. Les quatre autres sont rendus à plat : le
+          garage parce qu'un garage vide est l'écran par lequel on déclare sa
+          moto, l'accueil et le compte parce qu'ils existent avant toute saisie,
+          les roulages parce que c'est là qu'on en saisit un. Aucun n'avait donc
+          de test à passer, et la règle n'était plus qu'un commentaire. Celui-ci
+          en a un, et il vit dans `aDeQuoiAnalyser` : au moins une dépense, ou
+          trois journées vécues, ou un geste d'atelier consigné. Un pilote qui
+          vient d'installer l'application voit quatre onglets, pas cinq — et le
+          cinquième arrive le jour où il a de quoi le remplir, sans rien réclamer.
 
           ⚠ ET GARAGE EST TOUJOURS VISIBLE, y compris sans machine. Le masquer
           jusqu'à la première machine rendait la première machine INATTEIGNABLE
@@ -679,6 +909,9 @@ export default function App() {
         <button className="onglet" data-actif={ongletActif === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')} aria-current={ongletActif === 'accueil' ? 'page' : undefined}><House aria-hidden="true" /><span>ACCUEIL</span></button>
         <button className="onglet" data-actif={ongletActif === 'garage' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('garage') }} aria-current={ongletActif === 'garage' ? 'page' : undefined}><Wrench aria-hidden="true" /><span>GARAGE</span></button>
         <button className="onglet" data-actif={ongletActif === 'roulages' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('roulages') }} aria-current={ongletActif === 'roulages' ? 'page' : undefined}><Flag aria-hidden="true" /><span>ROULAGES</span></button>
+        {analysable(porte) && <button className="onglet" data-actif={ongletActif === 'analyse' ? '1' : '0'}
+          onClick={() => { setDepenseNote(null); setDepartAnalyse(null); setEcran('analyse') }}
+          aria-current={ongletActif === 'analyse' ? 'page' : undefined}><ChartNoAxesCombined aria-hidden="true" /><span>ANALYSE</span></button>}
         <button className="onglet" data-actif={ongletActif === 'compte' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('compte') }} aria-current={ongletActif === 'compte' ? 'page' : undefined}><UserRound aria-hidden="true" /><span>COMPTE</span></button>
       </nav>
     </div>
@@ -743,7 +976,7 @@ function Accueil({ db, src, conseil, abri, depenseNote, onNouveau, onOuvrir, onL
           qu'on vient chercher quand une date approche, et ce n'est rien du tout
           le reste de l'année — où elle est simplement absente. */}
       {src?.genre === 'a_venir' && (
-        <Preparation db={db}
+        <Preparation db={db} repliable
                      roulage={{ id: src.roulage.id, machineId: src.roulage.machine_id,
                                 date: src.roulage.date_jour }}
                      onAller={(vers) => onAller(vers, src.roulage.id)} />
@@ -791,13 +1024,27 @@ function Conseil({ texte }: { texte: string }) {
  */
 function Abrite({ abri }: { abri: Abri | null }) {
   const [issue, setIssue] = useState<string | null>(null)
+  const [ouvert, setOuvert] = useState(false)
   if (!abri) return null
   const mot = direLAbri(abri)
   if (!mot) return null
 
   return (
     <div className="bloc pile abri">
-      <div className="libelle">{mot.titre}</div>
+      {/* ⚠ REPLIÉ PAR DÉFAUT — lot 3, 2 septembre 2026. Mesuré à 216 px sur un
+          accueil qui en faisait 1562 : c'était le deuxième bloc le plus lourd de
+          l'écran le plus ouvert du produit, et il y était À CHAQUE OUVERTURE.
+
+          ⚠ ET CE N'EST PAS UN FAIT DE LA SAISON, C'EST UNE INVITATION. « Une
+          source de l'accueil est CE QU'ON A ENVIE DE VOIR, jamais ce qu'on a
+          oublié de faire » — la règle est écrite en tête de `db/accueil.ts`, et
+          une proposition d'installation est exactement l'autre moitié. Elle
+          n'est pas retirée pour autant : le risque qu'elle nomme est réel, un
+          navigateur PEUT libérer la place et la saison avec. Le titre le dit
+          replié — « ta saison vit dans un onglet » se lit sans ouvrir — et ce
+          qu'il faut faire est derrière un tap au lieu d'un cinquième d'écran. */}
+      <TeteRepli titre={mot.titre} ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+      {ouvert && (<>
       <p className="texte">{mot.texte}</p>
       {abri.proposable ? (
         <button className="bouton secondaire" onClick={() => void proposerInstallation().then((i) => {
@@ -808,6 +1055,7 @@ function Abrite({ abri }: { abri: Abri | null }) {
         </button>
       ) : mot.geste ? <p className="note">{mot.geste}</p> : null}
       {issue && <p className="note">{issue}</p>}
+      </>)}
     </div>
   )
 }
@@ -1094,9 +1342,12 @@ function ZoneChiffres({ db }: { db: Db }) {
   )
 }
 
-function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
+function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit, onArgentParPoste }: {
   db: Db; liste: Liste; onOuvrir: (id: string) => void; onModifier: (id: string) => void
   onNouveau: () => void; onEcrit: () => void
+  /** La porte du bilan de saison vers l'analyse — FINANCE · POSTE. `null` quand
+   *  aucune dépense n'est saisie : le bilan ne montre alors rien à ouvrir. */
+  onArgentParPoste: ((annee: number) => void) | null
 }) {
   const groupes = classerRoulages(liste)
   return (
@@ -1105,19 +1356,34 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
       {/* Le bilan de saison ouvre l'écran des roulages : c'est la vue d'ensemble
           de ce que la liste détaille en dessous. Consultable à tout moment
           (FR-55), jamais réservé à une fin de saison. */}
-      <Saison db={db} />
+      <Saison db={db} onArgentParPoste={onArgentParPoste} />
 
       {/* UN ROULAGE EST UNE JOURNÉE, jamais une session — Julian a eu à le
           rappeler, ce qui veut dire que l'écran ne le disait pas. Il le dit
           maintenant, une fois, à l'endroit où l'on compte. */}
       <div className="libelle rides-count">Roulages · {liste.length} journée{liste.length > 1 ? 's' : ''}</div>
+      {/* ⚠ `seul` : LES SECTIONS VIDES SE TAISENT, SAUF QUAND ELLES SONT SEULES —
+          lot 3, 2 septembre 2026. « Aujourd'hui · Aucun roulage aujourd'hui »
+          coûtait 65 px pour ne rien dire, et il les coûtait TOUS LES JOURS sauf
+          onze par an. C'est la règle que le budget applique déjà à ses postes :
+          « un poste vide ne s'affiche ni à zéro ni en tiret — il n'a rien à
+          dire ».
+
+          ⚠ MAIS UN ÉCRAN ENTIÈREMENT MUET N'EST PAS UN ÉCRAN VIDE, C'EST UN
+          ÉCRAN CASSÉ. Quand AUCUNE section n'a de journée, la phrase est la
+          seule chose que le pilote a à lire : `seul` la laisse alors passer, et
+          seulement là. Sans ce garde, un compte neuf ouvrait ROULAGES sur un
+          titre et un bouton, sans un mot expliquant ce qui manque. */}
       <SectionRoulages id="aujourdhui" titre="Aujourd'hui" vide="Aucun roulage aujourd'hui."
+                       seul={!liste.length}
                        db={db} liste={groupes.aujourdhui} onOuvrir={onOuvrir}
                        onModifier={onModifier} onEcrit={onEcrit} />
       <SectionRoulages id="a-venir" titre="À venir" vide="Aucun roulage à venir."
+                       seul={false}
                        db={db} liste={groupes.aVenir} onOuvrir={onOuvrir}
                        onModifier={onModifier} onEcrit={onEcrit} />
       <SectionRoulages id="passes" titre="Passés" vide="Aucun roulage passé."
+                       seul={false}
                        db={db} liste={groupes.passes} onOuvrir={onOuvrir}
                        onModifier={onModifier} onEcrit={onEcrit} />
       <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
@@ -1130,17 +1396,42 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
   )
 }
 
-function SectionRoulages({ id, titre, vide, db, liste, onOuvrir, onModifier, onEcrit }: {
-  id: 'aujourdhui' | 'a-venir' | 'passes'; titre: string; vide: string; db: Db; liste: Liste
+/** Ce qu'une section montre avant de proposer le reste. Trois journées : c'est
+ *  ce qui tient sous le pli avec le titre, et c'est aussi la profondeur à
+ *  laquelle on se souvient encore de ce qu'on cherche. */
+const JOURNEES_MONTREES = 3
+
+function SectionRoulages({ id, titre, vide, seul, db, liste, onOuvrir, onModifier, onEcrit }: {
+  id: 'aujourdhui' | 'a-venir' | 'passes'; titre: string; vide: string
+  /** `true` seulement pour la section qui doit parler quand AUCUNE n'a de
+   *  journée — voir le commentaire de l'appelant. */
+  seul: boolean
+  db: Db; liste: Liste
   onOuvrir: (id: string) => void; onModifier: (id: string) => void; onEcrit: () => void
 }) {
+  /* ⚠ LE RESTE SE DÉPLIE, IL NE DISPARAÎT PAS, ET LE LIEN LE COMPTE. Quatre
+     journées passées faisaient 536 px à elles seules. Montrer les trois
+     dernières et DIRE combien il y en a d'autres n'est pas cacher un fait :
+     c'est le nommer. Une liste tronquée en silence, elle, est un mensonge —
+     Julian s'est déjà retrouvé avec vingt-cinq roulages là où il en avait saisi
+     cinq, et c'est précisément une liste à laquelle on ne peut pas se fier qui
+     a coûté le plus cher à ce produit. */
+  const [tout, setTout] = useState(false)
+  if (!liste.length && !seul) return null
+  const montrees = tout ? liste : liste.slice(0, JOURNEES_MONTREES)
+  const cachees = liste.length - montrees.length
   return (
     <section className="pile groupe-roulages" aria-labelledby={`roulages-${id}`}>
       <h2 id={`roulages-${id}`} className="titre-section">{titre}</h2>
-      {liste.length ? liste.map((r) => (
+      {liste.length ? montrees.map((r) => (
         <LigneRoulage key={r.id} db={db} r={r} onOuvrir={onOuvrir}
                       onModifier={onModifier} onEcrit={onEcrit} />
       )) : <p className="note">{vide}</p>}
+      {cachees > 0 && (
+        <button className="lien" onClick={() => setTout(true)}>
+          Voir les {cachees} autre{cachees > 1 ? 's' : ''}
+        </button>
+      )}
     </section>
   )
 }
@@ -1554,7 +1845,7 @@ function Session({ onValider, onAnnuler }: {
 
 /* ─── LE RETOUR IMMÉDIAT — UJ-1 étape 3, sans réseau ───────────────────────
    Le produit ÉNONCE ce qui s'est passé. Il ne décerne jamais. */
-function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, visibilite, onCircuit, onSession, onAccueil, onRecap }: {
+function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, tenue, visibilite, onCircuit, onAnalyse, onSession, onAccueil, onRecap }: {
   db: Db; b: NonNullable<Bilan>; courbe: DonneesCourbe | null
   identite: Identite | null
   /** ⚠ LE COÛT ET LA VISIBILITÉ ARRIVENT MONTÉS, ILS NE SE COMPOSENT PLUS ICI —
@@ -1570,10 +1861,21 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, visibilite,
    *  journée une question, et ailleurs qu'ici elle serait introuvable le soir
    *  où l'on en a besoin. */
   chutes: React.ReactNode
+  /** LA TENUE DE CETTE JOURNÉE — la moto, le casque, la combinaison en une
+   *  image. Elle arrive montée pour la même raison que les autres : l'écran de
+   *  préparation porte EXACTEMENT le même nœud, et c'est là qu'on la déclare la
+   *  veille. Composée deux fois, elle aurait divergé ; montée seulement
+   *  là-bas, elle serait devenue incorrigible dès la première session. */
+  tenue: React.ReactNode
   /** Le nom du circuit ouvre sa fiche. C'est le seul endroit d'où l'on y entre :
    *  une fiche de circuit se consulte quand on pense à ce circuit-là, et c'est
    *  en regardant sa journée qu'on y pense. */
   onCircuit: () => void
+  /** La porte vers l'analyse, pré-réglée sur PERFORMANCE · CIRCUIT. Elle n'est
+   *  offerte que sous la courbe, et `null` quand l'onglet d'analyse lui-même
+   *  n'existe pas — voir sous la courbe pourquoi les DEUX gardes sont
+   *  nécessaires. */
+  onAnalyse: (() => void) | null
   onSession: () => void; onAccueil: () => void; onRecap: () => void
 }) {
   const record = b.ecart != null && b.ecart < 0
@@ -1620,14 +1922,59 @@ function BilanEcran({ db, b, cout, courbe, identite, photos, chutes, visibilite,
           Une courbe de deux points fait toujours une droite, donc toujours une
           progression ou toujours une chute : le pilote y lirait un mouvement
           qui n'existe pas. Rien ne signale son absence, et rien n'annonce ce
-          qu'il faudrait faire pour la voir apparaître. */}
-      {courbe && <Courbe d={courbe} />}
+          qu'il faudrait faire pour la voir apparaître.
+
+          ⚠ ET ELLE RESTE ICI. Le soir d'un roulage, la courbe se regarde DANS le
+          contexte de la journée qu'on vient de vivre — c'est ce qui lui donne son
+          sens, et la déplacer dans l'analyse l'aurait rendue introuvable au seul
+          moment où on la cherche. Elle a gagné un SECOND point de montage
+          (Circuit.tsx), elle n'en a pas changé. */}
+      {courbe && (
+        <>
+          <Courbe d={courbe} />
+          {/* LA PORTE VERS L'ANALYSE, PRÉ-RÉGLÉE SUR PERFORMANCE · CIRCUIT.
+              DEUX GARDES, ET LA SECONDE N'EST PAS UNE CEINTURE DE PLUS.
+
+              · `courbe` dit que le croisement a de la matière : cette journée a
+                une courbe, donc ce circuit porte au moins trois journées
+                chronométrées, donc PERFORMANCE · CIRCUIT montrera au moins un
+                tracé. C'est le fait, pas une supposition.
+              · `onAnalyse` dit que l'ONGLET existe, et les deux comptes ne sont
+                PAS le même. La courbe prend TOUTES les journées (`TOUTES_JOURNEES`
+                — « un tour prouve la journée mieux qu'une date »), le test de
+                l'onglet ne compte que les journées VÉCUES, au sens de
+                `bilanSaison`. Trois journées annoncées pour septembre et déjà
+                chronométrées font donc une courbe et zéro journée vécue : sans
+                cette seconde garde, ce lien s'afficherait sous un onglet absent,
+                et il ouvrirait un écran que rien ne rend. C'est exactement le
+                défaut « lu par un écran, écrit par personne » que ce lot a promis
+                de ne pas rejouer.
+
+              ⚠ ET IL DIT « TES CIRCUITS », PAS « CE CIRCUIT ». Le raccourci
+              tourne les deux premières molettes, domaine et axe ; il ne porte
+              aucun circuit, et l'analyse rend une courbe PAR circuit. Promettre
+              celui-ci et en afficher cinq serait un lien qui ment sur sa
+              destination — le mot suit ce que le lien fait vraiment. */}
+          {onAnalyse && (
+            <button className="lien" onClick={onAnalyse}>
+              Tes chronos, circuit par circuit
+            </button>
+          )}
+        </>
+      )}
 
       {/* FR-49 — la checklist se coche au fur et à mesure du chargement et
           reste attachée au roulage comme TRACE. Elle ne se vide jamais : c'est
           ce qui la rend utile l'année suivante, quand on ne se rappelle plus
           ce qu'on avait pris. */}
       <Checklist db={db} roulageId={b.id} jour={b.date} />
+
+      {/* La tenue suit le chargement, et c'est la même place que sur l'écran de
+          préparation : la checklist dit CE QU'ON EMPORTE, la tenue dit LEQUEL.
+          Les séparer d'un demi-écran obligerait à chercher deux fois la même
+          chose, et la position devait rester la même des deux côtés — un bloc
+          qui change de place selon l'écran se cherche à chaque ouverture. */}
+      {tenue}
 
       {/* FR-19 — LA VISIBILITÉ DU CHRONO EST UN INTERRUPTEUR, ROULAGE PAR
           ROULAGE, masqué par défaut. Il vit à côté du cercle parce que c'est le
@@ -1664,23 +2011,35 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
 }) {
   const [saisie, setSaisie] = useState('')
   const centimes = enCentimes(saisie)
+  /* ⚠ REPLIÉ PAR DÉFAUT — lot 3, 2 septembre 2026. Mesuré à 172 px sur le bilan
+     d'une journée, et 172 px pour écrire « Rien de saisi » quand rien n'est
+     saisi : c'était le troisième bloc le plus lourd d'un écran qui en faisait
+     2051. Le MONTANT, lui, reste dehors — c'est le fait qu'on vient chercher, et
+     le mettre derrière un tap coûterait exactement ce que le pli fait gagner.
+     Ce qui se plie est le détail : le coût au tour, le plafond, la jauge, la
+     saisie du budget — tout ce qu'on ouvre quand on a une question, jamais
+     quand on passe. */
+  const [ouvert, setOuvert] = useState(false)
 
   if (!c.journeeCentimes) {
     return (
       <div className="bloc pile">
-        <div className="libelle">Ce que la journée a coûté</div>
-        <p className="texte">Rien de saisi. Ça se note plus tard, pas maintenant.</p>
-        <button className="bouton secondaire" onClick={onDepense}>Ajouter une dépense</button>
+        <TeteRepli titre="Ce que la journée a coûté" etat="rien de saisi"
+                   ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+        {ouvert && (<>
+          <p className="texte">Rien de saisi. Ça se note plus tard, pas maintenant.</p>
+          <button className="bouton secondaire" onClick={onDepense}>Ajouter une dépense</button>
+        </>)}
       </div>
     )
   }
 
   return (
     <div className="bloc pile">
-      <div className="rang">
-        <span className="libelle">Ce que la journée a coûté</span>
-        <span className="chiffre hud-40">{formaterEuros(c.journeeCentimes)}</span>
-      </div>
+      <TeteRepli titre="Ce que la journée a coûté"
+                 chiffre={formaterEuros(c.journeeCentimes)}
+                 ouvert={ouvert} onBasculer={() => setOuvert(!ouvert)} />
+      {ouvert && (<>
 
       {c.auTour ? (
         <>
@@ -1799,6 +2158,7 @@ function BlocCout({ c, annee, onDepense, onBudget }: {
       )}
 
       <button className="lien" onClick={onDepense}>Ajouter une dépense</button>
+      </>)}
     </div>
   )
 }
@@ -1821,5 +2181,189 @@ function Visibilite({ db, roulageId }: { db: Db; roulageId: string }) {
         ? 'ton chrono de ce jour est visible par ton cercle · le masquer'
         : 'ton chrono de ce jour est masqué · le montrer à ton cercle'}
     </button>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA TENUE DU JOUR — moto, casque, combinaison.
+
+   « on peut lier à la journée de roule 1) la moto quand il y en a plusieurs,
+     2) le casque 3) la combi » — puis : « faire des genre de skin comme un
+   jeux vidéo ». — Julian, 1er septembre 2026.
+
+   ⚠ C'EST UNE SEULE IMAGE, ET C'EST TOUT LE SUJET. Trois vignettes posées
+   côte à côte se lisent comme trois objets rangés dans une caisse ; une grille
+   unique, un seul sol, une seule respiration se lisent comme une TENUE. Le
+   pilote doit reconnaître sa journée d'un coup d'œil, pas la déchiffrer.
+
+   ⚠ AUCUN SCORE, AUCUNE COMPLÉTUDE, AUCUN PALIER. Ni « 2 sur 3 », ni barre qui
+   se remplit, ni pastille, ni « tenue complète ». Une pièce non déclarée n'est
+   pas une case vide à remplir : c'est une pièce dont le pilote n'a rien dit, et
+   le produit ne relance JAMAIS personne pour compléter un carnet (AD-2, FR-31).
+   La tentation est ici plus forte qu'ailleurs — trois cases alignées appellent
+   un compteur — et c'est précisément pourquoi elle est écrite.
+
+   ⚠ ET UNE ABSENCE SE DIT EN TOUTES LETTRES. Deux absences vivent ici et elles
+   ne disent PAS la même chose : « rien de déclaré » (aucune pièce liée) et
+   « pas encore de portrait » (la pièce est là, son portrait n'existe pas). Les
+   confondre dans un même cadre gris ferait croire à un lien manquant là où il y
+   en a un. Le mot porte toujours le sens, la couleur ne le porte jamais seule
+   (UX-DR8) — c'est la même règle que la silhouette du garage.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * UNE PIÈCE DANS LA SCÈNE — son portrait s'il existe, son absence sinon.
+ *
+ * ⚠ ELLE NE RETOMBE PAS SUR LA PHOTO RÉELLE, à la différence du garage, et
+ * c'est une décision. Le garage montre UN objet : sprite, puis photo, puis
+ * silhouette. Ici les trois pièces doivent se lire comme UNE image — une photo
+ * de casque à côté de deux sprites ne compose plus rien, elle se lit comme un
+ * montage raté. La photo garde sa place là où elle a un sens : sur la fiche de
+ * la pièce, où le portrait se fabrique à partir d'elle.
+ */
+function PieceDeLaTenue({ place, piece }: {
+  /** LE NOM DE LA PLACE EST AUSSI LE MOT AFFICHÉ, et c'est délibéré : deux
+   *  propriétés qui portent toujours la même valeur finissent par diverger, et
+   *  c'est alors la feuille de style qui dit une chose et l'écran une autre. */
+  place: 'moto' | 'casque' | 'combinaison'
+  piece: { id: string; nom: string; sprite: string | null } | null
+}) {
+  const localPortrait = useLocalPortrait(piece?.id)
+  const portrait = estIllustrationImportee(piece?.sprite)
+    ? piece?.sprite : localPortrait ?? piece?.sprite
+  return (
+    <div className="tenue-piece" data-place={place}>
+      {piece && portrait
+        ? <img className="tenue-sprite" src={portrait} alt={`Illustration de ${piece.nom}`} />
+        : (
+          <p className="tenue-absente">
+            {piece ? 'pas encore de portrait' : 'rien de déclaré'}
+          </p>
+        )}
+      {/* Le nom de la place d'abord, la pièce ensuite : sur une place vide, la
+          ligne dit quand même DE QUOI on parle. Sans elle, un cadre hachuré ne
+          se distingue pas d'une image qui n'a pas chargé — le défaut exact que
+          la silhouette du garage a déjà payé. */}
+      <p className="tenue-nom"><b>{place}</b>{piece?.nom}</p>
+    </div>
+  )
+}
+
+/**
+ * LE SÉLECTEUR D'UNE PIÈCE — même forme que celui de la moto (`Nouveau` et
+ * `Modifier`, plus haut), et même règle : IL NE S'AFFICHE QUE S'IL Y A DE QUOI
+ * CHOISIR.
+ *
+ * ⚠ « DE QUOI CHOISIR » EST UNE PIÈCE ICI, ET DEUX MOTOS LÀ-BAS. Ce n'est pas
+ * une divergence, c'est la même règle appliquée à deux situations qui ne se
+ * ressemblent pas : `creerRoulage` LIE D'OFFICE la moto unique du garage, donc
+ * en dessous de deux il n'y a rien à demander. Rien ne lie une tenue d'office —
+ * et rien ne doit le faire, un casque lié tout seul affirmerait un fait que
+ * personne n'a déclaré. Avec un seul casque au garage, le choix reste donc
+ * entier : le déclarer, ou ne rien dire. Le seuil à deux le rendrait
+ * indéclarable pour la plupart des pilotes, qui n'ont qu'un casque.
+ *
+ * ⚠ ET LE MÊME TAP DÉLIE. Taper la pièce active la retire — c'est la seule
+ * façon de corriger une déclaration, et elle doit coûter le même geste. Les
+ * puces de la moto se comportent déjà exactement ainsi.
+ */
+function ChoixDeTenue({ titre, genre, pieces, portee, occupe, sur }: {
+  titre: string
+  genre: GenreDeTenue
+  pieces: PieceDeTenue[]
+  portee: PieceDeTenue | null
+  occupe: boolean
+  sur: (genre: GenreDeTenue, equipementId: string | null) => void
+}) {
+  if (pieces.length === 0) return null
+  return (
+    <div className="pile">
+      <div className="libelle">{titre}</div>
+      <div className="puces">
+        {pieces.map((p) => (
+          <button key={p.id} className="puce" disabled={occupe}
+                  data-actif={portee?.id === p.id ? '1' : '0'}
+                  onClick={() => sur(genre, portee?.id === p.id ? null : p.id)}>
+            {p.nom.toUpperCase()}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Tenue({ db, roulageId }: { db: Db; roulageId: string }) {
+  const [tenue, setTenue] = useState<TenueDuJour | null>(null)
+  /* La relecture après écriture passe par un compteur plutôt que par un appel
+     direct : l'effet garde alors SON drapeau de vie, et une réponse en retard
+     ne peut pas écraser l'état d'un autre roulage. Le compteur ne s'appelle
+     surtout pas `tour` — dans ce dépôt un tour est un CHRONO. */
+  const [relecture, setRelecture] = useState(0)
+  useEffect(() => {
+    let vivant = true
+    void tenueDuJour(db, roulageId).then((t) => { if (vivant) setTenue(t) })
+    return () => { vivant = false }
+  }, [db, roulageId, relecture])
+
+  /* ⚠ LE MÊME VERROU QUE PARTOUT, et il n'est pas décoratif ici : la puce est
+     une BASCULE. Deux taps dans la même image de rendu verraient tous les deux
+     l'ancien état — le premier lie le casque, le second le délie aussitôt, et
+     le pilote voit sa déclaration disparaître sans comprendre. `useGeste` ferme
+     la porte sur une valeur mutable, seule à être lue et écrite dans le même
+     rendu. */
+  const [poser, occupe] = useGeste(async (genre: GenreDeTenue, id: string | null) => {
+    await poserPieceDeTenue(db, roulageId, genre, id)
+    setRelecture((n) => n + 1)
+  })
+
+  /* « Je ne sais pas encore » et « il n'y a rien » sont deux états : le second
+     se dit, le premier se tait. Annoncer « rien de déclaré » le temps d'une
+     requête écrirait un fait faux à chaque ouverture — récit 17.2. */
+  if (!tenue) return null
+
+  /* ⚠ LE BLOC PARLE DE LA TENUE, ET LA MOTO SEULE N'EN EST PAS UNE. Tant
+     qu'aucune pièce n'est portée ni disponible, il n'existe pas — sinon le
+     pilote qui ne tient pas son équipement verrait à chaque journée un portrait
+     de moto qu'il a déjà au garage, sous un titre qui lui rappelle ce qu'il n'a
+     pas saisi. C'est une relance déguisée, et rien ici ne relance (AD-2). La
+     moto REJOINT la scène dès qu'il y a une tenue à composer avec elle : c'est
+     elle qui fait l'image, ce n'est pas elle qui la justifie. */
+  const sansTenue = !tenue.casque && !tenue.combinaison
+    && tenue.casques.length === 0 && tenue.combinaisons.length === 0
+  if (sansTenue) return null
+
+  return (
+    <section className="bloc tenue">
+      {/* Sans temps grammatical : ce bloc est le MÊME nœud sur le bilan et sur
+          l'écran de préparation. « ce que tu portais » mentirait sur l'un,
+          « ce que tu porteras » sur l'autre. */}
+      <p className="libelle">La tenue de ce jour-là</p>
+
+      <div className="tenue-scene">
+        {/* ⚠ LES TROIS PLACES SUIVENT LA MÊME RÈGLE, et la moto y a échappé une
+            version durant : une place n'apparaît que si elle a quelque chose à
+            DIRE (une pièce portée) ou quelque chose à FAIRE (une pièce à
+            choisir ici). Sinon elle répète « rien de déclaré » sans qu'aucun
+            geste de ce bloc puisse y répondre.
+
+            La moto n'a que la première branche, et c'est ce qui la distingue :
+            elle se choisit à la création de la journée, pas ici. Sur une
+            journée sans machine liée — `creerRoulage` accepte un `machineId`
+            nul, garage vide au moment de la saisie — la place restait affichée
+            avec une absence que rien dans cet écran ne pouvait lever. */}
+        {tenue.machine && <PieceDeLaTenue place="moto" piece={tenue.machine} />}
+        {(tenue.casque || tenue.casques.length > 0) && (
+          <PieceDeLaTenue place="casque" piece={tenue.casque} />
+        )}
+        {(tenue.combinaison || tenue.combinaisons.length > 0) && (
+          <PieceDeLaTenue place="combinaison" piece={tenue.combinaison} />
+        )}
+      </div>
+
+      <ChoixDeTenue titre="Casque" genre="casque" pieces={tenue.casques}
+                    portee={tenue.casque} occupe={occupe} sur={(g, id) => void poser(g, id)} />
+      <ChoixDeTenue titre="Combinaison" genre="combinaison" pieces={tenue.combinaisons}
+                    portee={tenue.combinaison} occupe={occupe} sur={(g, id) => void poser(g, id)} />
+    </section>
   )
 }

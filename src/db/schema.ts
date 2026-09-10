@@ -78,6 +78,12 @@ const chute = new Table({
 // C'est l'invariant qui rend l'axe atelier atteignable sans migration.
 const roulage = new Table({
   machine_id: column.text,
+  /** LA TENUE PORTÉE CE JOUR-LÀ. Facultative, comme la machine l'est déjà : une
+   *  journée sans tenue déclarée est un état valide et le reste (AD-2). Le
+   *  serveur met ces liens à `null` quand la pièce est vendue — la journée a eu
+   *  lieu, elle ne s'efface pas avec l'équipement qu'on n'a plus. */
+  casque_id: column.text,
+  combinaison_id: column.text,
   // Le circuit SE SAISIT. `circuit_nom` fait foi ; la référence au référentiel
   // est la normalisation que la récolte posera plus tard, et reste nulle jusque-là.
   // Écrire le nom dans la référence — ce que faisait la v0 — rendait toute
@@ -188,6 +194,16 @@ const equipement = new Table({
    *  un remplacement destructif » ne serait vrai que dans le texte. */
   sprite: column.text,
   photo_chemin: column.text,
+  /** ⚠ CE QUE LA PIÈCE EST, distinct de ce dans quoi on RANGE SA DÉPENSE.
+   *  `categorie` vaut 'protection' pour un casque comme pour une combinaison,
+   *  des gants et une dorsale : elle ne peut donc pas alimenter deux sélecteurs
+   *  séparés. `genre` le peut — 'casque' | 'combinaison' — et il est nul pour
+   *  tout le reste, qui est la majorité : une glacière n'a pas de genre.
+   *
+   *  Le NOM compte : un `check (categorie in …)` posé dans une migration plus
+   *  récente serait comparé aux catégories de la CHECKLIST par un essai qui
+   *  retient la dernière contrainte de ce motif, toutes tables confondues. */
+  genre: column.text,
 })
 
 // Ce que le pilote S'ÉTAIT FIXÉ — la seule grandeur du coût qui ne se dérive pas.
@@ -261,6 +277,31 @@ const photo = new Table({
    *  dépense — les compter ensemble annoncerait « 3 preuves » là où il y a
    *  trois clichés du même disque et aucun justificatif. */
   genre: column.text,
+})
+
+// LA VIDÉO — récit 23.10. ⚠ Mêmes métadonnées seules que la photo, et pour une
+// raison plus forte encore : un clip pèse cent fois une vignette, et la file
+// d'envoi n'a pas à le transporter. Les octets partent en HTTP direct vers le
+// bucket privé `videos`, par morceaux et de façon REPRENABLE — c'est la clause
+// qui a fait reporter cette pièce hors du lot 23.
+const video = new Table({
+  /** Le jour porte la vidéo même quand le crash la porte aussi : retirer le
+   *  récit du crash ne détruit pas la preuve, exactement comme pour la photo. */
+  roulage_id: column.text,
+  chute_id: column.text,
+  chemin_objet: column.text,
+  /** Le poids réel APRÈS compression, connu dès l'écriture locale. La reprise
+   *  compare cette cible à l'offset que le serveur lui rend ; sans elle, un
+   *  versement repris ne sait pas s'il a fini. */
+  octets: column.integer,
+  duree_ms: column.integer,
+  largeur: column.integer,
+  hauteur: column.integer,
+  type_mime: column.text,
+  /** 'locale' | 'montee' | 'a_supprimer'. Le tombstone est synchronisé : la
+   *  vidéo quitte les lectures tout de suite, son chemin survit jusqu'à ce que
+   *  le stockage confirme le retrait. */
+  etat: column.text,
 })
 
 // Le GESTE — purement déclaratif. Aucune reconnaissance d'image, jamais (FR-28).
@@ -457,6 +498,7 @@ export const AppSchema = new Schema({
   horloge,
   checklist_ligne,
   photo,
+  video,
   geste,
   plan_si_alors,
   document: document_,

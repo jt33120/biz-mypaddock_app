@@ -10,6 +10,9 @@ const dossier = path.join(ici, 'photos')
 
 // HEIC : Safari le décode, Chrome non. On normalise SANS redimensionner — réduire ici
 // supprimerait le cas à 18,3 Mpx, celui qui fait mourir l'onglet.
+// `sips` est un binaire macOS : `CHROME` sort le reste de ce fichier du poste de
+// travail, pas cette boucle. Ailleurs elle tourne à vide : `photos/` n'arrive
+// dans un clone qu'avec son `.gitkeep`, jamais avec un .heic.
 for (const f of fs.readdirSync(dossier).filter(f => /\.heic$/i.test(f))) {
   const jpg = path.join(dossier, f.replace(/\.heic$/i, '.jpg'))
   if (!fs.existsSync(jpg)) {
@@ -25,7 +28,8 @@ fs.writeFileSync(path.join(dossier, 'manifest.json'), JSON.stringify(noms, null,
 console.log(`${noms.length} photo(s) au jeu d'essai`)
 
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   args: ['--allow-file-access-from-files'],
 })
 const page = await nav.newPage({ viewport: { width: 1100, height: 900 }, deviceScaleFactor: 2 })

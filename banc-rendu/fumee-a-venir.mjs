@@ -22,9 +22,11 @@
 // d'une session existe encore sur l'écran de la journée, et la journée à venir
 // reste dans la liste des roulages, où elle se corrige et se retire.
 import { chromium } from 'playwright-core'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -133,6 +135,9 @@ verifier('   la préparation a RÉPONDU avant qu\'on lise la page',
 
 // ── ② IL PORTE CE QUI PRÉPARE — les deux listes, réunies et non mélangées.
 verifier('② « Avant d\'y aller » est là', await page.isVisible('.journee-page .preparation'))
+// Le chargement vide est replié depuis le lot 3 : son en-tête le dit, et ce
+// qu'il contient s'ouvre. On ouvre AVANT d'affirmer, jamais dans l'affirmation.
+await ouvrirTousLesPlis(page)
 verifier('   et le chargement aussi',
   await page.isVisible('text=Préparer le chargement')
   || await page.isVisible('.journee-page .checklist'))
@@ -223,6 +228,20 @@ await pret()
 await onglet('ROULAGES')
 await page.click(`.groupe-roulages .bloc:has-text("${jour(18)}") >> nth=0`)
 await page.waitForSelector('.journee-page', { timeout: 20_000 })
+/* ⚠ LE CADRE ARRIVE AVANT SES DONNÉES — corrigé le 3 septembre 2026, après une
+   demi-douzaine de rouges dans cette seule zone. `.journee-page` existe dès que
+   React rend l'écran ; les objectifs et la checklist, eux, viennent d'une
+   lecture PowerSync qui part APRÈS le montage. Lire dans la foulée du sélecteur,
+   c'est lire une page vraie mais pas encore remplie — et cet essai rougissait
+   donc sous la charge du banc complet en restant vert seul, ce qui est la pire
+   forme de rouge : celle qu'on finit par ignorer.
+   L'attente est TOLÉRANTE et ne remplace pas l'assertion : si la donnée ne
+   revient jamais, on veut une vérification rouge avec son détail, pas une
+   exception qui empêche les suivantes de tourner. */
+await page.waitForFunction(() => {
+  const t = document.querySelector('.journee-page')?.textContent ?? ''
+  return t.includes('Travailler la sortie') && t.includes('Relâcher les épaules')
+}, null, { timeout: 20_000 }).catch(() => {})
 const apresRecharge = await texte('.journee-page')
 verifier('   objectifs et coches persistent après rechargement',
   apresRecharge.includes('Travailler la sortie')
@@ -244,6 +263,13 @@ await pret()
 await onglet('ROULAGES')
 await page.click(`.groupe-roulages .bloc:has-text("${jour(18)}") >> nth=0`)
 await page.waitForSelector('.journee-page', { timeout: 20_000 })
+// Même course qu'au-dessus : on attend que l'objectif RESTANT soit revenu de la
+// base avant de conclure que l'autre est bien parti. Sans ça, « les deux sont
+// absents » se lit comme « le retrait a trop retiré ».
+await page.waitForFunction(() => {
+  const t = document.querySelector('.objectifs')?.textContent ?? ''
+  return t.includes('Relâcher les épaules')
+}, null, { timeout: 20_000 }).catch(() => {})
 const apresRetrait = await texte('.objectifs')
 verifier('   retirer un objectif ne retire pas l\'autre',
   !apresRetrait.includes('Travailler la sortie') && apresRetrait.includes('Relâcher les épaules'))
@@ -275,13 +301,28 @@ const sections = await page.$$eval('.groupe-roulages', (groupes) => groupes.map(
   dates: [...g.querySelectorAll('.ligne-glissante .rang:first-child .libelle')]
     .map((n) => n.textContent.trim()),
 })))
-verifier('   les trois sections sont distinctes et dans le bon ordre',
-  JSON.stringify(sections.map((s) => s.titre)) === JSON.stringify(["Aujourd'hui", 'À venir', 'Passés']),
+/* ⚠ UNE SECTION VIDE NE SE REND PLUS — lot 3, 2 septembre 2026. « Aujourd'hui ·
+   Aucun roulage aujourd'hui » coûtait 65 px pour ne rien dire, tous les jours
+   sauf onze par an. Ce qui est vérifié n'a pas changé de NATURE : les sections
+   présentes restent distinctes et dans l'ordre du produit. C'est donc une
+   SOUS-SUITE de l'ordre canonique qu'on exige, pas la liste entière — écrire
+   ["À venir", "Passés"] en dur ferait rougir cet essai le jour où le banc
+   tourne un jour de roulage, sur un produit parfaitement juste. */
+const ORDRE = ["Aujourd'hui", 'À venir', 'Passés']
+const sousSuite = (vus, ordre) => {
+  let i = 0
+  for (const v of vus) { i = ordre.indexOf(v, i); if (i < 0) return false; i += 1 }
+  return true
+}
+const IDENTIFIANT = {
+  "Aujourd'hui": 'roulages-aujourdhui', 'À venir': 'roulages-a-venir', 'Passés': 'roulages-passes',
+}
+verifier('   les sections rendues sont distinctes et dans le bon ordre',
+  sections.length > 0 && new Set(sections.map((s) => s.titre)).size === sections.length
+    && sousSuite(sections.map((s) => s.titre), ORDRE),
   sections.map((s) => s.titre).join(' · '))
-verifier('   les trois sections référencent un titre par un identifiant stable',
-  JSON.stringify(sections.map((s) => s.reference)) === JSON.stringify([
-    'roulages-aujourdhui', 'roulages-a-venir', 'roulages-passes',
-  ]) && sections.every((s) => s.reference === s.titreId),
+verifier('   chaque section référence son titre par un identifiant stable',
+  sections.every((s) => s.reference === IDENTIFIANT[s.titre] && s.reference === s.titreId),
   JSON.stringify(sections.map((s) => [s.reference, s.titreId])))
 const futur = sections.find((s) => s.titre === 'À venir')
 const passes = sections.find((s) => s.titre === 'Passés')
@@ -316,6 +357,18 @@ verifier('⑦ le garage ne compte pas la journée annoncée',
 
 await onglet('ROULAGES')
 await page.waitForSelector('.saison', { timeout: 20_000 })
+// ⚠ LE BILAN DE SAISON EST REPLIÉ PAR DÉFAUT depuis le lot 3 : il pesait 637 px
+// sur 759 utiles, avant même que la liste commence. Ce qu'il dit n'a pas changé,
+// l'endroit où on le lit non plus — il faut seulement l'ouvrir. La complétude,
+// elle, reste dans l'en-tête plié (FR-55) : c'est la seule chose qu'on lise sans
+// ce tap, et c'est voulu.
+const ouvrirLeBilan = async () => {
+  const tete = page.locator('.saison .atelier-tete')
+  await tete.waitFor({ state: 'visible', timeout: 20_000 })
+  if (await tete.getAttribute('aria-expanded') === 'false') await tete.click()
+  await page.waitForSelector('.saison .chiffres-saison', { timeout: 20_000 })
+}
+await ouvrirLeBilan()
 const saison = await texte('.saison')
 verifier('   le bilan de saison non plus',
   !/sans chrono/.test(saison), saison.slice(0, 200))

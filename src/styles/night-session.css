@@ -18,12 +18,12 @@ body { background: var(--nuit); font-family: var(--face); -webkit-font-smoothing
 .bloc::before { display: none; }
 .bloc .bloc, .bloc .plat { background: var(--nuit-2); }
 .bouton { gap: var(--space-3); border-radius: var(--radius-control); background: var(--accent); color: var(--accent-ink); font-size: var(--text-base); font-weight: 600; letter-spacing: -.01em; text-transform: none; box-shadow: none; transition: background var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast); }
-.bouton.secondaire { background: var(--surface); border-color: var(--filet); color: var(--encre); }
+.bouton.secondaire { background: var(--surface); border-color: var(--filet); color: var(--encre); font-weight: 500; letter-spacing: -.01em; text-transform: none; }
 .bouton.destructif { color: var(--alerte); border-color: var(--alerte); background: transparent; }
 .bouton:active { transform: translateY(1px); box-shadow: none; }
 .bouton[disabled] { opacity: .5; cursor: not-allowed; }
 .bouton svg { width: var(--icon-size); height: var(--icon-size); flex-shrink: 0; }
-.lien { color: var(--encre-faible); text-underline-offset: .2em; font-size: var(--text-sm); }
+.lien { color: var(--encre-faible); border-radius: var(--radius-control); text-underline-offset: .2em; font-size: var(--text-sm); font-weight: 500; letter-spacing: -.01em; }
 .lien.destructif { color: var(--alerte); }
 :where(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--miami); outline-offset: 4px; }
 .champ { background: var(--nuit-2); border: 1px solid var(--filet); border-radius: var(--radius-control); font-size: var(--text-base); min-height: var(--cible-min); }
@@ -125,7 +125,7 @@ body { background: var(--nuit); font-family: var(--face); -webkit-font-smoothing
 
 /* Neutralize legacy surface literals and decorative section colors. */
 .somme .unite, .jauge, .fait, .recap .recap-image,
-.case-photo-crash, .case-album, .barre-argent-fond {
+.case-photo-crash, .case-video-crash, .case-album, .barre-argent-fond {
   background: var(--nuit-2);
 }
 .piece figcaption { background: color-mix(in srgb, var(--nuit) 90%, transparent); color: var(--encre); }
@@ -135,12 +135,24 @@ body { background: var(--nuit); font-family: var(--face); -webkit-font-smoothing
 .atelier-raccourci.entretien, .atelier-raccourci.amelioration, .atelier-raccourci.reparation_non_vitale,
 .poste-page.entretien .garage-titre, .poste-page.amelioration .garage-titre,
 .poste-page.reparation_non_vitale .garage-titre, .circuit-page .garage-titre,
-.journee-page .garage-titre, .conseil.plan-pose {
+.journee-page .garage-titre, .conseil.plan-pose, .bloc.abri, .preparation {
   border-left-color: var(--filet);
 }
-.atelier, .atelier-raccourci { border-left-width: 1px; }
+.atelier, .atelier-raccourci, .bloc.abri, .preparation { border-left-width: 1px; }
 .atelier-raccourci .libelle { text-transform: none; font-weight: 500; }
 .garage .chiffres .et, .chiffres-saison .et { letter-spacing: 0; }
 .groupe-roulages .titre-section::before { display: none; }
 .coche { font-size: var(--text-sm); letter-spacing: 0; }
 .compte-groupe > .titre-section { border-bottom: 0; }
+.tenue-scene { overflow: hidden; border: 1px solid var(--filet); border-radius: var(--radius-card); }
+.tenue-piece { padding: var(--space-4); }
+.tenue-sprite { image-rendering: auto; }
+.tenue-nom { font-size: var(--text-sm); }
+.tenue-nom b { margin-bottom: var(--space-1); font-size: var(--text-xs); letter-spacing: .025em; }
+.tenue-absente { background: var(--nuit-2); border: 1px solid var(--filet); border-radius: var(--radius-control); }
+.analyse-choix { padding-bottom: var(--space-5); }
+.hud-credits { min-height: var(--target-small); padding: var(--space-2) var(--space-3); border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--filet); }
+.hud-credits .chiffre { font-size: var(--text-base); font-family: var(--face); font-weight: 600; letter-spacing: 0; }
+.hud-credits .mot { letter-spacing: 0; font-size: var(--text-xs); }
+.actions-materiel > .legacy-portraits { grid-column: 1 / -1; text-align: left; }
+.actions-materiel .legacy-portraits summary { justify-content: flex-start; }

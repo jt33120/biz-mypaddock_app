@@ -1,46 +1,58 @@
-# Night Session — local delivery
+# Garage Studio — local verification
 
-Date: 2026-09-10.
+Date: 2026-09-10. This report supersedes the first Night Session visual pass.
 
-Open [the personal garage preview](http://127.0.0.1:5173/?apercu=night), or [the regular application](http://127.0.0.1:5173/). Start it again with `npm run dev -- --host 127.0.0.1 --port 5173`.
+Open [the isolated personal garage preview](http://127.0.0.1:5173/?apercu=night), or [the regular application](http://127.0.0.1:5173/). Start development with `npm run dev -- --host 127.0.0.1 --port 5173`.
 
-## Delivered
+## Implemented locally
 
-The new racing-poster direction covers the startup, home, garage, equipment, account, rides, workshop, budget, forms, photo viewers and recap. Shared tokens, Barlow type, Lucide icons, responsive navigation and controls replace the pixel interface. The startup exists before React and exits as soon as the app is ready or storage fails; it does not add a fake delay.
+The user's revised direction is a restrained native iOS interface: black, charcoal, gray and white, platform system typography (SF on Apple devices), rounded controls, Lucide icons and consistent spacing. Decorative pink/mint accents and racing display fonts have been removed from the active theme. Red remains for errors/destructive actions and amber for actual warnings or slower timing deltas. Original artwork retains its colors.
 
-The motorcycle, suit and helmet were redrawn from personal reference photographs using the built-in image generation tool, without Gemini. The outputs are integrated locally; generation itself was not on-device inference. Personal PNG/WebP files and their exact prompts are in `.local/night-session/`, excluded from Git. See [portrait prompts and reference limits](../.local/night-session/prompts.md). Hidden suit panels were reconstructed from track photos because the original standalone equipment photos were unavailable on this device.
+Shared components cover home, garage, equipment, account, rides, workshop, budget, forms, preparation, season, photo/video views, recap and the newer Analysis and daily outfit flows. Navigation supports five tabs when Analysis has data. The 47 upstream commits were integrated before verification, preserving outfit classification, credit controls, collapsible sections and video behavior.
 
-Only the generic sunset artwork is public: [night-session.webp](../public/images/night-session.webp). Its creative brief was an original illustrated tropical paddock at sunset, a white/navy sport motorcycle on the right, palm trees and wet pavement, with dark negative space on the left for display type; refined ink contours and airbrushed early-2000s racing-game lighting, without game logos or copied screens.
+The exact motorcycle illustration selected by the user (D1) is reused. This refinement made two built-in image-generation calls to redraw the helmet and suit from their original personal reference photographs; it made zero Gemini calls. The earlier limitation about reconstructing suit panels from track photos no longer describes these final equipment references. Generation used the built-in tool, not on-device inference. Personal references, outputs and prompts remain under the ignored `.local/night-session/` directory; see [private portrait provenance](../.local/night-session/prompts.md).
 
-Local image import is available for each motorcycle and equipment item: PNG/JPEG/WebP, preview, cancel, explicit save and persistence after reload. Dimensions are checked before decoding; images are resized and compressed in the browser. The source photo is retained. The old paid pixel generator remains separately labeled and collapsed in the regular application; it is unavailable in the private preview. No Gemini request was made.
+The generic landscape remains a public asset at [night-session.webp](../public/images/night-session.webp), subdued to grayscale in the home interface. It contains no account-specific reference photograph.
 
-## Verification
+Image import is available per motorcycle and equipment item: PNG/JPEG/WebP, dimension checks before decoding, browser resize/compression, a candidate preview, cancel and explicit save. The source photo is retained. Saved imported WebP portraits take priority over private development overrides after reload, including in the daily outfit and recap. The existing paid pixel generator remains separately labeled and collapsed in the regular application; the private preview cannot invoke it.
+
+## Personalized startup
+
+The startup exists before React. It uses the selected motorcycle when a previously verified local thumbnail is available, with a restrained horizontal pass and a static reduced-motion alternative. It exits when the application is ready or storage fails; it adds no artificial wait.
+
+The optional cache contains one disposable raster thumbnail, at most 640 px and 180,000 characters. SQLite and the source-photo vault remain authoritative. The cache is bound to the current owner; account changes, logout and local erasure invalidate it and pending writes. A previously verified motorcycle remains usable offline. New signed-in data waits for ownership verification, and newly created anonymous motorcycles are marked at creation. The isolated preview neither reads nor modifies the regular account's startup cache. See the [startup verification report](../artifacts/night-session/qa/splash-v2/README.md).
+
+## Verification acquired
 
 | Check | Result |
 | --- | --- |
-| TypeScript and production build | Passed |
-| Existing unit tests | 160/160 |
-| Existing Chromium browser suites | 29/29 have passing latest results; six affected suites rerun after corrections |
-| Visual review | Two passes; second pass covers 28 states at 390/768/1440px, no horizontal overflow or page errors |
-| Local image import | 12 format/size checks and equipment preview/cancel/save/reload flow passed; machine flow inspected separately |
-| Private preview isolation | 8/8: separate SQLite and media namespaces, no Supabase client, original media intact, private files denied, no network writes |
-| Lint | Command passed with warnings; this is not a claim of a warning-free repository |
+| TypeScript after the merged UI and outfit changes | Passed |
+| Unit suite | [203/203 passed](../artifacts/night-session/unit-v2-final.txt) |
+| Chromium functional suites | [32/32 latest results passed](../artifacts/garage-studio/tests.json); affected suites were rerun after corrections, with earlier attempts retained in the report |
+| Responsive visual review | Garage, home, rides, Analysis, account and populated daily outfit at 390/768/1440 px; no horizontal overflow or runtime errors in those passes |
+| Local illustration import, final development rerun | [12/12 validation checks passed](../artifacts/garage-studio/logs/import-illustration.log); equipment preview/cancel/save/reload, original-photo preservation and item isolation passed; zero generation requests |
+| Personalized startup, development | [28/28 checks passed](../artifacts/night-session/qa/splash-v2/dev-results.json) |
+| Personalized startup, local production build | [28/28 checks passed](../artifacts/night-session/qa/splash-v2/production-results.json), including a real PWA offline reload; six generic startup check groups also passed |
+| Startup confidentiality | [Four integration scenarios passed](../artifacts/night-session/qa/splash-v2/confidentialite-results.txt), including partial SQLite erasure, restart, retry and account ownership denial |
+| Private preview | Separate SQLite/media stores, no Supabase client, private files denied through direct paths, no network writes; [isolation evidence](../artifacts/night-session/preview-isolation-v2.json) |
+| Lint | Zero errors in the checked change; existing repository warnings remain |
 
-The [browser report and screenshot index](../artifacts/night-session/qa/README.md) records individual attempts and screenshots. Personal artwork captures: [phone](../artifacts/night-session/garage-portraits-390.png), [tablet](../artifacts/night-session/garage-portraits-768.png), [desktop](../artifacts/night-session/garage-portraits-1440.png). Home: [phone](../artifacts/night-session/final-accueil-390.png), [desktop](../artifacts/night-session/final-accueil-1440.png). Isolation results: [JSON](../artifacts/night-session/preview-isolation.json).
+The current screenshots are in [Garage Studio artifacts](../artifacts/garage-studio/). Representative views: [garage phone](../artifacts/garage-studio/garage-viewport-390.png), [garage desktop](../artifacts/garage-studio/garage-1440.png), [Analysis](../artifacts/garage-studio/analyse-390.png), [daily outfit](../artifacts/garage-studio/journee-390.png) and [account](../artifacts/garage-studio/compte-390.png). The original Night Session captures are historical evidence of the superseded first direction.
 
-## Boundaries
+## Release evidence — local production build verified; remote release pending
 
-- This delivery is local. No deployment, commit, remote data write or replacement of the account's saved original portraits was performed.
-- The private preview uses an independent database and media stores, is served only on loopback in Vite development, and creates no Supabase client. Its personal manifest and assets are not emitted by the production build. Importing an image in the regular authenticated app uses its normal data persistence and sync flow.
-- Automated WebKit could not initialize SQLite/OPFS. Its storage failure screen was verified, but business routes have not been validated on Safari. Chromium responsive coverage does not substitute for a physical iPhone test.
-- Vite reports a large main bundle, primarily the existing database/sync stack. Repository-wide design lint also reports legacy patterns; it is not a clean-baseline acceptance signal for this change.
+The final production build has been exercised through its local preview on port 4317. Personalized and generic startup, confidentiality, and a real PWA offline reload pass there. This is production-format runtime verification on localhost, not a remote deployment. The current revision has not been verified on a live deployment by this report. Record the remote revision, URL and live checks separately if a release is authorized and completed.
 
-## Existing libraries reviewed
+The development-only personal manifest/routes must remain absent from production output. Personal illustrations in the private preview are local overrides; they do not replace the account's saved portraits. An explicit import/save in the regular authenticated application follows its normal data persistence and synchronization flow.
 
-- [Lucide React](https://lucide.dev/guide/react): one consistent scalable icon family, integrated.
-- [Barlow](https://tribby.com/fonts/barlow/) and bundled Fontsource packages: local font assets for offline use, integrated.
-- [Motion reduced-motion guidance](https://motion.dev/docs/react-use-reduced-motion): reviewed; native CSS and `prefers-reduced-motion` were sufficient, so no animation runtime was added.
-- [Vite CSP guidance](https://vite.dev/guide/features.html#content-security-policy-csp): a development nonce permits React refresh while preview and production retain their CSP.
+Automated WebKit could not initialize SQLite/OPFS in the earlier pass. Its storage-failure screen was verified, but Safari business routes and physical iPhone media behavior have not been validated. Chromium responsive coverage is not a substitute for a device test. Vite's existing database/sync stack still produces a large main bundle.
+
+## Existing libraries and implementation choices
+
+- [Lucide React](https://lucide.dev/guide/react) supplies a single scalable icon family.
+- System fonts replace the earlier Barlow presentation; no font network request is required by the active interface.
+- [Motion reduced-motion guidance](https://motion.dev/docs/react-use-reduced-motion) informed the review; native CSS and `prefers-reduced-motion` were sufficient, so no animation runtime was added.
+- [Vite CSP guidance](https://vite.dev/guide/features.html#content-security-policy-csp) supports a development nonce for React refresh. Preview and production retain CSP, including the media sources required by local video.
 
 ## Reproduce focused checks
 
@@ -50,7 +62,8 @@ npm run essais:unite
 npm run lint
 node banc-rendu/fumee-import-illustration.mjs http://127.0.0.1:5173
 node scripts/check-local-preview.mjs
-node scripts/capture-night.mjs
+SPLASH_TEST_URL=http://127.0.0.1:5173 node banc-rendu/fumee-splash-personnalise.mjs /tmp/splash-personnalise
+SPLASH_TEST_URL=http://127.0.0.1:5173 node banc-rendu/fumee-splash-confidentialite.mjs
 ```
 
-The existing full browser runner expects port 4173. This session preserved unrelated servers on that port and used a temporary URL-only redirect to preview port 4317, as documented in the QA report.
+The existing browser suites expect port 4173. This session preserved unrelated servers and used a temporary URL-only redirect to preview port 4317. Browser results are local checks, not live-account verification.

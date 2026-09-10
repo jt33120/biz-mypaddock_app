@@ -4,9 +4,11 @@
 import { chromium } from 'playwright-core'
 import { sortir } from './verdict.mjs'
 import fs from 'node:fs'
+import { ouvrirTousLesPlis } from './plis.mjs'
 
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -71,6 +73,7 @@ console.log('   au format de la vitrine, et servie depuis la copie locale :',
 // coût au tour. On le prouve en comparant l'image à celle d'après la pose du budget.
 await page.click('text=Retour au roulage')
 await page.waitForSelector('text=Meilleur tour du jour')
+await ouvrirTousLesPlis(page)
 await page.click('text=Ajouter une dépense')
 await page.fill('#montant', '180')
 await page.click('section.depense .bouton:not(.secondaire)')

@@ -5,14 +5,15 @@ import type { PowerSyncDatabase } from '@powersync/web'
 import {
   CATEGORIES_EQUIPEMENT, coutEquipement, declarerEquipement, depenserSur,
   EXEMPLE_EQUIPEMENT, EXEMPLE_POSTE, listerEquipement, NOM_EQUIPEMENT, NOM_POSTE,
-  jourDansLAnnee, nomMois, oublierEquipement, parMois, parPoste, poserSpriteEquipement,
+  jourDansLAnnee, nomMois, oublierEquipement, parPoste, poserGenreEquipement,
+  poserSpriteEquipement,
   POSTES, repereMensuel,
-  type CategorieEquipement, type Equipement as Materiel, type LigneMois, type LignePoste,
+  type CategorieEquipement, type Equipement as Materiel, type LignePoste,
   type Poste,
 } from '../db/budget'
+import { GENRES_DE_TENUE, piecesDeGenre, type GenreDeTenue } from '../db/equipement'
 import { photoEquipement, verserPhotoEquipement } from '../db/photos'
 import { Icone, type Nom } from './Icones'
-import { Barres, type Barre } from './Barres'
 import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import {
@@ -42,6 +43,28 @@ import { aujourdhui } from '../db/vecu'
  *     X € ». Un budget qui se vide sous les yeux est un compteur à rebours, et
  *     un compteur à rebours sur de l'argent produit exactement ce qu'il prétend
  *     éviter : on cesse de saisir pour ne plus le voir descendre.
+ *
+ * ⚠ LES DEUX TRACÉS ONT QUITTÉ CE MODULE — 1er septembre 2026. « Par poste » et
+ * « par mois » y étaient rendus en barres, et les deux étaient VERROUILLÉS SUR
+ * L'ANNÉE COURANTE aux deux points de montage : `<Budget annee={anneeSaison(
+ * aujourdhui())}>` au garage, dans la branche avec machine comme dans celle sans.
+ * L'argent était donc le seul chiffre du produit qu'on ne pouvait regarder sur
+ * aucune autre année — le bilan de saison, lui, a ses puces d'années depuis
+ * FR-55. Les deux tracés vivent maintenant dans l'écran d'analyse, où ils
+ * gagnent une PÉRIODE et se croisent aussi avec la journée, la moto et l'année.
+ *
+ * Ce qui reste ici : les huit postes avec leur champ de saisie, les montants
+ * déjà notés poste par poste, et le repère mensuel dérivé du plafond. Le module
+ * a perdu sa moitié « regarder » et gardé sa moitié « noter » — c'est un gain net
+ * sur le défilement du garage, pas seulement un déplacement.
+ *
+ * ⚠ ET LE PLAFOND N'EST PAS POSÉ ICI, il n'y est que LU (`budgetDeclare`). Le
+ * seul champ qui l'écrit vit dans `BlocCout` (App.tsx), sur le bilan d'une
+ * journée — « au premier coût affiché, jamais à la création du compte » (FR-24).
+ * C'est écrit noir sur blanc parce que le repère mensuel s'affiche ici sans que
+ * rien n'y mène : un pilote qui n'a pas encore de journée vécue ne peut pas
+ * poser de plafond, donc ne voit jamais ce repère. Ce n'est pas ce lot qui l'a
+ * fait, et ce n'est pas ce lot qui le corrige.
  */
 const ceMois = () => aujourdhui().slice(0, 7)
 
@@ -54,16 +77,21 @@ export function Budget({ db, annee, machineId, onEcrit }: {
   onEcrit: () => void
 }) {
   const [lignes, setLignes] = useState<LignePoste[]>([])
-  const [mois, setMois] = useState<LigneMois[]>([])
   /** Le PLAFOND de la saison, tel que le pilote l'a posé — jamais dérivé, jamais
    *  reconduit tout seul. `null` est un état parfaitement normal (FR-24). */
   const [plafond, setPlafond] = useState<number | null>(null)
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState<Poste | null>(null)
 
+  /* ⚠ CE MODULE NE LIT PLUS QUE LES POSTES. Le tracé des mois est parti à
+     l'analyse (voir la tête du fichier), et `parMois` — la lecture SQL qui
+     l'alimentait — a été retirée de `db/budget.ts` au même commit : elle n'avait
+     plus aucun appelant, et une requête gardée « au cas où » est une requête que
+     personne ne regarde et que personne ne corrige. Le GROUPEMENT, lui, survit
+     et sert : `argentParMois` (src/db/analyse.ts) appelle `grouperParMois` tel
+     quel — la fonction pure que le banc fait déjà rougir. */
   const charger = useCallback(async () => {
     setLignes(await parPoste(db, annee))
-    setMois(await parMois(db, annee))
     setPlafond(await budgetDeclare(db, annee))
   }, [db, annee])
   useEffect(() => { void charger() }, [charger])
@@ -81,11 +109,38 @@ export function Budget({ db, annee, machineId, onEcrit }: {
           titre au-dessus ne suffit pas — on lit le nombre, pas l'en-tête. Le mot
           « année » est donc collé à chaque somme de ce module, ici comme au
           bilan de la journée (App.tsx) et au bilan de saison (Saison.tsx). */}
+      {/* ⚠ L'EN-TÊTE A ÉTÉ RÉÉCRIT LE JOUR OÙ LE TRACÉ EST PARTI, et il disait
+          faux de DEUX façons, pas d'une.
+
+          ① Il promettait une LECTURE : « ce que l'année entière a coûté, poste
+            par poste » est ce qu'on lit d'un tracé, pas ce qu'on fait dans un
+            formulaire. Replié, ce sous-titre est tout ce que le pilote voit du
+            module ; il l'ouvrait pour regarder la forme de sa saison et tombait
+            désormais sur huit champs de saisie. Un en-tête qui annonce ce qui
+            n'est plus derrière est un panneau qui indique une route coupée.
+
+          ② Il annonçait une TOTALITÉ que ce total n'a jamais eue. `parPoste`
+            n'additionne que la table `depense` — la seule des trois sources
+            d'argent qui porte un poste. `intervention.cout_centimes` (l'atelier,
+            FR-43) et `equipement.cout_centimes` n'en portent aucun, donc ils ne
+            sont pas dans ce chiffre, et ils ne l'ont jamais été. « Ce que l'année
+            entière a coûté » était donc sous-compté depuis que cet écran existe.
+            Le sous-titre nomme maintenant exactement ce qu'il additionne : les
+            dépenses NOTÉES. C'est la même clause que l'emport, « un emport qui
+            ment sur ses trous est pire qu'un emport incomplet » — et l'écran
+            d'analyse, lui, chiffre les trous (`argentNonCompte`).
+
+          ⚠ ET LE MOT « ANNÉE » RESTE COLLÉ AU MONTANT — récit 19.1 ci-dessus, ce
+          n'est pas ce paragraphe qui le lève. */}
       <button className="rang atelier-tete" onClick={() => setOuvert(!ouvert)}>
         <span className="pile" style={{ gap: 1 }}>
           <span className="libelle">Budget · année {annee}</span>
+          {/* Le sous-titre NOMME LE NOMBRE qui est à côté de lui, et il ne nomme
+              que lui. Le repère mensuel se lit en clair une fois le module
+              ouvert : le faire voyager dans l'en-tête y mettrait un second
+              montant, et c'est précisément la confusion que 19.1 a fermée. */}
           <span className="sous-titre">
-            ce que l'année entière a coûté, poste par poste
+            les dépenses que tu as notées, poste par poste
           </span>
         </span>
         <span className="chiffre hud-16">{total ? formaterEuros(total) : '—'}</span>
@@ -100,37 +155,22 @@ export function Budget({ db, annee, machineId, onEcrit }: {
             </p>
           )}
 
-          {/* ─── LE TRACÉ PAR POSTE — récit 19.4 ──────────────────────────
-              Les huit postes étaient déjà calculés et n'existaient qu'en liste
-              de texte. Ils portent maintenant leur longueur, et la longueur est
-              ce qu'on lit d'un coup d'œil : « en quoi ma saison est partie ».
+          {/* ⚠ LE TRACÉ PAR POSTE ÉTAIT ICI, ET IL EST PARTI — 1er septembre
+              2026. Ce qu'il faisait exactement, pour que le déplacement soit
+              écrit et non subi : il rendait les huit postes en barres, triés du
+              plus gros au plus petit, échelle sur le plus gros poste, « Sans
+              poste » en teinte atténuée au bout.
 
-              ⚠ CE N'EST PAS UNE JAUGE — l'échelle est le PLUS GROS POSTE, jamais
-              le plafond de la saison. Mesurée contre un plafond, une barre
-              devient un compteur à rebours, et « dépasser son budget n'est pas
-              une faute ». Le raisonnement complet est dans Barres.tsx.
+              Il était verrouillé sur `annee` — et `annee` vaut
+              `anneeSaison(aujourdhui())` aux deux points de montage du garage.
+              La forme d'une saison passée était donc INATTEIGNABLE, sur le seul
+              chiffre du produit qui se reporte d'une année à l'autre (FR-56). Il
+              vit maintenant dans l'écran d'analyse, sous FINANCE · POSTE, avec
+              une rangée de périodes.
 
-              ⚠ ET IL VIENT AVANT LA LISTE, pas après. La liste sert à SAISIR —
-              chaque ligne ouvre son champ ; le tracé sert à LIRE. Mettre le
-              tracé en dessous obligerait à faire défiler huit champs de saisie
-              pour voir la forme de sa saison. */}
-          <Barres titre="Par poste"
-                  description={"Ce que l'année a coûté, en quoi. La longueur compare les postes "
-                    + "entre eux — jamais à ton plafond."}
-                  barres={[
-                    ...POSTES.map((p) => ({ p, l: trouve(p) }))
-                      .filter((x): x is { p: Poste; l: LignePoste } => !!x.l)
-                      .sort((a, b) => b.l.total - a.l.total)
-                      .map(({ p, l }): Barre => ({
-                        nom: NOM_POSTE[p], centimes: l.total,
-                        detail: `${l.n} dépense${l.n > 1 ? 's' : ''}`,
-                      })),
-                    ...(sansPoste ? [{
-                      nom: 'Sans poste', centimes: sansPoste.total, incertain: true,
-                      detail: 'saisies avant que les postes existent',
-                    } satisfies Barre] : []),
-                  ]} />
-
+              ⚠ ET LA LISTE QUI SUIT N'A PAS CHANGÉ DE PLACE. Elle sert à SAISIR
+              — chaque ligne ouvre son champ — et c'est désormais la première
+              chose du module, ce qui est exactement ce qu'il est devenu. */}
           {POSTES.map((p) => {
             const l = trouve(p)
             return (
@@ -181,55 +221,38 @@ export function Budget({ db, annee, machineId, onEcrit }: {
             </div>
           )}
 
-          {/* ─── PAR MOIS — récit 19.2, moitié « le mois existe » ──────────────
-              Ce qui est montré : ce que chaque mois a coûté, et de quoi il était
-              fait. Ce qui ne l'est JAMAIS, et la tentation est ici :
-                · aucun mois ne se compare au précédent, aucun « + 40 % » ;
-                · aucune couleur sur un mois cher — un mois cher est un mois où
-                  l'on a roulé, pas une faute ;
-                · aucune barre qui se remplit vers un plafond du mois : une jauge
-                  mensuelle transformerait un repère en compteur à rebours, et
-                  c'est exactement ce que les deux clauses d'argent refusent ;
-                · aucun « à ce rythme » — les douze mois d'une saison de piste ne
-                  se ressemblent pas, et une droite tirée sur avril ne dit rien
-                  de janvier. */}
-          {!!mois.length && (
-            <div className="pile" style={{ gap: 6 }}>
-              <span className="sous-titre">Par mois</span>
+          {/* ⚠ LE TRACÉ PAR MOIS ÉTAIT ICI, ET IL EST PARTI AVEC L'AUTRE —
+              1er septembre 2026. Ce qu'il faisait : un panier par mois, dans
+              L'ORDRE DU CALENDRIER et jamais trié par montant (un classement de
+              dépenses est un verdict), « Sans mois » en teinte atténuée au bout,
+              et le détail des postes sous chaque mois.
 
-              {/* LE REPÈRE MENSUEL — « un plafond annuel ET un repère mensuel »,
-                  décision de Julian du 25 août 2026. Il se DÉRIVE du plafond
-                  (÷ 12) au lieu de se saisir : deux montants saisis séparément
-                  finissent par se contredire, et un second champ rouvrirait la
-                  confusion même que 19.1 vient de fermer. Il est dit une fois,
-                  en toutes lettres, et aucune ligne de mois ne s'y mesure. */}
-              {repere != null && plafond != null && (
-                <p className="note">
-                  Repère du mois · {formaterEuros(repere)} — c'est le plafond que tu as posé
-                  pour l'année {annee}, {formaterEuros(plafond)}, divisé par douze. Un repère,
-                  rien de plus : aucun mois ne s'y compare, et un mois au-dessus n'est pas
-                  une faute.
-                </p>
-              )}
+              Il portait la même serrure que celui des postes : `annee` figée sur
+              l'année courante. Il vit maintenant sous FINANCE · MOIS, où il est
+              devenu une SUITE — des paniers mensuels reliés par des segments
+              droits, ce que ce module ne pouvait pas faire sans poser un `<svg>`
+              (voir le ④ de Barres.tsx, et la levée du 1er septembre).
 
-              {/* ⚠ LES MOIS GARDENT L'ORDRE DU CALENDRIER, ET LES BARRES AUSSI.
-                  Les trier par montant ferait un classement — « le mois le plus
-                  cher » — et un classement de dépenses est un verdict. Les
-                  dépenses d'avant la colonne restent DITES, en retrait, jamais
-                  rangées au hasard : leur attribuer un mois ferait croire qu'un
-                  choix a été fait. */}
-              <Barres titre="" description={"Ce que chaque mois a coûté, dans l'ordre du "
-                        + "calendrier, et de quoi il était fait."}
-                      barres={mois.map((m): Barre => ({
-                        nom: m.mois ? nomMois(m.mois) : 'Sans mois',
-                        centimes: m.total,
-                        incertain: !m.mois,
-                        detail: m.mois
-                          ? m.postes.map((p) => p.poste ? NOM_POSTE[p.poste].toLowerCase() : 'sans poste')
-                            .join(' · ')
-                          : 'saisies avant que la dépense porte son jour',
-                      }))} />
-            </div>
+              ⚠ CE QUI RESTE ICI EST LE REPÈRE MENSUEL, ET IL RESTE POUR UNE
+              RAISON : il ne se lit pas d'un tracé, il se DÉRIVE DU PLAFOND, et
+              le plafond se pose ici. Il a d'ailleurs cessé de dépendre des mois
+              — il était rendu à l'intérieur du `{!!mois.length}` du tracé, donc
+              un pilote qui avait posé son plafond sans avoir encore noté une
+              seule dépense ne voyait pas le repère qu'il venait de se donner. */}
+
+          {/* LE REPÈRE MENSUEL — « un plafond annuel ET un repère mensuel »,
+              décision de Julian du 25 août 2026. Il se DÉRIVE du plafond (÷ 12)
+              au lieu de se saisir : deux montants saisis séparément finissent par
+              se contredire, et un second champ rouvrirait la confusion même que
+              19.1 vient de fermer. Il est dit une fois, en toutes lettres, et
+              rien ne s'y mesure. */}
+          {repere != null && plafond != null && (
+            <p className="note">
+              Repère du mois · {formaterEuros(repere)} — c'est le plafond que tu as posé
+              pour l'année {annee}, {formaterEuros(plafond)}, divisé par douze. Un repère,
+              rien de plus : aucun mois ne s'y compare, et un mois au-dessus n'est pas
+              une faute.
+            </p>
           )}
         </>
       )}
@@ -250,7 +273,7 @@ function Ajouter({ db, poste, machineId, annee, onFini, onAnnuler }: {
   db: PowerSyncDatabase; poste: Poste; machineId: string | null
   /** ⚠ L'ANNÉE QUE L'APPELANT MONTRE, et la seule où le jour ait le droit de
    *  tomber. Ce n'est pas une préférence d'ergonomie : les deux lectures du
-   *  budget (`parPoste`, `parMois`) filtrent `WHERE saison_annee = ?` sur cette
+   *  budget (`parPoste`) filtre `WHERE saison_annee = ?` sur cette
    *  année-là, et le garage ne montre jamais que l'année en cours. Une facture
    *  de décembre retrouvée en janvier et datée de décembre partait donc dans une
    *  saison qu'AUCUN écran du produit n'affiche — pendant que le raccourci de
@@ -408,6 +431,11 @@ export function Equipement({ db, onEcrit, appele }: {
   appele?: number
 }) {
   const [liste, setListe] = useState<Materiel[]>([])
+  /** Ce que chaque pièce EST, quand le produit a besoin de le savoir. Absente
+   *  de la map = pièce sans genre, ce qui est l'état de la MAJORITÉ (une
+   *  glacière n'est ni un casque ni une combinaison) et un état parfaitement
+   *  valide — la migration 20260901000001 garde la colonne nullable exprès. */
+  const [genres, setGenres] = useState<Map<string, GenreDeTenue>>(new Map())
   const [cout, setCout] = useState(0)
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState(false)
@@ -425,6 +453,19 @@ export function Equipement({ db, onEcrit, appele }: {
   const charger = useCallback(async () => {
     setListe(await listerEquipement(db))
     setCout(await coutEquipement(db))
+    /* ⚠ LE GENRE SE LIT PAR LA MÊME REQUÊTE QUE LE SÉLECTEUR DE TENUE, et c'est
+       la raison de cette map plutôt qu'une colonne de plus sur l'inventaire.
+       `piecesDeGenre` est le SEUL endroit où le produit décide ce qui compte
+       comme un casque (db/equipement.ts). Si cet écran-ci lisait le genre
+       autrement, une pièce pourrait être proposée comme casque dans la tenue du
+       jour et se voir refuser le prompt de casque ici — deux écrans en
+       désaccord sur le même fait, et c'est le genre de divergence qu'on ne voit
+       qu'une fois payée. */
+    const m = new Map<string, GenreDeTenue>()
+    for (const g of ['casque', 'combinaison'] as const) {
+      for (const p of await piecesDeGenre(db, g)) m.set(p.id, g)
+    }
+    setGenres(m)
   }, [db])
   useEffect(() => { void charger() }, [charger])
 
@@ -458,8 +499,19 @@ export function Equipement({ db, onEcrit, appele }: {
             return (
               <div className="pile" key={c} style={{ gap: 6 }}>
                 <span className="sous-titre">{NOM_EQUIPEMENT[c]}</span>
+                {/* Dite UNE FOIS pour le groupe, jamais sous chaque pièce : c'est
+                    une règle du groupe, pas un fait de la pièce. Répétée, elle
+                    faisait défiler trois fois la même chose — et une phrase qu'on
+                    a déjà lue trois fois cesse d'être lue. */}
+                {c === 'protection' && (
+                  <p className="note">
+                    Nommer une pièce « casque » ou « combinaison » permet de la porter sur
+                    une journée, et son portrait est alors dessiné pour ce qu'elle est.
+                    Facultatif : la plupart des pièces n'ont pas à l'être.
+                  </p>
+                )}
                 {dedans.map((e) => (
-                  <LigneMateriel key={e.id} db={db} e={e}
+                  <LigneMateriel key={e.id} db={db} e={e} genre={genres.get(e.id) ?? null}
                                  onEcrit={() => void charger().then(onEcrit)} />
                 ))}
               </div>
@@ -476,8 +528,12 @@ export function Equipement({ db, onEcrit, appele }: {
   )
 }
 
-function LigneMateriel({ db, e, onEcrit }: {
-  db: PowerSyncDatabase; e: Materiel; onEcrit: () => void
+function LigneMateriel({ db, e, genre, onEcrit }: {
+  db: PowerSyncDatabase; e: Materiel
+  /** `null` pour tout ce qui n'est ni casque ni combinaison — la majorité de
+   *  l'inventaire. Il commande la fabrique de portrait, et rien d'autre. */
+  genre: GenreDeTenue | null
+  onEcrit: () => void
 }) {
   const portraitLocal = useLocalPortrait(e.id)
   const portraitAffiche = estIllustrationImportee(e.sprite) ? e.sprite : portraitLocal ?? e.sprite
@@ -532,6 +588,27 @@ function LigneMateriel({ db, e, onEcrit }: {
     return () => { vivant = false }
   }, [e.photo_chemin])
 
+  /* ─── DIRE CE QUE LA PIÈCE EST — et c'était le chaînon manquant ──────────
+     Le refus de fabrication ci-dessous disait « cette pièce n'a pas dit si elle
+     est un casque ou une combinaison » alors qu'AUCUN écran du produit ne
+     permettait de le dire. Un refus qui nomme une information qu'on ne peut pas
+     fournir n'est pas un garde-fou, c'est une impasse — et elle tombait au
+     moment précis où le pilote essayait de dépenser.
+
+     ⚠ IL NE S'OFFRE QUE SUR LA PROTECTION. La catégorie couvre « casque,
+     combinaison, dorsale, gants, bottes » : c'est le seul endroit où la question
+     se pose. Proposer « casque ? » sous une glacière ferait du genre une case à
+     remplir partout, alors qu'il est nul pour la majorité des pièces et que
+     c'est son état normal.
+
+     ⚠ ET IL SE REPREND. Taper la puce active retire le genre au lieu de le
+     reposer : une pièce mal qualifiée doit pouvoir cesser de l'être sans qu'on
+     la supprime — la supprimer coûterait la dépense qu'elle porte. */
+  const [poserGenre, genreOccupe] = useGeste(async (suivant: GenreDeTenue | null) => {
+    await poserGenreEquipement(db, e.id, suivant)
+    onEcrit()
+  })
+
   const verser = async (f: File) => {
     setSouci(null)
     await verserPhotoEquipement(db, e.id, f)
@@ -550,8 +627,31 @@ function LigneMateriel({ db, e, onEcrit }: {
         + 'à partir d\'elle.')
       return
     }
+    // ⚠ SANS GENRE, ON NE FABRIQUE PAS — ET SURTOUT ON NE DEVINE PAS.
+    // La fabrique a un dessin PAR SUJET : la moto est rendue de profil strict,
+    // le casque et la combinaison en trois-quarts. `equipement.genre` est
+    // nullable et le restera — une glacière n'est ni l'un ni l'autre, et la
+    // migration 20260901000001 le dit — donc une pièce sans genre existe pour
+    // de bon. Deviner « casque » parce que la catégorie vaut 'protection'
+    // appliquerait à une combinaison une consigne d'écran et de mentonnière, et
+    // l'appel serait facturé quand même : 0,16 € pour un rendu inutilisable.
+    //
+    // ⚠ ET LE MESSAGE DÉSIGNE LE GESTE, PARCE QU'IL EXISTE MAINTENANT.
+    // Il n'en désignait aucun dans sa première version, et c'était juste à ce
+    // moment-là : aucun écran ne permettait de dire ce qu'était une pièce, et
+    // désigner un geste absent est la promesse contradictoire que le panneau de
+    // fabrication a déjà payée une fois (Refaire.tsx). Le sélecteur « Ce que
+    // c'est » est juste au-dessus, sur cette même ligne — le refus cesse donc
+    // d'être une impasse polie et redevient ce qu'il doit être : un détour de
+    // deux secondes avant de dépenser.
+    if (!genre) {
+      setSouci("Dis d'abord si c'est un casque ou une combinaison, juste au-dessus. "
+        + "La fabrique dessine l'un ou l'autre et ne devine pas : un portrait payé sur le "
+        + "mauvais dessin ne se rattrape pas. Rien n'est parti, et rien n'a été décompté.")
+      return
+    }
     setEnCours(true); setSouci(null); setCandidat(null)
-    const issue = await genererPortrait(db, { equipementId: e.id }, f)
+    const issue = await genererPortrait(db, { equipementId: e.id, genre }, f)
     setEnCours(false)
     if (issue.ok) setCandidat(issue.sprite)
     else setSouci(issue.message)
@@ -602,6 +702,35 @@ function LigneMateriel({ db, e, onEcrit }: {
           {e.cout_centimes ? formaterEuros(e.cout_centimes) : ''}
           {e.note ? ` · ${e.note}` : ''}
         </span>
+      )}
+
+      {/* ⚠ `puces` SEUL, ET SURTOUT PAS `rang puces` — 2 septembre 2026, rapporté
+          depuis le téléphone : « les boutons casque combinaison ne fonctionnent
+          pas, et même pas très pratique ». Ils fonctionnaient ; c'est la mise en
+          page qui mentait. `.rang` porte `justify-content: space-between` et il
+          est déclaré APRÈS `.puces` dans la feuille, donc il gagne : les deux
+          puces partaient aux deux bords opposés de l'écran, à 250 px l'une de
+          l'autre. Deux choix qui s'excluent doivent se toucher — écartés, ils se
+          lisent comme deux boutons sans rapport, et le doigt traverse l'écran
+          pour corriger. C'est le seul endroit du produit qui cumulait les deux
+          classes, et c'est le seul qui était rapporté comme cassé.
+
+          ⚠ ET LA PHRASE N'EST PLUS ICI. Elle était rendue SOUS CHAQUE pièce de
+          protection : trois pièces, trois fois la même explication, plus trois
+          fois son titre. Elle est dite une fois pour le groupe, plus haut — une
+          règle qui vaut pour toutes les pièces se dit à l'endroit qui les tient
+          toutes. Le groupe `role`/`aria-label` garde ce que le titre disait à
+          qui n'a pas l'écran sous les yeux. */}
+      {e.categorie === 'protection' && (
+        <div className="puces" role="group" aria-label="Ce que c'est">
+          {GENRES_DE_TENUE.map(([g, mot]) => (
+            <button key={g} type="button" className="puce" disabled={genreOccupe}
+                    data-actif={genre === g ? '1' : '0'} aria-pressed={genre === g}
+                    onClick={() => void poserGenre(genre === g ? null : g)}>
+              {mot}
+            </button>
+          ))}
+        </div>
       )}
 
       <input ref={fichier} type="file" accept="image/*" hidden
@@ -662,8 +791,11 @@ function LigneMateriel({ db, e, onEcrit }: {
            été une règle à retenir de plus, pour rien.
 
            « Retirer » tout court, lui, reste et détruit vraiment : il oublie la
-           pièce d'équipement. Il porte donc le rouge, et pas ses voisins. */
-        <div className="rang actions-materiel">
+           pièce d'équipement. Il porte donc le rouge, et pas ses voisins.
+
+           The equal-column action group keeps the local illustration import
+           alongside the photo and preserves the existing equipment actions. */
+        <div className="actions-materiel">
           <button className="bouton secondaire petit" disabled={importe || enCours || occupe}
                   onClick={() => fichierIllustration.current?.click()}>
             {importe ? 'Préparation…' : 'Importer une illustration'}
@@ -671,16 +803,16 @@ function LigneMateriel({ db, e, onEcrit }: {
           <button className="lien" disabled={importe || enCours || occupe} onClick={() => fichier.current?.click()}>
             {e.photo_chemin ? 'Remplacer la photo' : 'Photographier'}
           </button>
+          <button className="lien destructif" disabled={occupe || importe || enCours}
+                  onClick={() => void retirer()}>Retirer</button>
           {/* ⚠ LA PHOTO RELUE, PAS LA COLONNE — même règle qu'au garage. La
               colonne descend sur tous les appareils, le fichier reste sur un
               seul : conditionner la dépense sur la colonne, c'est offrir un
               chemin qui ne peut pas aboutir. */}
           {photoUrl && !importe && (
-            <Refaire db={db} aUnPortrait={!!e.sprite} enCours={enCours}
+            <Refaire aUnPortrait={!!e.sprite} enCours={enCours}
                      onFabriquer={() => void fabriquer()} />
           )}
-          <button className="lien destructif" disabled={occupe || importe || enCours}
-                  onClick={() => void retirer()}>retirer</button>
         </div>
       )}
       {souci && <p className="mot-erreur" role="alert">{souci}</p>}
@@ -698,10 +830,14 @@ function DeclarerMateriel({ db, onFini }: { db: PowerSyncDatabase; onFini: () =>
   const [categorie, setCategorie] = useState<CategorieEquipement>('protection')
   const [achat, setAchat] = useState('')
   const [montant, setMontant] = useState('')
+  /** Ce que la pièce EST, choisi ici plutôt qu'après coup. `null` reste l'état
+   *  normal : la plupart des protections ne sont ni un casque ni une
+   *  combinaison — une dorsale, des gants, des bottes n'ont pas de genre. */
+  const [genre, setGenre] = useState<GenreDeTenue | null>(null)
   const [poser, occupe] = useGeste(async () => {
     if (!nom.trim()) return
     await declarerEquipement(db, {
-      nom, categorie,
+      nom, categorie, genre,
       acheteLe: /^\d{4}-\d{2}$/.test(achat) ? achat : null,
       centimes: montant.trim() ? enCentimes(montant) : null,
     })
@@ -719,6 +855,32 @@ function DeclarerMateriel({ db, onFini }: { db: PowerSyncDatabase; onFini: () =>
         ))}
       </div>
       <p className="note">{EXEMPLE_EQUIPEMENT[categorie]}</p>
+
+      {/* ⚠ LE GENRE SE POSE ICI, AU MOMENT OÙ ON LE SAIT — 3 septembre 2026.
+          Il ne se posait qu'APRÈS, sous la pièce déjà déclarée : il fallait
+          valider, retrouver la ligne dans l'inventaire, puis taper une puce.
+          Deux gestes séparés par une lecture, pour un fait qu'on a en tête au
+          moment où l'on tape le nom.
+
+          ⚠ ET IL RESTE FACULTATIF, DONC SANS DÉFAUT. Aucune des deux puces n'est
+          allumée à l'ouverture, et c'est l'état juste : une dorsale, des gants,
+          des bottes sont des protections sans genre, et pré-cocher « casque »
+          en ferait des casques par distraction. Taper la puce active la retire,
+          comme sous la pièce — un seul geste à connaître, aux deux endroits. */}
+      {categorie === 'protection' && (
+        <>
+          <div className="libelle">Ce que c'est · facultatif</div>
+          <div className="puces" role="group" aria-label="Ce que c'est">
+            {GENRES_DE_TENUE.map(([g, mot]) => (
+              <button key={g} type="button" className="puce"
+                      data-actif={genre === g ? '1' : '0'} aria-pressed={genre === g}
+                      onClick={() => setGenre(genre === g ? null : g)}>
+                {mot}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {/* UN MOIS, pas un jour. Personne ne se souvient de la date exacte où il a
           acheté ses gants — et exiger le jour transforme dix secondes de saisie
           en recherche de facture, donc en saisie qu'on ne fait pas. */}

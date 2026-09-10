@@ -13,11 +13,11 @@
  */
 import { UpdateType } from '@powersync/web'
 import {
-  anneeSaison, classerRoulages, coutDuRoulage, creerDepense, enCentimes, formaterChrono,
+  anneeSaison, aplati, classerRoulages, coutDuRoulage, creerDepense, enCentimes, formaterChrono,
   formaterEcart, formaterEuros, supprimerRoulage,
 } from '../../src/db/depot'
 import {
-  grouperParMois, jaugeBudget, jourDansLAnnee, moisDuJour, repereMensuel,
+  grouperParMois, jaugeBudget, jourDansLAnnee, moisDuJour, nomMois, repereMensuel,
 } from '../../src/db/budget'
 import { accepterMesures, instantDeLId, ouverture, SEUIL_H } from '../../src/db/mesures'
 import { direAVenir, direPasse, ecartJours } from '../../src/db/accueil'
@@ -29,6 +29,10 @@ import {
 import {
   consignerChute, consignerReparationDeChute, declarerAucunCrash, oublierChute,
 } from '../../src/db/chute'
+import {
+  extensionDe, nomLocalVideo, QUOTA_VIDEO_OCTETS, televerserVideosEnAttente, verserVideo,
+} from '../../src/db/video'
+import { cadre, capaciteVideo } from '../../src/video/comprimer'
 import {
   capaciteLocale, ecrireLocale, effacerLocale, eprouverLeCoffre, fermerLaConnexionDuCoffre,
   lireLocale, nomsBrutsDuCoffre, nomsDuCoffre, oublierLeMagasin, viderLeCoffre,
@@ -51,6 +55,24 @@ import { AppSchema, REFERENTIEL } from '../../src/db/schema'
 import REGLES_DE_SYNCHRO from '../../powersync/sync-config.yaml?raw'
 import { effacerLesReglages } from '../../src/db/effacer'
 import { POINTS_MINIMUM } from '../../src/db/courbe'
+/**
+ * ─── L'ANALYSE, IMPORTÉE POUR DE VRAI ──────────────────────────────────────
+ *
+ * La table des croisements et les trois décisions pures s'IMPORTENT plutôt que
+ * de se lire en texte, et ce n'est pas une commodité : une table lue au texte
+ * prouve qu'un mot est écrit quelque part, jamais qu'il sort de la fonction
+ * qu'on croit. Les phrases de lecture sont des FONCTIONS — elles se rendent
+ * pour zéro, une et plusieurs saisons — et c'est ce qu'elles RENDENT qui
+ * s'affiche sous le doigt du pilote.
+ *
+ * Ce qui se lit encore au texte, plus bas, est ce qui n'a aucune valeur de
+ * retour : une requête SQL, une convention d'axe, un commentaire abrogé.
+ */
+import {
+  cequiManque, comblerLesMois, croisementDe, CROISEMENTS, domainesDe, formeRendue,
+  NOM_DOMAINE, TOUTES_ANNEES, tracesDuDomaine,
+  type Domaine, type LigneAnalyse, type Trace,
+} from '../../src/db/analyse'
 import { niveauDuGroupe } from '../../src/db/usure'
 import { dateCivileLocale, sePrepare } from '../../src/db/vecu'
 import { direLaCompletude, memeTache } from '../../src/db/preparation'
@@ -85,7 +107,7 @@ import { direLAbri, type Abri } from '../../src/db/abri'
 import { spritifier } from '../../src/pixel/spritifier'
 import { COULEURS_MAX } from '../../src/pixel/reglages'
 import { CAPS_EMBARQUES, CIRCUITS_EMBARQUES, CONSEILS_EMBARQUES } from '../../src/db/corpus'
-import { COUT_PORTRAIT_CENTIMES, PORTRAITS_INCLUS } from '../../src/pixel/portrait'
+import { CREDITS_ACCUEIL, CREDITS_PORTRAIT } from '../../src/db/credits'
 // Les écrans et la feuille de style LUS À LA LETTRE — récit 21.3. Rien dans le
 // code ne relie un libellé de bouton à la classe qui l'habille : c'est du texte
 // dans du JSX, et un oubli n'y fait ni erreur de type ni écran cassé. Il rend
@@ -99,9 +121,54 @@ const ECRANS = import.meta.glob('../../src/**/*.tsx',
 const SOURCES = import.meta.glob('../../src/**/*.{ts,tsx}',
   { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 import FEUILLE from '../../src/styles/systeme.css?raw'
+// Le décor de démarrage vit dans le document, pas dans React : c'est la seule
+// façon de le lire, et la barre qu'il porte n'existe nulle part ailleurs.
+import INDEX from '../../index.html?raw'
+import { retirerLEcranDeChargement } from '../../src/chargement'
 import {
   appelleUneDestruction, boutonsDe, detruit, ditLaDestruction, gestesDestructifs,
 } from '../destructif.mjs'
+/**
+ * ─── LA FABRIQUE DE PORTRAITS, LUE DES DEUX FAÇONS POSSIBLES ───────────────
+ *
+ * `tenue.ts` s'IMPORTE POUR DE VRAI, et c'est un choix : c'est du TypeScript
+ * effaçable, sans un seul appel Deno, donc il se charge ici tel quel. Le faire
+ * RENDRE vaut infiniment mieux que de le lire — un `FICHES` où les deux clés
+ * pointeraient la même fiche passerait n'importe quelle lecture de texte, et se
+ * verrait à la première comparaison de sorties. Au passage il entre dans le
+ * programme de `tsc -b`, qui ne le voyait pas : `tsconfig.app.json` n'inclut que
+ * `src` et `banc-rendu/unite`, et RIEN ne type-vérifiait ce fichier.
+ *
+ * `v6.ts` et `index.ts` se lisent comme du TEXTE, pour la raison déjà écrite
+ * plus haut à propos de `manuel/index.ts` : `index.ts` importe
+ * `jsr:@supabase/supabase-js`, qu'aucun navigateur ne résout. Et lire v6 en
+ * texte a une seconde vertu — l'essai qui l'oppose à la tenue ne dépend pas de
+ * la signature de son `prompt`, qui prend un cadre là où la tenue prend un mot.
+ */
+import * as TENUE from '../../supabase/functions/sprite/tenue.ts'
+import SPRITE_MOTO from '../../supabase/functions/sprite/v6.ts?raw'
+import SPRITE_SERVEUR from '../../supabase/functions/sprite/index.ts?raw'
+/**
+ * ─── LE BANC LUI-MÊME, LU COMME DU TEXTE ───────────────────────────────────
+ *
+ * Trente-deux scripts Node que RIEN ne relie au produit : ni type, ni import,
+ * ni bundler. Ils ne cassent pas quand ils divergent — ils refusent simplement
+ * de démarrer, et seulement sur la machine qui n'a pas d'`/Applications`,
+ * c'est-à-dire jamais sur le poste où on les écrit.
+ */
+const BANC = import.meta.glob('../*.mjs',
+  { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+/**
+ * ─── CE QUI MONTE CHEZ L'HÉBERGEUR, ET CE QUE GIT CACHE ────────────────────
+ *
+ * Ces deux fichiers disent la même chose à deux outils qui ne se parlent pas,
+ * et `.vercelignore` REMPLACE `.gitignore` au lieu de s'y ajouter (son propre
+ * en-tête l'explique). Un chemin ignoré d'un seul côté est donc invisible dans
+ * `git status` ET téléversé : c'est la forme exacte du défaut de `graft/`, dont
+ * 4,5 Mo de cache contenaient les prompts en texte brut.
+ */
+import VERCELIGNORE from '../../.vercelignore?raw'
+import GITIGNORE from '../../.gitignore?raw'
 
 type Resultat = { titre: string; ok: boolean; detail: string }
 const resultats: Resultat[] = []
@@ -157,6 +224,14 @@ const estPrimaire = (className: string): boolean =>
  *  `https://` : sans lui, la moitié d'une URL passe pour un commentaire. */
 const sansCommentaires = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+
+/** UN FICHIER DU PRODUIT, PAR LA FIN DE SON CHEMIN. Le motif était réécrit à la
+ *  main dans une trentaine d'essais ; il rend `''` quand le fichier n'existe
+ *  pas, et chaque appelant DOIT le dire — un texte vide traverse toutes les
+ *  gardes par la négative, ce qui est la façon la plus discrète d'avoir un
+ *  témoin muet. */
+const fichierDe = (biblio: Record<string, string>, fin: string): string =>
+  Object.entries(biblio).find(([c]) => c.endsWith(fin))?.[1] ?? ''
 
 /**
  * ─── LES REQUÊTES DU DÉPÔT, LUES COMME DU TEXTE — récit 17.1 ────────────────
@@ -1072,6 +1147,204 @@ const essais = [
       "l'album journée lit encore exclusivement le cache de l'appareil A")
   }),
 
+  /* ─── LA VIDÉO DURABLE — récit 23.10 ───────────────────────────────────────
+     Le lot 23 l'avait REPORTÉE, et son hypothèse disait exactement pourquoi :
+     sans versement reprenable, sans quota dit à voix haute, sans suppression ni
+     export ni lecture sur un second appareil, la pièce n'est pas durable — elle
+     est seulement affichée. Ces essais tiennent ces clauses-là, une par une.
+
+     ⚠ CELUI QUI COMPTE LE PLUS EST LE VERSEMENT COUPÉ. C'est la seule chose que
+     la photo n'a jamais eu à traiter — un aller-retour rate ou réussit — et
+     c'est la seule qui puisse, ici, produire une vidéo à moitié écrite que le
+     carnet déclare montée. */
+
+  doit('le quota vidéo se refuse en disant ses deux chiffres, sans rien écrire', async () => {
+    let ecrit = false
+    const db = {
+      get: async () => ({ total: QUOTA_VIDEO_OCTETS - 1024 }),
+      getOptional: async () => ({ roulage_id: 'r1' }),
+      execute: async () => { ecrit = true; return {} },
+    } as any
+    const r = await verserVideo(
+      db, { chuteId: 'c1' }, new Blob([new Uint8Array(4096)], { type: 'video/mp4' }))
+    vrai('refus' in r, 'une vidéo au-delà du quota est entrée dans le carnet')
+    const refus = (r as { refus: string }).refus
+    // Un quota qui dit seulement « plein » n'est pas explicite : le pilote doit
+    // pouvoir décider quoi retirer, donc savoir ce qu'il pèse et ce qu'il reste.
+    vrai(/pèse/.test(refus) && /reste/.test(refus),
+      'le refus ne dit ni le poids de la vidéo ni la place restante')
+    vrai(/Mo|Ko/.test(refus), 'le refus ne donne aucun chiffre lisible')
+    vrai(!ecrit, 'une vidéo refusée a quand même écrit sa ligne')
+  }),
+
+  doit('une vidéo de crash retrouve sa journée et garde les deux liens', async () => {
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    const db = {
+      get: async () => ({ total: 0 }),
+      getOptional: async () => ({ roulage_id: 'r-du-crash' }),
+      execute: async (sql: string, params: unknown[] = []) => {
+        ecrites.push({ sql, params }); return {}
+      },
+    } as any
+    const r = await verserVideo(
+      db, { chuteId: 'c1' }, new Blob([new Uint8Array(64)], { type: 'video/mp4' }))
+    vrai(!('refus' in r), 'une vidéo dans le quota a été refusée')
+    const v = r as {
+      id: string; roulage_id: string | null; chute_id: string | null; chemin_objet: string
+    }
+    // La même clause que la photo de crash : retirer le récit ne doit pas
+    // détruire la preuve, donc la journée porte la vidéo elle aussi.
+    egal(v.roulage_id, 'r-du-crash', 'la vidéo de crash ne retrouve pas sa journée')
+    egal(v.chute_id, 'c1', 'la vidéo a perdu son crash')
+    const insertion = ecrites.find((e) => /INSERT INTO video/.test(e.sql))
+    vrai(!!insertion, 'aucune ligne de vidéo n’est écrite')
+    vrai(/'locale'/.test(insertion!.sql), 'la vidéo naît dans un état inconnu')
+    await effacerLocale(nomLocalVideo(v))
+  }),
+
+  doit('un versement vidéo coupé garde son avancement et ne se dit jamais monté', async () => {
+    const v = {
+      id: 'video-coupee', roulage_id: 'r1', chute_id: 'c1',
+      chemin_objet: 'local/c1/video-coupee.mp4', octets: 8000,
+      duree_ms: 1000, largeur: 2, hauteur: 2, type_mime: 'video/mp4',
+      etat: 'locale' as const,
+    }
+    await ecrireLocale(nomLocalVideo(v), new Blob([new Uint8Array(8000)], { type: 'video/mp4' }))
+    const ecrites: string[] = []
+    const db = {
+      getAll: async (sql: string) => (/a_supprimer/.test(sql) ? [] : [v]),
+      getOptional: async () => v,
+      execute: async (sql: string) => { ecrites.push(sql); return {} },
+    } as any
+    // 3 000 octets sur 8 000 : le serveur en détient une partie, et c'est le
+    // cas NOMINAL d'une 4G de paddock, pas une erreur à signaler.
+    const montees = await televerserVideosEnAttente(db, 'pilote-1', {
+      peutTeleverser: () => true,
+      televerser: async () => 3000,
+      supprimer: async () => 'supprimee',
+    })
+    egal(montees, 0, 'un envoi coupé a été compté comme monté')
+    vrai(!ecrites.some((s) => /etat = 'montee'/.test(s)),
+      'une vidéo à moitié versée a été déclarée montée — le carnet montre une pièce que le serveur n’a pas')
+    await effacerLocale(nomLocalVideo(v))
+  }),
+
+  doit('un versement vidéo complet inscrit le chemin du pilote, jamais le chemin local', async () => {
+    const ligne = {
+      id: 'video-entiere', roulage_id: 'r1', chute_id: 'c1',
+      chemin_objet: 'local/c1/video-entiere.mp4', octets: 500,
+      duree_ms: 1000, largeur: 2, hauteur: 2, type_mime: 'video/mp4',
+      etat: 'locale' as string,
+    }
+    await ecrireLocale(nomLocalVideo(ligne), new Blob([new Uint8Array(500)], { type: 'video/mp4' }))
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    const db = {
+      getAll: async (sql: string) => (/a_supprimer/.test(sql) ? [] : [{ ...ligne }]),
+      getOptional: async (sql: string) =>
+        (/AND etat = 'locale'/.test(sql) && ligne.etat !== 'locale' ? null : { ...ligne }),
+      execute: async (sql: string, params: unknown[] = []) => {
+        ecrites.push({ sql, params })
+        if (/SET etat = 'montee'/.test(sql) && ligne.etat === 'locale') {
+          ligne.etat = 'montee'; ligne.chemin_objet = String(params[0])
+        }
+        return {}
+      },
+    } as any
+    const montees = await televerserVideosEnAttente(db, 'pilote-1', {
+      peutTeleverser: () => true,
+      televerser: async () => 500,
+      supprimer: async () => 'supprimee',
+    })
+    egal(montees, 1, 'un envoi complet n’est pas compté')
+    const majeur = ecrites.find((e) => /SET etat = 'montee'/.test(e.sql))
+    vrai(!!majeur, 'la vidéo montée ne change pas d’état')
+    // ⚠ LE PREMIER SEGMENT EST CE QUE LA POLITIQUE DU BUCKET COMPARE À auth.uid().
+    // Un chemin resté en `local/` serait refusé en 403 au premier accès.
+    egal(majeur!.params[0], 'pilote-1/c1/video-entiere.mp4',
+      'le chemin distant ne commence pas par le pilote')
+    vrai(/WHERE id = \? AND etat = 'locale'/.test(majeur!.sql),
+      'un retrait gagné pendant l’envoi pourrait être ressuscité en montée')
+    await effacerLocale('video-entiere.mp4')
+  }),
+
+  doit('une vidéo retirée pendant son envoi est effacée du stockage, jamais ressuscitée', async () => {
+    const ligne = {
+      id: 'video-retiree', roulage_id: 'r1', chute_id: 'c1',
+      chemin_objet: 'local/c1/video-retiree.mp4', octets: 300,
+      duree_ms: 1000, largeur: 2, hauteur: 2, type_mime: 'video/mp4',
+      etat: 'locale' as string,
+    }
+    await ecrireLocale(nomLocalVideo(ligne), new Blob([new Uint8Array(300)], { type: 'video/mp4' }))
+    const supprimes: string[] = []
+    const db = {
+      getAll: async (sql: string) => (/a_supprimer/.test(sql) ? [] : [{ ...ligne }]),
+      // Le retrait gagne la course PENDANT l'HTTP : la relecture d'après ne voit
+      // plus qu'un tombstone.
+      getOptional: async (sql: string) =>
+        (/AND etat = 'locale'/.test(sql) ? { ...ligne } : { ...ligne, etat: 'a_supprimer' }),
+      execute: async () => ({}),
+    } as any
+    const montees = await televerserVideosEnAttente(db, 'pilote-1', {
+      peutTeleverser: () => true,
+      televerser: async () => 300,
+      supprimer: async (chemin: string) => { supprimes.push(chemin); return 'supprimee' },
+    })
+    egal(montees, 0, 'une vidéo retirée a été comptée comme montée')
+    vrai(supprimes.includes('pilote-1/c1/video-retiree.mp4'),
+      'l’objet tout juste écrit reste au stockage alors que le carnet l’a retiré')
+    await effacerLocale('video-retiree.mp4')
+  }),
+
+  doit('l’extension suit le type réel, pas le nom rendu par l’iPhone', () => {
+    // Un iPhone rend souvent un fichier SANS nom exploitable ; quand il en rend
+    // un, c'est `.MOV`. Le type MIME fait donc autorité, et le repli n'invente
+    // pas une extension à partir de n'importe quelle chaîne.
+    egal(extensionDe(new Blob([], { type: 'video/quicktime' })), 'mov')
+    egal(extensionDe(new Blob([], { type: 'video/mp4' })), 'mp4')
+    egal(extensionDe(new Blob([], { type: 'video/webm;codecs=vp9' })), 'webm')
+    egal(extensionDe(new Blob([], { type: '' })), 'mp4')
+  }),
+
+  doit('le cadre borne le côté long, garde des dimensions paires et n’agrandit jamais', () => {
+    const paysage = cadre(1920, 1080)
+    egal(paysage.largeur, 720, 'une vidéo paysage ne descend pas à 720 sur son côté long')
+    vrai(paysage.hauteur % 2 === 0, 'une hauteur impaire est refusée par les encodeurs')
+    vrai(Math.abs(paysage.hauteur - 405) <= 2, 'les proportions ne sont pas gardées')
+    // Le côté long d'une vidéo PORTRAIT est sa hauteur : c'est le cadrage que
+    // rend un téléphone tenu à la main, donc le cas courant au paddock.
+    egal(cadre(1080, 1920).hauteur, 720, 'une vidéo portrait n’est pas bornée sur son côté long')
+    // Agrandir coûterait des octets sans ajouter une seule information.
+    egal(cadre(320, 240), { largeur: 320, hauteur: 240 }, 'une petite vidéo a été agrandie')
+  }),
+
+  doit('la capacité vidéo se prononce toujours, et dit pourquoi', () => {
+    const c = capaciteVideo()
+    vrai(typeof c.comprime === 'boolean', 'la capacité ne tranche pas')
+    vrai(c.raison.length > 10, 'la capacité ne dit pas ce qu’elle a décidé (UX-DR8)')
+    // Quand elle ne comprime pas, elle ne doit pas prétendre avoir un format :
+    // c'est ce couple-là qui décide si l'original part tel quel.
+    vrai(c.comprime === (c.format !== null),
+      'la capacité annonce une compression sans format, ou un format sans compression')
+  }),
+
+  doit('l’emport garde les liens de la vidéo sans jamais encoder ses octets', () => {
+    const source = sansCommentaires(
+      Object.entries(SOURCES).find(([nom]) => nom.endsWith('/db/emporter.ts'))?.[1] ?? '')
+    // ⚠ 500 Mo de quota vidéo en base64 feraient un JSON de 700 Mo qui échoue au
+    // moment précis où le pilote croit sauver son carnet.
+    vrai(/photos_jointes/.test(source), 'les photos ne sont plus jointes')
+    const jointes = source.slice(source.indexOf('const jointes'), source.indexOf('contenu.photos_jointes'))
+    vrai(!/video/.test(jointes), 'les octets d’une vidéo sont encodés dans le fichier d’emport')
+    // Mais un manque tu : le récit 23.7 dit qu'un emport qui ment sur ses trous
+    // est pire qu'un emport incomplet.
+    vrai(/donnees\.video/.test(source) && /manques\.push/.test(source),
+      'l’emport ne dit pas que les vidéos n’y sont pas')
+    // Et le tombstone reste dehors, sinon la restauration ressusciterait une
+    // vidéo dont le retrait est déjà demandé.
+    vrai(/table === 'photo' \|\| table === 'video'/.test(source),
+      'un tombstone de vidéo part dans l’emport avec son chemin')
+  }),
+
   doit('une suppression non persistée garde les octets locaux pour réessayer', async () => {
     const photo = {
       id: 'photo-rejet', roulage_id: 'r1', machine_id: null,
@@ -1393,8 +1666,11 @@ const essais = [
       Object.entries(SOURCES).find(([nom]) => nom.endsWith('/db/emporter.ts'))?.[1] ?? '')
     vrai(/FROM photo WHERE etat != 'a_supprimer'/.test(emport),
       "l'emport immédiat remet dans le zip une photo retirée hors ligne")
+    // La règle vaut pour les DEUX tables qui portent un tombstone depuis le
+    // récit 23.10 : `photo` et `video` ont le même `etat` et le même danger —
+    // un chemin cloud révélé, et une pièce ressuscitée à la restauration.
     vrai((emport.match(/filtreEmport\(t\)/g) ?? []).length >= 2
-      && /table === 'photo' \? ` WHERE etat != 'a_supprimer'`/.test(emport),
+      && /table === 'photo' \|\| table === 'video' \? ` WHERE etat != 'a_supprimer'`/.test(emport),
     "le JSON ou la pesée compte encore le tombstone et révèle son chemin cloud")
   }),
 
@@ -1668,9 +1944,22 @@ const essais = [
        aurait accusé le produit d'envoyer une catégorie refusée alors que le
        serveur venait de l'accepter. Une garde ancrée sur un nom de fichier
        éprouve le nom du fichier. */
+    /* ⚠ ET ELLE S'ANCRE SUR LA CONTRAINTE NOMMÉE, PAS SUR LE MOTIF NU — deux
+       défauts, dont un s'est produit ici même.
+         · Le motif `check (categorie in (…))` n'est borné par AUCUNE table, et
+           CINQ migrations le portent : trois pour `checklist_ligne`, une pour
+           `equipement`, une pour `cap`. Toute contrainte de catégories posée
+           demain sur une autre table serait comparée à `NOM_CATEGORIE` de la
+           checklist, et le banc accuserait un fichier qui n'y est pour rien.
+         · Le SQL était lu BRUT, commentaires compris. Une migration qui se
+           contentait d'EXPLIQUER ce piège dans un commentaire le déclenchait :
+           le motif cité en prose gagnait le tri et rendait une liste vide. Un
+           témoin qu'un commentaire trompe ne témoigne pas — même leçon que
+           l'ancrage sur un nom de fichier, une ligne plus haut. */
     const contraintes = Object.entries(MIGRATIONS)
       .sort(([a], [b]) => a.localeCompare(b))
-      .flatMap(([, sql]) => [...sql.matchAll(/check \(categorie in \(([^)]*)\)\)/g)])
+      .flatMap(([, sql]) => [...sql.replace(/--[^\n]*/g, '').matchAll(
+        /constraint checklist_ligne_categorie_check\s+check \(categorie in \(([^)]*)\)\)/g)])
     vrai(contraintes.length > 0, 'la contrainte de catégories est introuvable dans les migrations')
     const m = contraintes[contraintes.length - 1]
     const serveur = new Set([...m[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]))
@@ -2224,12 +2513,14 @@ const essais = [
     // Un sortant se reconnaît à ce qu'il FAIT — refermer la confirmation — et
     // pas seulement à son mot : « Garder » sert aussi à enregistrer une chute,
     // et ce bouton-là n'a rien d'un sortant.
-    // Ils sont CINQ : la journée, la chute, le compte, la photo de l'album et
-    // la photo liée au crash — un cliché du 12 septembre ne se retape pas.
+    // Ils sont SIX : la journée, la chute, le compte, la photo de l'album, la
+    // photo liée au crash — un cliché du 12 septembre ne se retape pas — et
+    // depuis le récit 23.10 la vidéo du crash, qui ne se refilme pas du tout.
     const sortants = Object.values(ECRANS).flatMap(boutonsDe)
-      .filter((b) => b.libelles.some((l) => /^Garder(?: mon compte| le crash| la photo)?$/.test(l))
+      .filter((b) => b.libelles.some(
+        (l) => /^Garder(?: mon compte| le crash| la photo| la vidéo)?$/.test(l))
         && /set(?:Confirme|Ouvert)\(false\)|setARetirer\(null\)/.test(b.gestionnaire))
-    vrai(sortants.length === 5, `${sortants.length} sortants de confirmation trouvés`)
+    vrai(sortants.length === 6, `${sortants.length} sortants de confirmation trouvés`)
     for (const s of sortants)
       egal(s.className, 'lien', `« ${s.libelles.join(' / ')} » ne sort pas en lien`)
   }),
@@ -2337,29 +2628,128 @@ const essais = [
       'Legal.tsx ne cite plus le bouton par son nom exact')
   }),
 
-  doit('l\'annonce du coût d\'un portrait dit le vrai quota du serveur', () => {
-    // Deux dépôts que rien ne relie : le nombre ANNONCÉ avant de dépenser vit
-    // dans portrait.ts, le nombre qui AUTORISE vraiment vit dans une migration
-    // Postgres. Le jour où l'un bouge, l'écran se met à mentir sans que rien ne
-    // casse — et c'est un mensonge sur de l'argent.
-    const migration = Object.entries(MIGRATIONS)
-      .find(([c]) => c.includes('portrait_et_quota'))?.[1] ?? ''
-    const defaut = migration.match(/quota_sprites\s+smallint\s+not null\s+default\s+(\d+)/i)?.[1]
-    vrai(!!defaut, 'le défaut de quota_sprites est introuvable dans la migration')
-    egal(PORTRAITS_INCLUS, Number(defaut), 'portraits inclus annoncés vs défaut serveur')
+  doit("l'annonce du coût d'un portrait dit le vrai solde du serveur", () => {
+    /* Deux dépôts que rien ne relie : le nombre ANNONCÉ avant de dépenser vit
+       dans `db/credits.ts`, le nombre qui AUTORISE vraiment vit dans une
+       migration Postgres. Le jour où l'un bouge, l'écran se met à mentir sans
+       que rien ne casse — et c'est un mensonge sur de l'argent.
 
-    // ⚠ ET LE PRIX N'AVAIT AUCUNE GARDE, alors qu'il est celui des deux nombres
-    // qui s'affiche EN EUROS. `vrai(COUT_PORTRAIT_CENTIMES > 0)` ne disait qu'une
-    // chose — que le portrait n'est pas annoncé gratuit — et laissait passer
-    // n'importe quel montant faux. Ce qui décompte vraiment est
-    // `plafond.cout_unitaire_centimes`, dans le filet monétaire : c'est lui que
-    // l'écran promet au pilote avant qu'il tape.
-    const filet = Object.entries(MIGRATIONS)
-      .find(([c]) => c.includes('filet_monetaire'))?.[1] ?? ''
-    const cout = filet.match(/cout_unitaire_centimes\s+integer\s+not null\s+default\s+(\d+)/i)?.[1]
-    vrai(!!cout, 'le défaut de cout_unitaire_centimes est introuvable dans la migration')
-    egal(COUT_PORTRAIT_CENTIMES, Number(cout), 'prix annoncé en euros vs coût unitaire du serveur')
-    vrai(COUT_PORTRAIT_CENTIMES > 0, 'un portrait annoncé gratuit est un portrait qui surprend')
+       ⚠ CET ESSAI A CHANGÉ D'UNITÉ LE 3 SEPTEMBRE 2026, PAS DE RAISON D'ÊTRE.
+       Il confrontait `PORTRAITS_INCLUS` à `pilote.quota_sprites` et
+       `COUT_PORTRAIT_CENTIMES` à `plafond.cout_unitaire_centimes`. Les deux
+       colonnes de quota n'existent plus — il n'y a qu'un solde, en crédits — et
+       le centime ne s'affiche plus nulle part (« Ne pas marquer 16 cts »,
+       Julian). Ce sont donc les nombres en CRÉDITS qui se confrontent
+       maintenant, et c'est exactement la même garde : ce que l'écran promet
+       doit être ce que le serveur applique. */
+    const credits = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('un_seul_solde_en_credits'))?.[1] ?? ''
+    vrai(!!credits, 'la migration du solde en crédits est introuvable')
+
+    const lu = (colonne: string) => credits
+      .match(new RegExp(`${colonne}\\s+integer not null default\\s+(\\d+)`, 'i'))?.[1]
+
+    const accueil = lu('credits_accueil')
+    vrai(!!accueil, 'le défaut de credits_accueil est introuvable dans la migration')
+    egal(CREDITS_ACCUEIL, Number(accueil), 'crédits d\'accueil annoncés vs défaut serveur')
+
+    const prix = lu('credits_sprite')
+    vrai(!!prix, 'le défaut de credits_sprite est introuvable dans la migration')
+    egal(CREDITS_PORTRAIT, Number(prix), 'prix annoncé en crédits vs prix appliqué par le serveur')
+    vrai(CREDITS_PORTRAIT > 0, 'un portrait annoncé gratuit est un portrait qui surprend')
+
+    /* ⚠ ET LE CENTIME N'A PAS DISPARU DE LA BASE, seulement de l'écran. C'est
+       la distinction qui tient tout ce lot : le centime MESURE ce que ça coûte à
+       Julian — seule base honnête pour fixer un prix de vente (A-FAIRE §6 ③) —
+       le crédit SE DÉPENSE. Effacer `cout_centimes` du registre en même temps
+       que l'affichage aurait rendu ce prix indéterminable pour toujours. */
+    vrai(/credits\s+integer not null default/i.test(credits),
+      'le registre ne dit plus combien de crédits une ligne a consommés')
+  }),
+
+  doit("un acte qui ne dessine rien n'a pas à nommer un prompt", () => {
+    /* ⚠ CET ESSAI VIENT D'UN DÉFAUT QUI N'AURAIT PU SE MONTRER QUE LE JOUR DE
+       LA MISE EN SERVICE. `reserver_manuel`, écrite le 25 août, insère dans
+       `generation` sans renseigner `version` ni `modele` — deux colonnes alors
+       `not null` sans défaut. CHAQUE recherche de manuel aurait donc échoué en
+       500, avant même d'appeler Mistral.
+
+       Il est resté invisible trois semaines parce que `MISTRAL_API_KEY` n'a
+       jamais été posée : la fonction refuse en `cle_absente` AVANT d'atteindre
+       la réservation. C'est la même forme de piège que le `mimeType` écrit en
+       dur côté sprite — un défaut qu'un interrupteur cache, et que le PREMIER
+       usage réel découvre. Trouvé en éprouvant le contrat des réservations
+       après le passage aux crédits, pas à la relecture.
+
+       Ce que la garde retient n'est pas « la fonction doit remplir ces
+       colonnes » : c'est que la contrainte doit être POSÉE LÀ OÙ ELLE A UN SENS.
+       Une recherche de manuel n'a pas de version de prompt — l'exiger d'elle
+       était le défaut. Et la contrainte conditionnelle RENFORCE le sprite au
+       passage : avant, `not null` acceptait une chaîne vide. */
+    const manuel = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('un_manuel_n_a_pas_de_prompt'))?.[1] ?? ''
+    vrai(!!manuel, 'la migration qui libère version/modele est introuvable')
+
+    for (const colonne of ['version', 'modele'])
+      vrai(new RegExp(`alter column ${colonne}\\s+drop not null`, 'i').test(manuel),
+        `\`generation.${colonne}\` reste obligatoire pour tous les actes : le manuel ne peut pas réserver`)
+
+    // Et le sprite, lui, doit toujours dire d'où il sort — sinon on ne saurait
+    // plus sur quelle grille spritifier, ni rejouer une génération.
+    vrai(/check \(acte <> 'sprite' or \(version is not null and modele is not null\)\)/i.test(manuel),
+      'un sprite peut désormais naître sans dire son prompt ni son modèle')
+  }),
+
+  doit("le démarrage révèle l'écran prêt immédiatement, sans durée inventée", () => {
+    const decor = document.createElement('div')
+    decor.id = 'chargement'
+    document.body.appendChild(decor)
+    retirerLEcranDeChargement()
+    vrai(decor.classList.contains('ch-parti'), 'un délai retient encore le premier écran prêt')
+    egal(decor.getAttribute('aria-hidden'), 'true', 'le statut de démarrage reste annoncé après son retrait')
+    retirerLEcranDeChargement()
+    decor.remove()
+    vrai(/role="status"/.test(INDEX), 'le démarrage ne dit plus ce qui attend')
+    vrai(!/aria-valuenow|role="progressbar"/.test(INDEX), 'le décor annonce une progression non mesurée')
+    vrai(INDEX.indexOf('/splash-cache.js') < INDEX.indexOf('/src/main.tsx'),
+      'le cache personnel n’est plus disponible avant React')
+    const app = Object.entries(ECRANS).find(([c]) => c.endsWith('/App.tsx'))?.[1] ?? ''
+    vrai(/if \(pretPremierEcran \|\| panne\) retirerLEcranDeChargement\(\)/.test(app),
+      'le décor est reparti sur une condition plus faible que le premier écran prêt')
+    vrai(/void rafraichir\(db\)\.finally\(\(\) => setPretPremierEcran\(true\)\)/.test(app),
+      "le premier écran ne se déclare plus prêt sur la première lecture de la saison")
+  }),
+
+  doit('personne ne peut se créditer soi-même', () => {
+    /* ⚠ LA GARDE VIENT D'UN DÉFAUT RÉEL, PAYÉ LE 19 AOÛT 2026 : la politique de
+       `pilote` était `for all`, et un simple `PATCH /rest/v1/pilote` portait
+       `quota_sprites` à 32767 — 5 242 € en un appel, relevable autant de fois
+       qu'on veut. Le solde en crédits rouvrirait exactement le même trou s'il
+       était écrivable par le compté.
+
+       Trois propriétés le ferment, et les trois se lisent dans la migration :
+       le registre des crédits accordés n'a QUE une politique de lecture ;
+       `crediter()` est retirée à tous les rôles joignables depuis un
+       navigateur ; et le solde se DÉRIVE au lieu d'être stocké, donc il n'y a
+       aucune colonne à écrire même si l'on trouvait un chemin. */
+    const credits = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('un_seul_solde_en_credits'))?.[1] ?? ''
+
+    const politiques = [...credits.matchAll(/create policy[^;]*?on credit_accorde\s+for (\w+)/gi)]
+      .map((m) => m[1].toLowerCase())
+    egal(politiques, ['select'],
+      'credit_accorde a une politique autre que la lecture : le compté peut se créditer')
+
+    vrai(/revoke all on function crediter\([^)]*\) from [^;]*authenticated/i.test(credits),
+      '`crediter` reste joignable depuis un navigateur')
+
+    // Le solde est une FONCTION, pas une colonne. Une colonne `credits` sur
+    // `pilote` serait une surface d'écriture de plus, et c'est précisément
+    // celle qui avait été trouvée ouverte.
+    vrai(/create or replace function solde_credits/i.test(credits),
+      'le solde ne se dérive plus : il est redevenu une colonne, donc écrivable')
+    vrai(!/alter table pilote add column if not exists credits\s+integer/i.test(credits),
+      'un solde stocké est réapparu sur `pilote` — il dérivera du registre')
   }),
 
   /* ─── RÉCIT 17.1 — UNE JOURNÉE ANNONCÉE NE SE COMPTE PAS COMME VÉCUE ──────
@@ -2811,12 +3201,30 @@ const essais = [
        garde qui empêche le jeu de se rouvrir icône par icône — la manière exacte
        dont un assemblage se reconstitue. Deux exceptions déclarées : `Icones.tsx`
        qui EST le jeu, et `Courbe.tsx`, qui n'est pas une icône mais un tracé de
-       données à l'échelle de l'écran. */
+       données à l'échelle de l'écran.
+
+       ⚠ ET L'EXCEPTION EST ANCRÉE SUR LE CHEMIN COMPLET, PAS SUR LE NOM. Elle
+       s'écrivait `/\/(Icones|Courbe)\.tsx$/`, donc elle absolvait un fichier
+       PARCE QU'IL S'APPELLE Courbe. Un `src/analyses/Courbe.tsx` créé demain —
+       et les vues d'analyse arrivent — aurait hérité du droit de poser un <svg>
+       sans qu'une seule ligne d'essai change, ni que personne ait décidé quoi
+       que ce soit. L'exception d'UN tracé ne doit pas devenir l'exception de
+       tous par accident : ce sont ces deux fichiers-là, à cette place-là. */
+    const TRACES = ['src/ecrans/Icones.tsx', 'src/ecrans/Courbe.tsx']
+    const dansSrc = (chemin: string) => chemin.replace(/^.*\/src\//, 'src/')
     for (const [chemin, brut] of Object.entries(ECRANS)) {
-      if (/\/(Icones|Courbe)\.tsx$/.test(chemin)) continue
+      if (TRACES.includes(dansSrc(chemin))) continue
       vrai(!/<svg\b/.test(sansCommentaires(brut)),
-        `${chemin.split('/').pop()} dessine un <svg> à lui : le jeu d'icônes se rouvre`)
+        `${dansSrc(chemin)} dessine un <svg> à lui : le jeu d'icônes se rouvre`)
     }
+    /* Et les deux exceptions désignent encore quelque chose. Une exception qui
+       pointe un fichier absent ne protège plus rien : elle ne s'applique
+       simplement jamais, et le déplacement qui l'a vidée ne fait rougir personne
+       — sauf ici. C'est l'autre moitié de l'ancrage : nommer un chemin oblige à
+       le tenir à jour, nommer un fichier n'obligeait à rien. */
+    for (const t of TRACES)
+      vrai(Object.keys(ECRANS).some((c) => dansSrc(c) === t),
+        `${t} a bougé : l'exception au <svg> ne désigne plus aucun fichier`)
   }),
 
   doit('20.2 — un tracé, jamais un emoji', () => {
@@ -3590,6 +3998,1420 @@ const essais = [
     // Et l'écran DIT que les deux compteurs ne se parlent pas.
     vrai(/convertit pas/.test(ecran),
       'l\'écran laisse croire que les kilomètres du manuel et les roulages se convertissent')
+  }),
+
+  /* ═══ LA FABRIQUE PAR SUJET — « un casque n'est pas une moto » ════════════
+     Julian, 1er septembre 2026 : « L'image de chaque casque générée par Gemini
+     doit être dans le même angle (trois quart profil) ».
+
+     LE DÉFAUT D'ORIGINE, dans sa forme exacte : la fonction serveur n'avait
+     qu'un seul prompt, celui de la MOTO. Une photo de casque partie depuis
+     l'écran d'équipement recevait donc « c'est CETTE moto, pas une moto » et
+     « L'ANGLE est un PROFIL STRICT » — et l'appel était facturé au prix plein.
+     Le rendu n'était pas raté, il était HORS SUJET, et rien dans le produit ne
+     pouvait le dire : ni le type, ni le quota, ni le banc.
+
+     Ces essais tiennent les deux moitiés : que les deux prompts DIVERGENT là où
+     ils doivent diverger (l'angle, le vocabulaire, le budget), et qu'ils
+     restent IDENTIQUES là où la collection l'exige (la grille, le fond, le
+     contour, le zéro-lettre). Une seule des deux moitiés se satisferait d'un
+     produit cassé : deux prompts identiques passent la seconde, deux prompts
+     sans rien de commun passent la première. */
+
+  doit('un casque et une moto ne reçoivent JAMAIS le même dessin', () => {
+    const casque = TENUE.prompt('casque'), combinaison = TENUE.prompt('combinaison')
+    vrai(casque.length > 500 && combinaison.length > 500, 'un prompt de tenue est vide')
+    /* ⚠ LA COMPARAISON DE SORTIES, ET PAS UNE LECTURE DE SOURCE. Une table de
+       fiches dont les deux clés pointeraient le même objet — un copier-coller
+       d'une ligne, exactement le genre de faute qu'on ne relit pas — traverse
+       n'importe quelle garde de texte et se voit ici, immédiatement. */
+    vrai(casque !== combinaison,
+      'le casque et la combinaison partent avec le MÊME texte : une pièce sur deux sera hors sujet')
+
+    // Le témoin sait reconnaître la consigne de la moto : sans cette ligne, les
+    // deux gardes du dessous ne prouveraient rien d'autre qu'une faute de frappe.
+    vrai(/PROFIL STRICT/.test(SPRITE_MOTO) && /ramènes?[^.]*au profil/i.test(SPRITE_MOTO),
+      'v6 ne dit plus « profil strict » : le témoin ne reconnaît plus ce dont la tenue doit différer')
+
+    for (const sujet of ['casque', 'combinaison'] as const) {
+      const p = TENUE.prompt(sujet)
+      vrai(/TROIS-QUARTS/.test(p), `le prompt du ${sujet} n'impose plus d'angle`)
+      /* Un casque de profil est un ovale sans écran ni mentonnière, une
+         combinaison de profil est une manche devant une jambe. La consigne de la
+         moto, recopiée ici, rendrait deux pièces méconnaissables. */
+      vrai(!/ramènes?[^.]*au profil/i.test(p),
+        `le prompt du ${sujet} ramène le sujet au profil : c'est la consigne de la MOTO`)
+      // Et il ne décrit pas une machine. C'est ce vocabulaire-là qui partait sur
+      // un casque au temps du prompt unique, et il se lit à l'œil nu.
+      for (const mot of ['jante', 'carénage', 'échappement', 'guidon', 'roues'])
+        vrai(!new RegExp(mot, 'i').test(p),
+          `le prompt du ${sujet} parle de « ${mot} » : c'est une moto qu'on décrit`)
+    }
+    // Chacun nomme SA pièce en toutes lettres, et jamais celle de l'autre.
+    vrai(casque.includes('CASQUE intégral') && !casque.includes('COMBINAISON de moto'),
+      'le prompt du casque ne nomme pas exactement la pièce à dessiner')
+    vrai(combinaison.includes('COMBINAISON de moto') && !combinaison.includes('CASQUE intégral'),
+      'le prompt de la combinaison ne nomme pas exactement la pièce à dessiner')
+  }),
+
+  doit('l\'angle de la tenue est une MESURE, pas un adjectif', () => {
+    /* ⚠ « TROIS-QUARTS » TOUT SEUL EST UN ADJECTIF, et un adjectif se
+       réinterprète à chaque photo. Ce que la demande exige n'est pas un bel
+       angle, c'est LE MÊME angle d'une pièce à l'autre : deux casques rendus
+       sous deux angles ne se comparent plus, on croit voir deux formes
+       différentes là où seule la déco change. Un seuil chiffré se vérifie sur le
+       rendu ; un adjectif ne se vérifie pas du tout. */
+    for (const sujet of ['casque', 'combinaison'] as const) {
+      const p = TENUE.prompt(sujet)
+      vrai(/DEUX TESTS/.test(p), `le prompt du ${sujet} n'offre plus rien à vérifier sur le rendu`)
+      vrai((p.match(/\d+\s*%/g) ?? []).length >= 2, `le prompt du ${sujet} ne chiffre plus son cadrage`)
+      /* Les deux bords, nommés : un seuil qui ne dit que « trop » ne dit pas de
+         quel côté corriger, et se corrige donc une fois sur deux à l'envers.
+         ⚠ `\s+` ET PAS UNE ESPACE : le prompt est un gabarit REPLIÉ à la main,
+         et « tu es trop \n DE PROFIL » traverse une coupe de ligne. Une garde
+         qui exige l'espace unique éprouve la mise en page du fichier, pas la
+         consigne — et rougirait au premier reformatage. */
+      vrai(/trop\s+DE\s+FACE/.test(p) && /trop\s+DE\s+PROFIL/.test(p),
+        `le prompt du ${sujet} ne dit plus de quel côté il a dérapé`)
+    }
+  }),
+
+  doit('un casque et une moto ont EXACTEMENT le même carré de pixel', () => {
+    /* ⚠ CE N'EST PAS DE LA PARESSE, C'EST UNE CONTRAINTE DE COLLECTION. Les
+       trois portraits se posent sur la MÊME scène, côte à côte. 1024 / 128 = 8 :
+       le carré logique fait 8 px des deux côtés. Une grille plus fine pour la
+       tenue rendrait le casque « mieux dessiné » que la machine — et c'est
+       précisément ce qui casse une collection, sans qu'aucun des deux sprites
+       soit raté. */
+    const grilleMoto = Number(SPRITE_MOTO.match(/export const GRILLE = (\d+)/)?.[1])
+    vrai(grilleMoto > 0, 'la grille de la moto est introuvable dans v6.ts')
+    egal(TENUE.GRILLE, grilleMoto, 'la tenue et la moto ne se dessinent plus sur la même grille')
+    egal(TENUE.entreePx % TENUE.GRILLE, 0,
+      'la grille ne divise plus l\'image : le carré logique cesse d\'être un carré')
+    // Et le prompt ANNONCE la grille qu'il renvoie. C'est tout l'objet du
+    // voyage de `grille` avec l'image : spritifier sur une autre grille que
+    // celle demandée au modèle rend une bouillie que rien ne signale.
+    for (const sujet of ['casque', 'combinaison'] as const)
+      vrai(TENUE.prompt(sujet).includes(`${TENUE.GRILLE} × ${TENUE.GRILLE}`),
+        `le prompt du ${sujet} annonce une grille différente de celle qu'il renvoie`)
+  }),
+
+  doit('la tenue ne porte AUCUNE lettre, et se détache comme la moto', () => {
+    /* Le zéro-lettre est plus dur ici que sur la machine : un casque porte la
+       marque au front, celle de l'écran sur la platine, l'homologation sur la
+       jugulaire, et le modèle SAIT lire ces marques. Le fond et le contour, eux,
+       doivent rester ceux de v6 — c'est le programme qui détache le vert, et
+       c'est la scène de l'application qui reçoit les trois sprites. */
+    for (const sujet of ['casque', 'combinaison'] as const) {
+      const p = TENUE.prompt(sujet)
+      vrai(/AUCUNE lettre de l'alphabet/.test(p), `le prompt du ${sujet} a perdu le zéro-lettre`)
+      vrai(/homologation/.test(p), `le prompt du ${sujet} n'écarte plus l'étiquette d'homologation`)
+      for (const teinte of ['#00E000', '#1A0A2E']) {
+        vrai(p.includes(teinte), `le prompt du ${sujet} a perdu ${teinte}`)
+        vrai(SPRITE_MOTO.includes(teinte),
+          `v6 n'emploie plus ${teinte} : les trois sprites cessent de se détacher pareil`)
+      }
+    }
+  }),
+
+  doit('rien ne peut PENDRE entre le jeton vérifié et la réponse', () => {
+    /* ⚠ CET ESSAI EXISTE PARCE QUE LA PANNE A DURÉ DEUX SEMAINES SANS QUE
+       PERSONNE NE PUISSE LA VOIR — 3 septembre 2026.
+
+       La branche « pas de clé » ornait son refus de deux nombres, lus en deux
+       allers-retours PostgREST dont le second était un `count: 'exact',
+       head: true`. Les journaux du projet le montrent trois fois, toujours
+       pareil : la passerelle journalise un 200 pour ce HEAD — la réponse EST
+       partie — puis la fonction reste muette 150 secondes et le runtime la tue.
+       Une réponse HEAD n'a pas de corps, et le client Deno en attend un.
+
+       Côté téléphone, Safari abandonnait à 60 s avec « Load failed » ; le client
+       en concluait « le serveur est resté injoignable » face à un serveur qui
+       avait répondu deux fois en 500 ms. Le seul fait vrai — la clé n'est pas
+       posée sur le projet — n'a jamais pu remonter.
+
+       Ce que cet essai garde n'est PAS « ne pas écrire head: true ». C'est la
+       propriété qui rendait la panne possible : le chemin le plus dégradé de la
+       fonction, celui qui répond quand rien n'est configuré, faisait du réseau
+       pour orner un refus que personne ne lit. Il doit être le moins cher de
+       tous, pas le plus fragile. */
+    const cle = SPRITE_SERVEUR.indexOf("const cle = Deno.env.get('GEMINI_IMAGE')")
+    const rendu = SPRITE_SERVEUR.indexOf("refus: 'cle_absente'")
+    vrai(cle > 0 && rendu > cle, "la branche « fabrique fermée » a changé de forme")
+    egal(SPRITE_SERVEUR.slice(cle, rendu).match(/\bawait\b/g)?.length ?? 0, 0,
+      'un `await` est réapparu entre le test de la clé et son refus : il peut pendre')
+
+    /* Et le HEAD lui-même reste banni de TOUTE la fonction : la propriété
+       ci-dessus protège une branche, celle-ci protège les autres.
+
+       ⚠ SUR LE CODE, PAS SUR LA PROSE — et cette précaution s'est payée tout de
+       suite : la première version de cet essai rougissait sur le commentaire
+       qui RACONTE le défaut, à trois lignes de la correction. Un dépôt dont les
+       commentaires sont la mémoire des pannes ne peut pas se doter de gardes
+       qui interdisent de les nommer, sinon la garde chasse le souvenir. */
+    const codeSeul = (t: string) =>
+      t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+    vrai(!/head:\s*true/.test(codeSeul(SPRITE_SERVEUR)),
+      'une requête HEAD est revenue dans la fonction : sa promesse ne se règle jamais côté Deno')
+
+    /* ⚠ ET L'APPEL AU MODÈLE EST BORNÉ, PARCE QU'UNE FONCTION TUÉE NE REND PAS
+       SON CRÉNEAU. Sans borne, un modèle qui traîne fait dépasser la limite de
+       temps de mur : `annuler()` n'est jamais atteint, la réservation reste en
+       base, et le pilote a payé un silence. */
+    const appel = SPRITE_SERVEUR.indexOf('generativelanguage.googleapis.com')
+    const corps = SPRITE_SERVEUR.slice(appel, appel + 1200)
+    vrai(/signal:\s*AbortSignal\.timeout/.test(corps),
+      "l'appel au modèle n'a plus de borne de temps : un modèle lent brûle un créneau")
+
+    /* ⚠ ET CELUI QUI RENONCE EN PREMIER DOIT ÊTRE CELUI QUI PEUT RENDRE LE
+       CRÉNEAU. Si le téléphone abandonnait avant le serveur, le serveur
+       finirait sa fabrication — donc la facturerait — pour une image que
+       personne ne recevrait. Les deux bornes vivent dans deux dépôts que rien
+       d'autre ne relie : c'est ici, et seulement ici, qu'elles se confrontent. */
+    const client = SOURCES[Object.keys(SOURCES).find((k) => k.endsWith('/pixel/portrait.ts'))!]
+    const ms = (texte: string, nom: string) =>
+      Number((texte.match(new RegExp(`${nom} = ([\\d_]+)`))?.[1] ?? '0').replace(/_/g, ''))
+    const serveur = ms(SPRITE_SERVEUR, 'MODELE_MAX_MS')
+    const attente = ms(client, 'ATTENTE_MAX_MS')
+    vrai(serveur > 0 && attente > 0, 'une des deux bornes de temps a disparu')
+    vrai(attente > serveur,
+      `le téléphone (${attente} ms) renonce avant le serveur (${serveur} ms) : `
+      + 'la fabrication continue et se facture pour une image que personne ne reçoit')
+
+    /* ⚠ ET LE TYPE DE L'IMAGE N'EST PLUS ÉCRIT EN DUR. Il valait `image/jpeg`
+       alors que `reduire()` réencode en WebP : le modèle recevait une étiquette
+       fausse. Le défaut n'a jamais pu se montrer — aucun appel n'est allé
+       jusqu'au modèle, faute de clé — donc c'est le PREMIER appel payant qui
+       l'aurait découvert. */
+    vrai(!/mimeType:\s*'image\//.test(codeSeul(SPRITE_SERVEUR)),
+      "le type de l'image est de nouveau écrit en dur : il ment dès que `reduire()` change de format")
+    vrai(/mime:\s*r\.blob\.type/.test(client),
+      "le client n'envoie plus le type réel de ce qui part")
+  }),
+
+  doit('un sujet inconnu est refusé AVANT la moindre dépense', () => {
+    /* ⚠ SE REPLIER SUR UN DÉFAUT SERAIT PIRE QUE REFUSER : le serveur
+       dessinerait une moto à la place d'une combinaison, et l'appel serait
+       facturé. Le refus part donc avant `reserver_generation` — donc sans
+       consommer de créneau de quota — et a fortiori avant le premier octet
+       envoyé au modèle. L'ordre dans le fichier EST l'invariant. */
+    const refus = SPRITE_SERVEUR.indexOf("refus: 'sujet_inconnu'")
+    const reserve = SPRITE_SERVEUR.indexOf("rpc('reserver_generation'")
+    const modele = SPRITE_SERVEUR.indexOf('generativelanguage.googleapis.com')
+    vrai(refus > 0, 'le serveur ne refuse plus un sujet inconnu : il dessinerait une moto à la place')
+    vrai(reserve > 0 && modele > 0, 'la réservation ou l\'appel au modèle est introuvable')
+    vrai(refus < reserve,
+      'le refus passe APRÈS la réservation : un créneau de quota est brûlé pour rien')
+    vrai(refus < modele, 'le refus passe après l\'appel au modèle : la génération est facturée')
+    // Et c'est une demande refusée, pas une panne : le client doit pouvoir le dire.
+    vrai(/,\s*400\)/.test(SPRITE_SERVEUR.slice(refus, SPRITE_SERVEUR.indexOf('\n', refus))),
+      'le refus d\'un sujet inconnu ne rend pas 400 : le pilote lirait une panne de serveur')
+
+    const liste = SPRITE_SERVEUR.match(/const SUJETS = \[([^\]]*)\]/)?.[1] ?? ''
+    egal([...liste.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort(),
+      ['casque', 'combinaison', 'machine'], 'les sujets connus du serveur')
+    /* ⚠ ET UN CORPS SANS `sujet` RESTE UNE MOTO. Ce n'est pas de la complaisance :
+       une version déjà installée sur le téléphone d'un pilote envoie un corps
+       sans ce champ, et n'envoie que des motos. Sans ce défaut, le redéploiement
+       refuserait tous les clients déjà déployés. */
+    vrai(/charge\.sujet \?\? 'machine'/.test(SPRITE_SERVEUR),
+      'le défaut « machine » a disparu : le redéploiement casse les clients déjà installés')
+  }),
+
+  doit('la grille qui redescend est celle du module qui a vraiment dessiné', () => {
+    /* La grille voyage AVEC l'image parce que c'est elle qui interdit à la
+       spritification de travailler sur une autre grille que le prompt. Prendre
+       la grille d'un module et la consigne de l'autre remettrait ce trou-là en
+       place, cette fois sans qu'aucune constante ne soit fausse. */
+    for (const module of ['moto', 'tenue'])
+      vrai(new RegExp(`import \\* as ${module} from`).test(SPRITE_SERVEUR),
+        `la fonction n'importe plus le module « ${module} »`)
+    for (const champ of ['GRILLE', 'entreePx', 'version', 'modele'])
+      vrai(new RegExp(`fabrique\\.${champ}\\b`).test(SPRITE_SERVEUR),
+        `la réponse renvoie \`${champ}\` d'un module fixe : on peut spritifier sur une grille que le modèle n'a jamais reçue`)
+    vrai(/\bsujet,/.test(SPRITE_SERVEUR),
+      'la réponse ne dit plus quel sujet a été dessiné : le pilote ne sait pas ce qu\'il a payé')
+  }),
+
+  doit('le client NOMME ce qu\'il fait dessiner, il n\'envoie plus un identifiant nu', () => {
+    /* ⚠ LE `string` NU VALAIT « machine », ET C'ÉTAIT LA SEULE PORTE QUI DÉPENSE.
+       `genererPortrait(db, uneCleDEquipement, photo)` compilait sans un mot et
+       facturait un prompt de moto sur un casque. Un raccourci d'appel qui laisse
+       ouverte la porte de la dépense ne vaut pas les deux appelants qu'il
+       épargne. Le TYPE porte désormais l'obligation : `{ equipementId }` seul ne
+       type plus, et c'est `tsc -b` qui le dit, pas cet essai. */
+    const brut = fichierDe(SOURCES, 'pixel/portrait.ts')
+    vrai(brut.length > 0, 'portrait.ts introuvable')
+    const source = sansCommentaires(brut)
+    vrai(/equipementId: string; genre: GenreDeTenue/.test(source),
+      'un équipement peut repartir sans genre : le serveur lui dessinerait une moto')
+    vrai(!/sujet: Sujet \| string/.test(source),
+      '`genererPortrait` accepte de nouveau une chaîne nue : elle vaut « machine » et facture un prompt de moto sur un casque')
+    vrai(/JSON\.stringify\(\{[^}]*\bsujet:/.test(source), 'le corps POST ne porte plus le sujet')
+    // Et le refus du serveur a une phrase : un motif brut à l'écran n'est pas
+    // une phrase, et celui-ci parle d'argent.
+    vrai(/sujet_inconnu:/.test(brut), 'le refus « sujet_inconnu » n\'a aucune phrase pour le pilote')
+
+    // Les deux seuls appelants nomment leur sujet, chacun le sien.
+    const garage = sansCommentaires(fichierDe(ECRANS, '/Garage.tsx'))
+    vrai(garage.length > 0, 'Garage.tsx introuvable')
+    vrai(/genererPortrait\(db, \{ machineId:/.test(garage),
+      'le garage envoie de nouveau un identifiant nu : le serveur ne sait plus si c\'est une moto')
+    const budget = sansCommentaires(fichierDe(ECRANS, '/Budget.tsx'))
+    vrai(budget.length > 0, 'Budget.tsx introuvable')
+    vrai(/genererPortrait\(db, \{ equipementId: [^,]+, genre \}/.test(budget),
+      'l\'inventaire fabrique un portrait d\'équipement sans dire ce qu\'est la pièce')
+  }),
+
+  doit('une pièce sans genre ne fait partir AUCUNE génération payante', () => {
+    /* `equipement.genre` est NULLABLE et le restera : une glacière n'est ni un
+       casque ni une combinaison (migration 20260901000001). Une pièce sans genre
+       existe donc pour de bon, et deviner « casque » parce que la catégorie vaut
+       'protection' appliquerait à une combinaison une consigne d'écran et de
+       mentonnière — 0,16 € pour un rendu inutilisable, et rien pour le dire. */
+    const source = sansCommentaires(fichierDe(ECRANS, '/Budget.tsx'))
+    vrai(source.length > 0, 'Budget.tsx introuvable')
+    const refus = source.indexOf('if (!genre)')
+    const appel = source.indexOf('await genererPortrait(')
+    vrai(refus > 0, 'la fabrique dessine de nouveau une pièce dont personne n\'a dit ce qu\'elle est')
+    vrai(appel > refus, 'le refus arrive APRÈS l\'appel : le portrait est payé avant qu\'on y renonce')
+    const message = source.slice(refus, appel)
+    vrai(/casque/.test(message) && /combinaison/.test(message),
+      'le refus ne dit pas ce qui manque à la pièce')
+    vrai(/décompté|prélevé/.test(message),
+      'le refus ne dit pas que rien n\'a été prélevé : le pilote croira avoir payé')
+    /* ⚠ ET IL NE DÉSIGNE AUCUN GESTE. Il serait naturel d'écrire « déclare-le
+       ici » — sauf que RIEN n'écrit `equipement.genre` aujourd'hui, dans aucun
+       écran. Désigner un geste qui n'existe pas est la promesse contradictoire
+       que ce produit a déjà payée une fois (Refaire.tsx) : le message dit ce qui
+       manque et ce qui n'a pas été prélevé, rien de plus. */
+    vrai(!/bouton|ci-dessous|ci-dessus|touche/i.test(message),
+      'le refus désigne un geste : si ce geste n\'existe pas, la phrase promet ce qu\'elle ne tient pas')
+  }),
+
+  /* ═══ LA TENUE DU JOUR — moto, casque, combinaison ════════════════════════
+     « on peut lier à la journée de roule 1) la moto quand il y en a plusieurs,
+       2) le casque 3) la combi », puis « faire des genre de skin comme un jeux
+     vidéo ». — Julian, 1er septembre 2026. */
+
+  doit('la tenue se déclare la veille ET se corrige le soir', () => {
+    /* ⚠ LA PORTE QUI SE SERAIT REFERMÉE EN SILENCE, une septième fois. On
+       déclare sa tenue sur l'écran de préparation ; à la PREMIÈRE trace saisie,
+       `sePrepare` bascule et cet écran-là cède la place au bilan. Montée dans le
+       seul `<Journee>`, la tenue devenait INDÉCLARABLE et INCORRIGIBLE le soir
+       même — or c'est en relisant sa journée qu'on se souvient de noter sa
+       combinaison. C'est mot pour mot la classe de défaut des six chemins de
+       17.2, et elle ne se rouvre qu'en composant le nœud UNE FOIS dans App.tsx.
+       Un second `<Tenue>` monté dans l'écran de préparation aurait divergé du
+       premier à la première correction. */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const journee = sansCommentaires(fichierDe(ECRANS, '/Journee.tsx'))
+    vrai(app.length > 0 && journee.length > 0, 'App.tsx ou Journee.tsx introuvable')
+    egal((app.match(/<Tenue\b/g) ?? []).length, 1,
+      'montages de <Tenue> dans App.tsx — deux nœuds divergeront à la première correction')
+    egal((app.match(/tenue=\{gestesDeLaJournee\.tenue\}/g) ?? []).length, 2,
+      'écrans qui reçoivent la tenue — il en faut DEUX : la préparation et le bilan')
+    vrai(/\{\s*tenue\s*\}/.test(journee), 'l\'écran de préparation ne rend plus la tenue')
+    vrai(!journee.includes('<Tenue'),
+      '<Tenue> est monté une seconde fois dans Journee.tsx au lieu d\'être reçu')
+
+    /* ⚠ ET LA LECTURE PREND TOUT LE TEMPS, y compris ce qui n'a pas eu lieu. La
+       tenue se déclare AVANT de partir, sur une journée future : filtrée par
+       `A_EU_LIEU`, elle serait invisible exactement au moment où elle sert
+       (récit 17.1). C'est le seul endroit du produit où `TOUTES_JOURNEES` est
+       une exigence et non une tolérance. */
+    const sql = gabaritsSql()
+      .find((q) => q.fichier.endsWith('db/equipement.ts') && /r\.casque_id/.test(q.sql))?.sql ?? ''
+    vrai(sql.length > 0, 'la lecture de la tenue a disparu de db/equipement.ts')
+    vrai(/FROM roulage r \$\{TOUTES_JOURNEES\}/.test(sql),
+      'la tenue ne se prononce plus sur le futur, ou le fait trop loin de son `FROM roulage`')
+    vrai(!/A_EU_LIEU/.test(sql),
+      'la tenue ne se lit que sur les journées passées : on ne peut plus la déclarer la veille')
+  }),
+
+  doit('aucun compteur, aucune complétude, aucun palier sur la tenue', () => {
+    /* ⚠ LA TENTATION EST PLUS FORTE ICI QU'AILLEURS, et c'est pour ça que la
+       garde existe : trois places alignées appellent un compteur, « 2 sur 3 »
+       s'écrit tout seul. Une pièce non déclarée n'est pas une case vide à
+       remplir — c'est une pièce dont le pilote n'a rien dit, et le produit ne
+       relance JAMAIS personne pour compléter un carnet (AD-2, FR-31).
+
+       ⚠ ON LIT SANS LES COMMENTAIRES. Le composant ET la feuille de style CITENT
+       « 2 sur 3 » et « tenue complète » pour dire qu'ils les refusent : un témoin
+       qui lit le texte brut accuse la mémoire du défaut au lieu du défaut. C'est
+       le même piège que partout ailleurs dans ce banc. */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const debut = app.indexOf('function PieceDeLaTenue')
+    vrai(debut > 0, 'le bloc de la tenue a disparu d\'App.tsx')
+    const bloc = app.slice(debut)
+    vrai(!/\b\d+\s*(?:sur|\/)\s*\d+\b/.test(bloc),
+      'la tenue affiche un compte sur un total : une journée devient un objectif à moitié rempli')
+    const INTERDITS = ['complèt', 'complet', 'palier', 'badge', 'score', 'jauge', 'pastille',
+      'progress', 'manque', 'barre']
+    for (const mot of INTERDITS)
+      vrai(!new RegExp(mot, 'i').test(bloc), `la tenue porte « ${mot} » : elle s'est mise à juger`)
+
+    /* La feuille tient l'autre moitié : un compteur peut très bien n'exister
+       QUE dans le dessin — une place teintée selon qu'elle est remplie dit « il
+       en manque une » sans écrire un seul mot, et la couleur seule ne porte
+       jamais le sens dans ce produit (UX-DR8). Le motif chiffré n'est pas
+       appliqué ici : `aspect-ratio: 1 / 1` est un rapport de cadre, pas un
+       score. */
+    const style = FEUILLE.replace(/\/\*[\s\S]*?\*\//g, ' ')
+    const i = style.indexOf('.tenue {')
+    vrai(i > 0, 'le bloc `.tenue` a disparu de la feuille')
+    const dessin = style.slice(i, style.indexOf('.garage .chiffres', i))
+    vrai(dessin.length > 0, 'le bloc `.tenue` ne se referme plus avant le garage')
+    for (const mot of INTERDITS)
+      vrai(!new RegExp(mot, 'i').test(dessin), `la feuille dessine « ${mot} » sur la tenue`)
+    // Et aucune couleur de verdict : ce sont les jetons du mieux, du plus lent,
+    // du record et de l'alerte — ils disent tous « c'est bien » ou « c'est mal ».
+    for (const jeton of ['--mieux', '--plus-lent', '--record', '--alerte'])
+      vrai(!dessin.includes(jeton),
+        `la tenue emprunte ${jeton} : une place se met à valoir mieux qu'une autre`)
+  }),
+
+  doit('retirer une pièce n\'efface pas les journées où elle a été portée', () => {
+    /* ⚠ VENDRE SON CASQUE NE DOIT PAS EFFACER SES JOURNÉES. `on delete set null`
+       et jamais `cascade` : la journée a eu lieu, elle reste — la même règle que
+       la photo de chute, pour la même raison. Une correction ou une vente ne
+       coûte jamais un fait déjà consigné. */
+    const migration = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('la_tenue_du_jour_se_declare'))?.[1] ?? ''
+    vrai(migration.length > 0, 'la migration de la tenue est introuvable')
+    for (const colonne of ['casque_id', 'combinaison_id'])
+      vrai(new RegExp(`${colonne} uuid[\\s\\S]{0,120}?on delete set null`, 'i').test(migration),
+        `roulage.${colonne} ne se détache plus en douceur : vendre la pièce effacerait les journées`)
+    vrai(!/on delete cascade/i.test(migration),
+      'la tenue emporte la journée avec elle : une vente détruirait un fait consigné')
+
+    /* ⚠ ET LE LIEN SURVIT AU GENRE. La jointure résout la pièce par son
+       IDENTIFIANT et rien d'autre : si elle vérifiait `genre = 'casque'`,
+       corriger ou retirer le genre d'une pièce effacerait de l'écran toutes les
+       journées où elle a été portée. Le genre décide de ce qu'on PROPOSE, jamais
+       de ce qui a eu lieu. */
+    const sql = gabaritsSql()
+      .find((q) => q.fichier.endsWith('db/equipement.ts') && /r\.casque_id/.test(q.sql))?.sql ?? ''
+    vrai(sql.length > 0, 'la lecture de la tenue a disparu de db/equipement.ts')
+    for (const colonne of ['casque_id', 'combinaison_id'])
+      vrai(new RegExp(`LEFT JOIN equipement \\w+ ON \\w+\\.id = r\\.${colonne}`).test(sql),
+        `la tenue ne résout plus ${colonne} par son seul identifiant`)
+    vrai(!/genre/i.test(sql),
+      'la tenue portée se filtre sur le genre : corriger le genre d\'une pièce effacerait ses journées')
+  }),
+
+  doit('le lien de tenue est FACULTATIF, et rien ne le pose d\'office', () => {
+    /* ⚠ LA DIFFÉRENCE AVEC LA MACHINE, ET ELLE EST ENTIÈRE. `creerRoulage` lie
+       d'office la moto unique du garage : la question n'a alors qu'une réponse
+       possible, et le formulaire perdrait l'information sans le dire. Un casque
+       lié d'office, lui, affirmerait un FAIT que personne n'a déclaré — « j'ai
+       porté celui-ci ce jour-là ». Une journée sans tenue n'est pas une tenue
+       absente : c'est une tenue dont on n'a rien dit (AD-2). */
+    const migration = Object.entries(MIGRATIONS)
+      .find(([c]) => c.includes('la_tenue_du_jour_se_declare'))?.[1] ?? ''
+    vrai(migration.length > 0, 'la migration de la tenue est introuvable')
+    for (const colonne of ['casque_id', 'combinaison_id']) {
+      /* ⚠ ON LIT LA SEULE INSTRUCTION QUI POSE LA COLONNE. Chercher « not null »
+         dans toute la migration accuse à tort : l'index partiel s'écrit
+         `where casque_id is not null`, et c'est exactement le contraire d'une
+         contrainte — il ne range que les journées qui ONT déclaré une pièce. */
+      const ajout = migration.match(new RegExp(`add column if not exists ${colonne}[^;]*`, 'i'))?.[0] ?? ''
+      vrai(ajout.length > 0, `roulage.${colonne} n'est plus posée par la migration`)
+      vrai(!/not null/i.test(ajout),
+        `roulage.${colonne} est devenue obligatoire : une journée sans tenue déclarée serait refusée`)
+    }
+
+    const depot = sansCommentaires(fichierDe(SOURCES, 'db/depot.ts'))
+    vrai(depot.length > 0, 'depot.ts introuvable')
+    const creation = depot.slice(depot.indexOf('INSERT INTO roulage'),
+      depot.indexOf('INSERT INTO roulage') + 400)
+    for (const colonne of ['casque_id', 'combinaison_id'])
+      vrai(!creation.includes(colonne),
+        `la création d'une journée écrit ${colonne} : elle affirme une tenue que personne n'a déclarée`)
+
+    /* ⚠ ET LE MÊME TAP DÉLIE. `equipementId` à nul est un appel PLEIN, pas un cas
+       d'erreur : sans lui, le sélecteur est une porte à sens unique et il ne
+       reste que la suppression de la journée pour corriger un casque déclaré par
+       erreur. C'est exactement le défaut qu'a payé `modifierRoulage`. */
+    vrai(/equipementId: string \| null/.test(depot),
+      'poser une pièce de tenue n\'accepte plus le nul : le sélecteur devient une porte à sens unique')
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    vrai(/portee\?\.id === p\.id \? null : p\.id/.test(app),
+      'taper la pièce active ne la retire plus : la déclaration devient irréversible')
+  }),
+
+  doit('poser une pièce n\'écrit QUE sa colonne, et son nom ne vient pas de l\'appelant', () => {
+    /* Une interpolation dans une requête est la faute par défaut de ce fichier —
+       sauf quand elle ne peut porter que deux valeurs écrites ici même.
+       `COLONNE_DE_TENUE` a exactement deux clés, `genre` est une union de deux
+       littéraux : le compilateur refuse la troisième, et rien de ce que
+       l'appelant fournit n'atteint le SQL. */
+    const brut = fichierDe(SOURCES, 'db/depot.ts')
+    vrai(brut.length > 0, 'depot.ts introuvable')
+    const source = sansCommentaires(brut)
+    const table = source.match(/COLONNE_DE_TENUE = \{([^}]*)\}/)?.[1] ?? ''
+    vrai(table.length > 0, 'la table fermée des colonnes de tenue a disparu')
+    egal([...table.matchAll(/(\w+):\s*'(\w+)'/g)].map((m) => `${m[1]}=${m[2]}`),
+      ['casque=casque_id', 'combinaison=combinaison_id'],
+      'la table des colonnes de tenue ne dit plus exactement ce qu\'elle doit dire')
+    vrai(/as const/.test(source.slice(source.indexOf('COLONNE_DE_TENUE'),
+      source.indexOf('COLONNE_DE_TENUE') + 160)),
+      'la table des colonnes n\'est plus figée : un troisième nom de colonne devient interpolable')
+
+    /* ⚠ ET L'ÉCRITURE NE TOUCHE QU'UNE COLONNE. Poser une combinaison qui
+       effacerait le casque, ou la moto de la journée, serait une perte que rien
+       ne rattrape et que rien n'annonce. */
+    const requete = source.match(/UPDATE roulage SET [^`]*/)?.[0] ?? ''
+    vrai(requete.length > 0, 'l\'écriture de la tenue a disparu')
+    // On ne compte QUE ce qui est posé — entre `SET` et `WHERE`. Compter les
+    // `=` de la requête entière en trouverait deux dès le premier jour, celui
+    // du `WHERE id = ?`, et la garde se satisferait alors de n'importe quoi.
+    const pose = requete.slice(requete.indexOf('SET') + 3, requete.indexOf('WHERE'))
+    egal((pose.match(/=/g) ?? []).length, 1,
+      'l\'écriture de la tenue pose plus d\'une valeur : elle emporte une autre colonne de la journée')
+    egal((pose.match(/,/g) ?? []).length, 0,
+      'l\'écriture de la tenue enchaîne plusieurs colonnes dans un seul geste')
+    for (const colonne of ['machine_id', 'date_jour', 'etat', 'crash_statut'])
+      vrai(!requete.includes(colonne),
+        `poser une pièce de tenue réécrit ${colonne} : un geste en touche un autre`)
+    // Et c'est une saisie, pas un réglage : le témoin de sauvegarde le sait.
+    const corps = source.slice(source.indexOf('poserPieceDeTenue'))
+    vrai(/marquerSaisie\(db\)/.test(corps.slice(0, 600)),
+      'déclarer sa tenue ne marque plus la journée comme saisie')
+  }),
+
+  doit('deux absences, deux phrases — et jamais la photo à la place du sprite', () => {
+    /* ⚠ ELLES NE DISENT PAS LA MÊME CHOSE, et les confondre dans un même cadre
+       gris ferait croire à un lien manquant là où il y en a un : « rien de
+       déclaré » (aucune pièce liée) et « pas de portrait pixel » (la pièce est
+       là, son portrait n'existe pas). Le mot porte le sens, la couleur ne le
+       porte jamais seule (UX-DR8) — même règle que la silhouette du garage. */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const debut = app.indexOf('function PieceDeLaTenue')
+    vrai(debut > 0, 'le bloc de la tenue a disparu d\'App.tsx')
+    const bloc = app.slice(debut)
+    vrai(bloc.includes('rien de déclaré'), 'l\'absence de lien ne se dit plus')
+    vrai(bloc.includes('pas encore de portrait'), 'l\'absence de portrait ne se dit plus')
+    vrai(!/rien de déclaré[\s\S]{0,40}rien de déclaré/.test(bloc),
+      'les deux absences se sont confondues en une seule phrase')
+    // Le mot de la place est rendu même sur une place vide : sans lui, un cadre
+    // hachuré ne se distingue pas d'une image qui n'a pas chargé.
+    vrai(/<b>\{place\}<\/b>/.test(bloc), 'une place vide ne dit plus de quoi elle parle')
+
+    /* ⚠ ET PAS DE REPLI SUR LA PHOTO RÉELLE, contrairement au garage
+       (sprite → photo → silhouette). Les trois pièces doivent se lire comme UNE
+       image : une photo de casque à côté de deux sprites ne compose plus rien,
+       elle se lit comme un montage raté. La photo garde sa place sur la fiche de
+       la pièce, là où le portrait se fabrique à partir d'elle. */
+    for (const repli of ['photoEquipement', 'photoUrl', 'TRACE_EQUIPEMENT'])
+      vrai(!bloc.includes(repli),
+        `la tenue retombe sur ${repli} : les trois places cessent de composer une image`)
+  }),
+
+  doit('la tenue se tait tant qu\'elle ne sait pas, et n\'existe pas quand il n\'y a rien à dire', () => {
+    /* ⚠ TROIS SILENCES DISTINCTS, et chacun a coûté quelque part dans ce produit.
+
+       ① « Je ne sais pas encore » ≠ « il n'y a rien ». Annoncer « rien de
+         déclaré » le temps d'une requête écrirait un fait faux à chaque
+         ouverture — récit 17.2, sur l'écran dont tout le propos est de n'énoncer
+         que ce qu'il sait.
+       ② Le bloc parle de la TENUE, et la moto seule n'en est pas une. Sans cette
+         sortie, le pilote qui ne tient pas son équipement verrait à chaque
+         journée un portrait de moto qu'il a déjà au garage, sous un titre qui
+         lui rappelle ce qu'il n'a pas saisi : une relance déguisée (AD-2).
+       ③ Le sélecteur d'un genre disparaît à zéro pièce — il proposerait sinon
+         une liste vide, c'est-à-dire une question sans réponse possible. */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const bloc = app.slice(app.indexOf('function PieceDeLaTenue'))
+    vrai(bloc.length > 0, 'le bloc de la tenue a disparu d\'App.tsx')
+
+    const tait = bloc.indexOf('if (!tenue) return null')
+    const vide = bloc.indexOf('if (sansTenue) return null')
+    const rendu = bloc.indexOf('<section className="bloc tenue">')
+    vrai(tait > 0, 'la tenue affirme quelque chose avant que la base ait répondu')
+    vrai(vide > tait, 'la sortie du bloc vide passe avant celle de l\'ignorance, ou a disparu')
+    vrai(rendu > vide, 'le bloc se rend avant d\'avoir décidé qu\'il a quelque chose à dire')
+    // ② se lit sur sa condition : ni pièce portée, ni pièce à choisir — la moto
+    //   n'y entre pas, sinon le bloc existerait sur toutes les journées.
+    vrai(/sansTenue = !tenue\.casque && !tenue\.combinaison/.test(bloc),
+      'la moto suffit à faire exister le bloc : il devient une relance sur toutes les journées')
+    vrai(!/sansTenue[^\n]*tenue\.machine/.test(bloc),
+      'la moto est entrée dans la condition d\'existence du bloc')
+    // ③ un seul casque suffit à ouvrir le choix — la plupart des pilotes n'en
+    //   ont qu'un, et un seuil à deux le rendrait indéclarable pour eux.
+    vrai(/if \(pieces\.length === 0\) return null/.test(bloc),
+      'le sélecteur exige plus d\'une pièce, ou s\'affiche sur une liste vide')
+  }),
+
+  /* ═══ LE BANC ET LE TÉLÉVERSEMENT — deux défauts qu'aucun écran ne montre ══ */
+
+  doit('le banc entier démarre ailleurs que sur le poste de Julian', () => {
+    /* ⚠ CE DÉFAUT NE FAIT ROUGIR PERSONNE, IL EMPÊCHE DE DÉMARRER. Trente
+       fumées clouaient `/Applications/Google Chrome.app/…` : sur le poste de
+       travail tout marche, et c'est là qu'on les écrit. Ailleurs — un conteneur
+       d'intégration, une revue à distance — la seule façon de lancer le banc est
+       de modifier les fichiers, et une modification locale finit par partir dans
+       un commit.
+
+       La garde part de `BOUT_EN_BOUT`, la liste que le lanceur exécute vraiment :
+       une fumée ajoutée demain sans échappatoire y est nommée le jour même. */
+    const lanceur = BANC['../essais.mjs'] ?? ''
+    vrai(lanceur.length > 0, 'banc-rendu/essais.mjs introuvable')
+    const i = lanceur.indexOf('const BOUT_EN_BOUT')
+    vrai(i > 0, 'la liste des essais de bout en bout a disparu du lanceur')
+    const noms = [...lanceur.slice(i, lanceur.indexOf(']', i)).matchAll(/'([\w-]+)'/g)]
+      .map((m) => m[1])
+    vrai(noms.length >= 25, `seulement ${noms.length} fumées lues : la lecture du lanceur est cassée`)
+
+    const DEFAUT = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    /* `photo-essai.mjs` EXPORTE l'échappatoire, et `planches.mjs` l'importe déjà
+       plutôt que de la réécrire. Les deux formes sont donc légitimes, et la
+       garde doit accepter les deux : sinon elle interdirait la seule
+       factorisation raisonnable de ces trente lignes identiques. */
+    const empruntee = (src: string) =>
+      /import \{[^}]*\bCHROME\b[^}]*\} from '\.\/photo-essai\.mjs'/.test(src)
+    // `unite` et `photo-essai` ne sont pas dans la liste — ils sont lancés à
+    // part par le même script — et ils ouvrent Chrome comme les autres.
+    for (const nom of [...noms, 'unite', 'photo-essai']) {
+      const src = BANC[`../${nom}.mjs`] ?? ''
+      vrai(src.length > 0, `banc-rendu/${nom}.mjs est lancé par le banc et n'existe pas`)
+      // ① Aucun chemin de Chrome écrit en dur. C'est le défaut lui-même.
+      egal([...src.matchAll(/executablePath:\s*'[^']*'/g)].map((m) => m[0]), [],
+        `${nom}.mjs cloue le chemin de Chrome : le banc redevient macOS-only sans que rien ne le dise`)
+      /* ② Tout lancement DÉCLARE son chemin. La garde du dessus se satisferait
+         d'un second `chromium.launch()` nu, ajouté plus tard — il prendrait
+         alors le Chromium de Playwright, que ce dépôt n'installe pas, et
+         l'échec ressemblerait à une panne de banc. */
+      egal((src.match(/chromium\.launch\(/g) ?? []).length,
+        (src.match(/executablePath/g) ?? []).length,
+        `${nom}.mjs : lancements de Chrome vs chemins déclarés`)
+      // ③ L'échappatoire existe, en propre ou empruntée.
+      vrai(/process\.env\.CHROME/.test(src) || empruntee(src),
+        `${nom}.mjs n'a plus d'échappatoire : poser CHROME= ne l'atteint plus`)
+      /* ④ ET LE DÉFAUT MACOS NE BOUGE PAS. `CHROME` est une échappatoire, pas un
+         déménagement : le poste de travail reste le cas nominal, et personne n'a
+         à poser une variable pour lancer le banc chez soi. */
+      vrai(src.includes(DEFAUT) || empruntee(src),
+        `${nom}.mjs a perdu le défaut macOS : le poste de travail cesse d'être le cas nominal`)
+    }
+  }),
+
+  doit('rien de ce que git cache ne monte chez l\'hébergeur', () => {
+    /* ⚠ `graft/` PARTAIT EN PRODUCTION : 5,4 Mo, dont 4,5 Mo de `graft/.cache/`
+       où dorment les prompts en texte brut. Il n'apparaissait NULLE PART — pas
+       dans `git status`, puisque `.gitignore` le cache ; pas dans une revue de
+       diff, puisqu'il n'est pas versionné — et rien ne l'aurait signalé avant le
+       jour du téléversement depuis un poste.
+
+       La règle est mécanique et elle vaut pour la classe entière : ce fichier-ci
+       REMPLACE `.gitignore` chez Vercel au lieu de s'y ajouter, donc tout ce que
+       git cache doit y être redit. C'est l'essai qui aurait attrapé `graft/`
+       avant ce lot, et qui attrapera le suivant. */
+    vrai(VERCELIGNORE.length > 0 && GITIGNORE.length > 0,
+      'un des deux fichiers d\'exclusion ne se lit plus : le témoin est muet')
+    const lignes = (f: string) => f.split('\n')
+      .map((l) => l.replace(/#.*$/, '').trim()).filter(Boolean)
+    // On compare des CHEMINS, pas des lignes : `/graft/`, `graft/` et
+    // `graft/.cache/` désignent le même endroit sous trois écritures.
+    const net = (l: string) => l.replace(/^\//, '').replace(/\/\*$/, '').replace(/\/$/, '')
+    const chezVercel = lignes(VERCELIGNORE).filter((l) => !l.startsWith('!')).map(net)
+    const oublies = lignes(GITIGNORE).filter((l) => !l.startsWith('!')).map(net)
+      .filter((g) => !chezVercel.some((v) => g === v || g.startsWith(`${v}/`)))
+    egal(oublies, [],
+      'chemins que git cache et que Vercel téléverserait quand même')
+
+    /* ⚠ ET LA CLAUSE DES SECRETS NE PEUT PAS DISPARAÎTRE D'UN REVERT DISTRAIT.
+       C'est la raison d'être du fichier : `.env` et `.env.local` n'étaient
+       protégés QUE par `.gitignore`, et le jour où l'on déploie depuis un poste
+       ils monteraient avec le reste — MISTRAL_API_KEY, POWERSYNC_TOKEN, le mot
+       de passe Postgres. Le témoin ci-dessus ne les verrait pas partir : il
+       compare les DEUX fichiers, et un secret retiré des deux passe. */
+    for (const clause of ['.env', '.env.*', '!.env.example'])
+      vrai(lignes(VERCELIGNORE).includes(clause),
+        `.vercelignore a perdu « ${clause} » : les secrets remonteraient au premier déploiement depuis un poste`)
+  }),
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     L'ANALYSE — le cinquième onglet, onze croisements derrière trois rangées.
+
+     ⚠ CES ESSAIS NE VÉRIFIENT PAS QUE L'ÉCRAN S'AFFICHE. La fumée le fait, et
+     elle l'a fait. Ils tiennent les REFUS — c'est-à-dire les seules choses qu'un
+     écran qui marche ne signale jamais. Un chrono moyenné par mois rend un
+     nombre parfaitement plausible ; une jauge ressemble trait pour trait à une
+     composition ; un verbe figé au singulier se relit trois fois sans se voir.
+     Aucun de ces trois défauts ne fait rougir quoi que ce soit : ils rendent un
+     écran, simplement le mauvais.
+
+     ⚠ ET LA TABLE DES CROISEMENTS S'IMPORTE, ELLE NE SE LIT PAS. Ses phrases
+     sont des FONCTIONS de la période : lire leur gabarit dans le fichier
+     prouverait qu'un mot est écrit quelque part, jamais qu'il sort. On les fait
+     donc RENDRE, pour les trois périodes qu'un pilote peut avoir.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  doit('l\'analyse — un chrono ne s\'agrège jamais sans son circuit', () => {
+    /* « 1'38 à Pau-Arnos » et « 1'38 à Nogaro » ne se comparent pas. Un chrono
+       agrégé par mois, par année ou par moto n'est pas une information
+       imprécise : c'est une information FAUSSE, et fausse en flattant — le
+       pilote y lit une progression qu'aucun tour ne porte, sur le seul chiffre
+       du produit auquel il tient vraiment.
+
+       La table est le seul endroit d'où un tel croisement peut naître, puisque
+       c'est elle qui porte la forme. C'est donc elle qu'on interroge, et pas
+       l'écran : un écran se corrige, une table mal remplie se recopie. */
+    vrai(CROISEMENTS.length > 0, 'la table des croisements est vide : le témoin est muet')
+    for (const c of CROISEMENTS) {
+      if (c.forme === 'chrono')
+        egal(c.axe, 'circuit',
+          `un chrono se lit « par ${c.mot} » : deux circuits différents tombent dans le même temps`)
+      if (c.axe !== 'circuit')
+        vrai(c.forme !== 'chrono',
+          `« ${NOM_DOMAINE[c.domaine]} · ${c.mot} » agrège des temps au tour hors de leur circuit`)
+      /* ⚠ ET LA TROISIÈME UNITÉ N'EXISTE PAS. Deux valeurs seulement — de
+         l'argent, un décompte — et le chrono n'est ni l'une ni l'autre : le
+         croisement du circuit compte des JOURNÉES chronométrées, jamais un
+         temps. Une unité « chrono » dans cette table serait la porte par
+         laquelle un temps entrerait dans une barre mesurée depuis zéro. */
+      vrai(c.unite === 'euros' || c.unite === 'decompte',
+        `« ${c.mot} » porte une troisième unité : un temps au tour peut y entrer`)
+      // L'argent ne vit que dans FINANCE. Un décompte de gestes passé au
+      // formateur d'euros afficherait « 0,03 € » pour trois interventions.
+      egal(c.unite === 'euros', c.domaine === 'finance',
+        `« ${NOM_DOMAINE[c.domaine]} · ${c.mot} » : l'unité ne suit plus son domaine`)
+    }
+    egal(CROISEMENTS.filter((c) => c.forme === 'chrono').length, 1,
+      'le chrono a gagné ou perdu un croisement : le seul qui tienne est le circuit')
+    // Et la couche de lecture ne sait pas écrire un temps. Rien n'y appelle le
+    // formateur du chrono : ce qui en porte un le rend à `Courbe`, tel quel.
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    vrai(an.length > 0, 'src/db/analyse.ts ne se lit plus : le témoin est muet')
+    vrai(!/formaterChrono/.test(an),
+      'la lecture de l\'analyse écrit un temps au tour : elle en a donc agrégé un')
+  }),
+
+  doit('l\'analyse — la suite ne reçoit jamais un chrono, et les deux planchers restent opposés', () => {
+    /* LES DEUX TRACÉS VIVENT DANS LE MÊME FICHIER POUR QU'ON LISE LES DEUX
+       RAISONS AVANT D'Y TOUCHER, et leurs conventions sont EXACTEMENT inverses :
+         · `Courbe` porte des CHRONOS — axe INVERSÉ, plancher au meilleur temps
+           MESURÉ. Zéro seconde au tour n'existe pas, et caler sur zéro écraserait
+           quinze roulages dans trois pixels de haut.
+         · `Suite` porte de l'ARGENT et des DÉCOMPTES — axe NORMAL, plancher à
+           ZÉRO. Faire partir la suite de son minimum ferait d'un mois à 180 € et
+           d'un mois à 200 € deux mois que tout sépare.
+
+       Deux conventions opposées à trente lignes l'une de l'autre appellent
+       l'harmonisation, et c'est exactement le geste qu'il ne faut PAS faire : la
+       première courbe MONTAIT à mesure que le pilote progressait, juste au-dessus
+       d'une phrase disant l'inverse. Ce défaut-là a déjà été payé une fois. */
+    const brut = fichierDe(ECRANS, '/Courbe.tsx')
+    vrai(brut.length > 0, 'src/ecrans/Courbe.tsx a disparu : le témoin est muet')
+    const coupe = brut.indexOf('export function Suite')
+    vrai(coupe > 0,
+      'la suite a quitté Courbe.tsx : elle a donc un fichier à elle, donc un <svg> de plus')
+    const courbe = sansCommentaires(brut.slice(0, coupe))
+    const suite = sansCommentaires(brut.slice(coupe))
+
+    const yCourbe = courbe.match(/const y = [^\n]*/)
+    const ySuite = suite.match(/const y = [^\n]*/)
+    vrai(!!yCourbe && !!ySuite, 'un des deux tracés n\'a plus d\'axe vertical : le témoin est muet')
+    vrai(yCourbe![0] !== ySuite![0],
+      'les deux tracés ont pris le même axe : l\'un des deux ment sur sa propre légende')
+    // Le plancher de la courbe est le MINIMUM MESURÉ : elle part de ce que le
+    // pilote a réellement tourné.
+    vrai(/\(v - min\)/.test(yCourbe![0]),
+      'la courbe du chrono ne part plus du meilleur temps mesuré : quinze roulages tiennent dans trois pixels')
+    // Le plancher de la suite est ZÉRO : aucune soustraction, aucun minimum.
+    vrai(/\(v \/ sommet\)/.test(ySuite![0]),
+      'la suite ne part plus de zéro : deux mois presque égaux deviennent deux mois que tout sépare')
+    vrai(!/Math\.min|\bmin\b/.test(suite),
+      'la suite s\'est calée sur son minimum : elle exagère chaque écart sous une légende qui dit encore zéro')
+    // Et son sommet est le PLUS GROS DE CE QU'ELLE MONTRE, comme aux barres :
+    // une suite mesurée contre un plafond est un compteur à rebours.
+    vrai(/Math\.max\(\.\.\.lignes\.map/.test(suite),
+      'l\'échelle de la suite ne vient plus de ce qu\'elle montre : le tracé est devenu une jauge')
+
+    /* ⚠ ET LA SUITE NE FORMATE RIEN, DONC NE PEUT RIEN FORMATER DE TRAVERS. Elle
+       reçoit le texte déjà écrit par la couche qui connaît l'unité. Un appel au
+       formateur du chrono ici serait la preuve qu'un temps y est entré — et un
+       temps dans la suite MONTERAIT à mesure que le pilote progresse, sous une
+       légende disant l'inverse. */
+    vrai(!/formaterChrono/.test(suite),
+      'la suite écrit un temps au tour : le tracé monte quand le pilote progresse')
+    vrai(!/record/.test(suite),
+      'la suite allume le violet du record : il n\'existe aucun record d\'argent ni de décompte')
+    vrai(!/--alerte|--plus-lent/.test(suite),
+      'la suite porte le rouge de l\'alerte ou le jaune du dépassement : un mois y devient une faute')
+
+    /* ⚠ DES SEGMENTS DROITS, ET RIEN D'AUTRE. Relier n'invente qu'un intervalle
+       qu'on n'a pas mesuré ; LISSER invente des valeurs entre les pas ; une
+       DROITE DE TENDANCE invente au-delà du dernier. La levée du 1er septembre
+       porte sur RELIER, jamais sur PROLONGER — et une `<polyline>` ne sait faire
+       que des segments droits, là où un `<path>` ouvre les courbes de Bézier. */
+    vrai(/<polyline/.test(suite),
+      'la suite ne relie plus ses pas par des segments droits')
+    vrai(!/<path\b|curve|smooth|bezier|catmull/i.test(suite),
+      'la suite lisse son tracé : elle passe par des valeurs que personne n\'a mesurées')
+    for (const mot of ['tendance', 'projection', 'à ce rythme', 'prévision', 'moyenne'])
+      vrai(!new RegExp(mot, 'i').test(suite),
+        `la suite porte « ${mot} » : elle prolonge au-delà de ce que le pilote a vécu`)
+
+    /* ⚠ ET AUCUN ÉCRAN NE LUI PASSE UN CHRONO. C'est l'essai NÉGATIF, sur tous
+       les `.tsx` du produit : la garde ne vaut que si personne, nulle part, ne
+       monte la suite sur des temps au tour. */
+    let montages = 0
+    for (const [chemin, source] of Object.entries(ECRANS)) {
+      const nom = chemin.replace(/^.*\/src\//, 'src/')
+      /* La balise OUVRANTE, et elle seule — jusqu'au premier `>` qui ne ferme pas
+         une flèche. Une lecture qui attendrait le `/>` ne trouverait rien du tout
+         le jour où la suite prend des enfants : elle passerait au vert en ne
+         regardant plus rien, ce qui est la façon la plus discrète de perdre un
+         essai. */
+      for (const m of sansCommentaires(source).matchAll(/<Suite\b(?:=>|[^>])*>/g)) {
+        montages++
+        vrai(!/hrono|ourbe|\bms\b/.test(m[0]),
+          `${nom} monte la suite sur un chrono : « 1'38 à Pau-Arnos » et « 1'38 à Nogaro » s'y comparent`)
+      }
+    }
+    vrai(montages >= 1,
+      'plus personne ne monte la suite : la garde du chrono ne regarde plus rien')
+    // Et le chrono garde SA courbe, une par circuit — jamais un tracé de tous.
+    const ecran = sansCommentaires(fichierDe(ECRANS, '/Analyse.tsx'))
+    vrai(ecran.length > 0, 'l\'écran d\'analyse a disparu : le témoin est muet')
+    vrai(/chronos\.map\([^\n]*<Courbe/.test(ecran),
+      'les chronos ne passent plus par la courbe : ils sont partis dans un autre tracé')
+  }),
+
+  doit('l\'analyse — les barres n\'acceptent aucune échelle venue du dehors', () => {
+    /* CE N'EST PAS UNE JAUGE, ET LA DIFFÉRENCE TIENT DANS UNE SEULE LIGNE :
+       l'échelle est LE PLUS GROS DE CE QU'ON MONTRE, calculé DEDANS. Une barre
+       mesurée contre un maximum reçu du dehors est un compteur à rebours — elle
+       dit « il te reste » — et « dépasser son budget n'est pas une faute ».
+
+       ⚠ LA GARDE PORTE SUR LE TYPE, ET C'EST LÀ QU'ELLE MORD. Rien dans un champ
+       nommé `sommet` ne distinguerait « le plus gros de l'autre moto » d'un
+       plafond à ne pas dépasser, et le second EST la jauge. Le sommet se calcule
+       dedans, ou il n'existe pas. */
+    const brut = fichierDe(ECRANS, '/Barres.tsx')
+    vrai(brut.length > 0, 'src/ecrans/Barres.tsx a disparu : le témoin est muet')
+    const source = sansCommentaires(brut)
+
+    const props = source.match(/export function Barres\(\{([^}]*)\}/)
+    vrai(!!props, 'la signature des barres ne se lit plus : le témoin est muet')
+    egal(props![1].split(',').map((s) => s.trim()).filter(Boolean),
+      ['titre', 'barres', 'description'],
+      'les barres ont pris un quatrième réglage : c\'est par là qu\'un plafond entre')
+
+    const type = brut.slice(brut.indexOf('export type Barre'), brut.indexOf('export function Barres'))
+    vrai(type.length > 0, 'le type d\'une barre ne se lit plus : le témoin est muet')
+    /* ⚠ `cle` A ÉTÉ AJOUTÉ APRÈS COUP, ET CE TÉMOIN A FAIT SON TRAVAIL en
+       refusant l'ajout jusqu'à ce qu'il soit décidé. Il est ici parce que `nom`
+       N'EST PAS UNIQUE — `LigneAnalyse` le dit noir sur blanc — et que deux
+       motos du même modèle produisaient deux barres réconciliées sur la même
+       clé React. Il ne peut loger ni sommet ni cible : c'est une chaîne
+       d'identité, jamais un nombre. Tout champ NUMÉRIQUE ajouté ici doit être
+       regardé de très près, car c'est par là qu'un plafond entrerait. */
+    egal([...type.matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]),
+      ['nom', 'centimes', 'libelle', 'detail', 'incertain', 'cle'],
+      'les champs d\'une barre ont bougé : vérifier qu\'aucun ne peut loger une cible')
+
+    const sommet = source.match(/const sommet = [^\n]*/)
+    vrai(!!sommet, 'les barres n\'ont plus d\'échelle : le témoin est muet')
+    vrai(/Math\.max\(\.\.\.barres\.map/.test(sommet![0]),
+      'l\'échelle des barres ne vient plus de ce qu\'elles montrent : le tracé est devenu une jauge')
+
+    /* ⚠ ET LA VALEUR NE SE DEVINE PAS. Ce fichier est né du budget, où tout est
+       en euros ; l'analyse lui envoie aussi des décomptes, et trois gestes
+       d'atelier s'y affichaient « 0,03 € », avec l'aplomb d'un montant. Un tracé
+       ne peut pas savoir si `3` est un décompte ou trois centimes : il devine, et
+       il devine faux une fois sur deux. */
+    vrai(/b\.libelle \?\? formaterEuros\(b\.centimes\)/.test(source),
+      'les barres reformatent la valeur : trois gestes d\'atelier s\'affichent « 0,03 € »')
+    const ecran = sansCommentaires(fichierDe(ECRANS, '/Analyse.tsx'))
+    vrai(/\{ \.\.\.l, centimes: l\.valeur \}/.test(ecran),
+      'l\'écran d\'analyse recompose la barre champ par champ : le libellé déjà écrit se perd en route')
+
+    /* AUCUN MOT DE PLAFOND DANS CE QUI SE REND, ET AUCUN CHAMP OÙ EN LOGER UN
+       DANS CE QUI ARRIVE. Le type est la seule garantie durable : un mot se
+       retire, un champ se remplit. */
+    for (const mot of ['plafond', 'cible', 'objectif', 'maximum', 'quota', 'reste'])
+      vrai(!new RegExp(`\\b${mot}`, 'i').test(source),
+        `les barres portent « ${mot} » : la composition est devenue un compte à rebours`)
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    const ligne = an.slice(an.indexOf('export type LigneAnalyse'), an.indexOf('export type Croisement'))
+    vrai(ligne.length > 0, 'le type d\'une ligne d\'analyse ne se lit plus : le témoin est muet')
+    /* ⚠ `detail` A ÉTÉ AJOUTÉ LE 1er SEPTEMBRE 2026, ET CETTE LISTE A ROUGI —
+       c'est son travail. Il porte la composition d'un mois (« engagement ·
+       pneus »), la seconde moitié du récit 19.2 que le budget rendait avant que
+       le tracé parte à l'analyse. Il est admis parce qu'il ne peut loger aucun
+       des trois interdits : la boucle de mots juste au-dessus relit TOUTE la
+       source de l'écran, plafond compris, et `argentParMois` est le seul à le
+       remplir — avec des noms de postes, jamais un nombre. */
+    egal([...ligne.matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]),
+      ['cle', 'nom', 'valeur', 'libelle', 'n', 'detail', 'incertain'],
+      'une ligne d\'analyse a gagné un champ : vérifier qu\'aucun ne loge un plafond, un rang ni un écart')
+  }),
+
+  doit('l\'analyse — sous trois points une suite se rend en barres, et c\'est la table qui le décide', () => {
+    /* DEUX POINTS NE FONT PAS UNE LIGNE : ils font TOUJOURS une droite, donc
+       toujours une progression ou toujours une chute, et le pilote y lit un
+       mouvement qui n'existe pas. La différence avec la courbe est ce qui se
+       passe ensuite — la courbe n'affiche RIEN sous le seuil, parce qu'un chrono
+       isolé ne dit rien ; deux mois de dépenses, eux, disent quelque chose de
+       parfaitement vrai, simplement pas un mouvement. Ils se rendent donc en
+       BARRES, qui n'affirment aucun sens de lecture entre elles. */
+    egal(formeRendue('suite', POINTS_MINIMUM), 'suite',
+      'une suite refuse de se tracer au seuil : le pilote perd un tracé qu\'il a rempli')
+    egal(formeRendue('suite', POINTS_MINIMUM - 1), 'composition',
+      'deux pas se relient en ligne : le pilote y lit une progression que rien ne porte')
+    egal(formeRendue('suite', 0), 'composition', 'une suite vide se trace encore')
+    egal(formeRendue('composition', 1), 'composition', 'une composition a changé de forme toute seule')
+    // Le chrono ne bascule JAMAIS : `courbeDuCircuit` tient déjà son propre
+    // seuil, et un temps au tour n'a rien à faire dans une barre mesurée depuis
+    // zéro.
+    for (const n of [0, 1, 2, 3, 40])
+      egal(formeRendue('chrono', n), 'chrono',
+        `un chrono à ${n} points se rend en barres : un temps s'y mesurerait depuis zéro`)
+    // La décision est IDEMPOTENTE, pour qu'un écran qui se méfie ne puisse pas se
+    // tromper en la reposant sur ce qu'il rend vraiment.
+    egal(formeRendue(formeRendue('suite', 2), 2), 'composition',
+      'reposer la décision sur ce qui est rendu change la forme : l\'écran et la table divergent')
+
+    /* ⚠ ET AUCUN ÉCRAN NE REDÉCLARE LE SEUIL. L'écran rend à `formeRendue` le
+       compte final, il n'écrit pas sa propre règle : deux seuils à deux endroits
+       sont deux seuils qui divergent, et l'écran est celui des deux qu'on relit
+       le moins. */
+    const ecran = sansCommentaires(fichierDe(ECRANS, '/Analyse.tsx'))
+    vrai(ecran.length > 0, 'l\'écran d\'analyse a disparu : le témoin est muet')
+    vrai(/formeRendue\(/.test(ecran), 'l\'écran d\'analyse a cessé de demander sa forme à la table')
+    vrai(!/POINTS_MINIMUM/.test(ecran),
+      'l\'écran d\'analyse tient un seuil à lui : il divergera de celui de la table')
+    /* ET IL N'OFFRE PAS LA FORME AU DOIGT. Une troisième molette « barres ou
+       courbe » laisserait relier huit postes qui n'ont aucun ordre entre eux. */
+    for (const mot of ['barres ou', 'type de tracé', 'changer de forme'])
+      vrai(!new RegExp(mot, 'i').test(ecran),
+        `l'écran d'analyse offre « ${mot} » au doigt : huit postes sans ordre peuvent être reliés`)
+  }),
+
+  doit('l\'analyse — les mois se comblent entre deux mois vécus, jamais au-delà', () => {
+    /* ⚠ L'AXE DES ABSCISSES EST LE TEMPS, ET C'EST CE QUI RETOURNE LA RÈGLE DES
+       LISTES. `grouperParMois` refuse les mois vides, et il a raison : douze
+       lignes dont neuf à zéro font une grille de cases à remplir. Sur une SUITE,
+       avril, juin et septembre tracés côte à côte à intervalle égal font un
+       dessin où mai, juillet et août n'ont jamais existé — et la pente entre deux
+       pas ment sur la durée qui les sépare.
+
+       Un zéro inséré ENTRE deux mois vécus est une MESURE. Un zéro ajouté APRÈS
+       le dernier serait une PRÉDICTION, et le produit n'en fait aucune. */
+    const l = (cle: string, valeur: number, n = 1): LigneAnalyse =>
+      ({ cle, nom: cle, valeur, libelle: `${valeur}`, n })
+    const ZERO = '0,00 €'
+
+    const comble = comblerLesMois([l('2026-07', 300), l('2026-04', 100)], ZERO)
+    egal(comble.map((x) => x.cle), ['2026-04', '2026-05', '2026-06', '2026-07'],
+      'les mois sans dépense ont disparu de la suite : la pente ment sur le temps qui sépare deux pas')
+    for (const x of comble.slice(1, 3)) {
+      egal(x.valeur, 0, 'un mois comblé porte une valeur que personne n\'a saisie')
+      egal(x.n, 0, 'un mois comblé prétend porter des faits')
+      egal(x.libelle, ZERO, 'un mois comblé n\'écrit pas sa valeur dans l\'unité du tracé')
+      egal(x.nom, nomMois(x.cle), 'un mois comblé porte sa clé au lieu de son nom')
+      vrai(!x.incertain, 'un mois comblé se marque incertain : c\'est une mesure, pas un trou')
+    }
+    // Le passage d'année se fait par le CALENDRIER, jamais par une addition sur
+    // le douzième mois.
+    egal(comblerLesMois([l('2026-11', 10), l('2027-02', 20)], ZERO).map((x) => x.cle),
+      ['2026-11', '2026-12', '2027-01', '2027-02'],
+      'le comblage saute le passage d\'année : décembre et janvier disparaissent du tracé')
+    // JAMAIS AVANT, JAMAIS APRÈS : rien ne se comble jusqu'à décembre, parce que
+    // ce serait annoncer qu'il ne se passera rien en novembre.
+    egal(comblerLesMois([l('2026-05', 10), l('2026-06', 20)], ZERO).map((x) => x.cle),
+      ['2026-05', '2026-06'],
+      'le comblage déborde de ce qui a été vécu : le tracé prédit les mois à venir')
+    egal(comblerLesMois([l('2026-05', 10)], ZERO).map((x) => x.cle), ['2026-05'],
+      'un mois seul se comble tout seul : un tracé naît d\'un seul point')
+
+    /* ⚠ LA LIGNE « SANS MOIS » SORT ICI, ET ELLE N'EST PAS PERDUE. Une dépense
+       sans date n'a aucune place sur un axe du temps — la poser au bout
+       inventerait un treizième mois — et c'est la phrase de complétude qui
+       l'énonce, lue sur les lignes BRUTES. */
+    const orpheline: LigneAnalyse =
+      { cle: '', nom: 'Sans mois', valeur: 5000, libelle: '50,00 €', n: 2, incertain: true }
+    egal(comblerLesMois([l('2026-04', 100), l('2026-06', 100), orpheline], ZERO).map((x) => x.cle),
+      ['2026-04', '2026-05', '2026-06'],
+      'une dépense sans date a été posée sur l\'axe du temps : le tracé invente un treizième mois')
+
+    /* ⚠ ET C'EST POUR ÇA QUE LA FORME SE DÉCIDE SUR LES PAS QUI IRONT VRAIMENT
+       SUR L'AXE. Trois lignes brutes — deux mois et une dépense sans date — n'en
+       laissent que deux : compter les brutes ferait tracer exactement la droite
+       que le seuil existe pour refuser. */
+    const places = comblerLesMois([l('2026-04', 1), orpheline], ZERO)
+    egal(formeRendue('suite', places.length), 'composition',
+      'la forme se décide sur les lignes brutes : un mois plus une orpheline se relient en ligne')
+
+    /* L'ORDRE DES DÉCISIONS VIT DANS LA LECTURE, ET IL EST PIÉGEUX : la
+       complétude se lit sur les lignes BRUTES, et le comblage retire justement
+       cette ligne-là. Composé dans l'autre sens, il ne resterait rien à énoncer,
+       et le trou disparaîtrait en silence. */
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    const lecture = an.slice(an.indexOf('export const lire ='))
+    vrai(lecture.indexOf('cequiManque') > 0
+      && lecture.indexOf('cequiManque') < lecture.indexOf('comblerLesMois'),
+    'ce qui manque se compte après le comblage : le trou disparaît en silence, et c\'est la seule façon de le rater')
+  }),
+
+  doit('l\'analyse — ce qui manque se dit, et jamais « 0 »', () => {
+    /* FR-55 appliqué tel quel : « le bilan ÉNONCE SA COMPLÉTUDE ». Huit barres
+       qui totalisent 1 840 € sur une saison qui en a coûté 2 180 se lisent comme
+       un total — et un tracé qui ne dit pas ce qu'il laisse dehors ment sans
+       qu'un seul de ses chiffres soit faux.
+
+       ⚠ ET JAMAIS « 0 SANS POSTE ». Un zéro énoncé est un compteur de
+       complétude, c'est-à-dire une case à remplir : exactement ce que ce produit
+       refuse d'installer dans un carnet qu'on tient par plaisir. */
+    const c = croisementDe('finance', 'poste')
+    vrai(!!c, 'le croisement de l\'argent par poste a disparu : le témoin est muet')
+    const sans = (n: number): LigneAnalyse =>
+      ({ cle: '', nom: 'Sans poste', valeur: 0, libelle: '', n, incertain: true })
+    const pleine: LigneAnalyse =
+      { cle: 'pneus', nom: 'Pneus', valeur: 12000, libelle: '120,00 €', n: 3 }
+
+    egal(cequiManque(c!, [pleine]), null,
+      'un tracé complet annonce un trou : le pilote cherche une dépense qu\'il a bien saisie')
+    egal(cequiManque(c!, [pleine, sans(0)]), null,
+      'le tracé énonce « 0 sans poste » : un zéro annoncé est une case à remplir')
+    egal(cequiManque(c!, [pleine, sans(1)]), '1 dépense sans poste.',
+      'la phrase de complétude ne s\'accorde pas au singulier')
+    egal(cequiManque(c!, [pleine, sans(2)]), '2 dépenses sans poste.',
+      'la phrase de complétude ne s\'accorde pas au pluriel')
+    // Le grain vient de la table, jamais de l'écran : un décompte de gestes
+    // d'atelier ne s'annonce pas dans le mot de l'argent.
+    const g = croisementDe('maintenance', 'moto')
+    vrai(!!g, 'le croisement des gestes par moto a disparu : le témoin est muet')
+    vrai(/geste/.test(cequiManque(g!, [{ ...sans(2), nom: 'Sans moto' }]) ?? ''),
+      'ce qui manque à l\'atelier s\'annonce en dépenses : le pilote cherche un montant qui n\'existe pas')
+  }),
+
+  doit('l\'analyse — une saison ne se classe pas, et l\'argent d\'une moto ne se compte qu\'une fois', () => {
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    vrai(an.length > 0, 'src/db/analyse.ts ne se lit plus : le témoin est muet')
+    const corps = (nom: string) => {
+      const i = an.indexOf(`export const ${nom} =`)
+      vrai(i > 0, `${nom} a disparu de l'analyse : le témoin est muet`)
+      const j = an.indexOf('\nexport ', i + 10)
+      return an.slice(i, j < 0 ? an.length : j)
+    }
+
+    /* ⚠ LES SAISONS SE RANGENT DANS L'ORDRE DU CALENDRIER, JAMAIS PAR MONTANT.
+       Trier par montant ferait « 2025 en tête », c'est-à-dire un verdict sur une
+       année de la vie du pilote — une saison n'est ni chère ni bon marché. C'est
+       le refus de `grouperParMois` appliqué à l'échelle au-dessus. */
+    const annee = corps('argentParAnnee')
+    vrai(/ORDER BY saison_annee ASC/.test(annee),
+      'les saisons sortent de la base dans un ordre libre : le calendrier n\'est plus garanti')
+    vrai(!/parTaille/.test(annee),
+      'les saisons sont triées par montant : la plus chère prend la tête, donc devient un verdict')
+    const tri = annee.match(/\.sort\(\([\s\S]{0,160}/)
+    vrai(!!tri && !/valeur|total|centimes/.test(tri![0]),
+      'le rang des saisons se calcule sur un montant : c\'est un classement des années du pilote')
+
+    /* ⚠ LA CLAUSE `depense_id IS NULL` EST OBLIGATOIRE PARTOUT OÙ L'ARGENT DE
+       L'ATELIER EST ADDITIONNÉ. Il entre par deux portes — une dépense de cible
+       `machine`, ou le montant porté par l'intervention quand aucune dépense n'a
+       été saisie (FR-43). Les additionner sans condition compterait DEUX FOIS une
+       pièce dont on a fait les deux, et la moto la mieux tenue serait la plus
+       chère, deux fois. */
+    for (const { fichier, sql } of gabaritsSql()) {
+      if (!fichier.endsWith('db/analyse.ts')) continue
+      if (!/FROM intervention/.test(sql) || !/cout_centimes/.test(sql)) continue
+      vrai(/depense_id IS NULL/.test(sql),
+        'une lecture de l\'analyse additionne l\'argent de l\'atelier sans écarter ce qui est déjà compté : la moto la mieux tenue devient la plus chère, deux fois')
+      vrai(/etat = 'faite'/.test(sql),
+        'une lecture de l\'analyse compte l\'argent d\'un geste que personne n\'a fait')
+    }
+    vrai(/depense_id IS NULL/.test(corps('argentParMoto')),
+      'l\'argent par moto a perdu sa clause : une pièce saisie des deux côtés se compte deux fois')
+    vrai(/depense_id IS NULL/.test(corps('argentNonCompte')),
+      'la phrase de l\'argent non compté annonce comme manquant un argent déjà tracé : elle exagère son trou, et on cesse de la lire')
+
+    /* ⚠ ET RIEN N'ARRIVE PAR LES ROULAGES (AD-17). Une machine coûte ce qui la
+       DÉSIGNE : l'engagement d'une journée est une dépense du pilote, et le
+       ranger sous la moto qui a roulé ce jour-là serait une jointure implicite. */
+    vrai(!/roulage_id/.test(corps('argentParMoto')),
+      'l\'argent par moto ramasse l\'engagement des journées : une machine coûte ce qui la désigne, pas ce qui a roulé')
+    // Et l'axe MOTO ne répète pas la phrase de l'argent non compté : il
+    // additionne déjà l'atelier, et l'annoncer manquant serait faux.
+    const sousCompte = an.match(/const SOUS_COMPTE[^\n]*/)
+    vrai(!!sousCompte && !/'moto'/.test(sousCompte![0]),
+      'l\'axe moto annonce comme absent un argent qui est déjà dans ses barres')
+  }),
+
+  doit('l\'analyse — un seul compte de journées, et c\'est celui du bilan de saison', () => {
+    /* ⚠ LE BILAN DE SAISON ANNONCE « 11 ROULAGES » À UN ÉCRAN DE DISTANCE. Une
+       analyse qui en annoncerait 12, parce qu'elle a laissé passer une journée
+       annoncée pour septembre, ferait douter des deux — et c'est le chiffre, pas
+       l'écran, que le pilote cesserait de croire.
+
+       La seule manière de ne pas rejouer « deux comptes qui divergent de 1 à
+       trois centimètres d'écart » est qu'il n'existe qu'UN SEUL compte. */
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    vrai(an.length > 0, 'src/db/analyse.ts ne se lit plus : le témoin est muet')
+    const journees = gabaritsSql()
+      .filter((g) => g.fichier.endsWith('db/analyse.ts') && /\bFROM roulage\b/.test(g.sql))
+    egal(journees.length, 1,
+      'l\'analyse va chercher les journées à deux endroits : les deux comptes divergeront, et le bilan de saison avec')
+    vrai(/A_EU_LIEU\(/.test(journees[0].sql),
+      'l\'analyse compte des journées annoncées pour plus tard : elle en annonce une de plus que le bilan de saison')
+    // Les trois croisements qui comptent des journées partent tous de cette
+    // liste-là, jamais d'une requête chacun.
+    for (const nom of ['argentParJournee', 'journeesParMois', 'journeesParMoto']) {
+      const i = an.indexOf(`export const ${nom} =`)
+      vrai(i > 0, `${nom} a disparu de l'analyse : le témoin est muet`)
+      const j = an.indexOf('\nexport ', i + 10)
+      vrai(/journeesVecues\(/.test(an.slice(i, j < 0 ? an.length : j)),
+        `${nom} s'est écrit son propre compte de journées : il divergera du bilan de saison`)
+    }
+    /* ⚠ ET LE CINQUIÈME ONGLET SE GARDE AVEC LES LECTURES DE L'ANALYSE, pas avec
+       des requêtes écrites pour l'occasion. Un onglet gardé par un compte et
+       rempli par un autre finit par s'ouvrir sur un écran vide — le défaut exact
+       « lu par un écran, écrit par personne ». */
+    const app = sansCommentaires(fichierDe(ECRANS, '/App.tsx'))
+    const debut = app.indexOf('const aDeQuoiAnalyser')
+    vrai(debut > 0, 'le test du cinquième onglet a disparu : le témoin est muet')
+    const porte = app.slice(debut, debut + 500)
+    vrai(/journeesVecues\(/.test(porte),
+      'l\'onglet d\'analyse compte les journées à sa façon : il finira par s\'ouvrir sur un écran vide')
+    vrai(!/db\.getAll|db\.get\(/.test(porte),
+      'l\'onglet d\'analyse s\'est écrit ses propres requêtes : le garde et le contenu peuvent diverger')
+  }),
+
+  doit('l\'analyse — rien n\'y touche les chutes, et aucun mot de la table ne juge', () => {
+    /* ⚠ C'EST UNE CLAUSE DE SÉCURITÉ, PAS DE PUDEUR. « 7 roulages sans chute »
+       fabrique une série à ne pas casser, donc une pression à ne pas déclarer la
+       huitième — et une chute non déclarée est une chute non réparée. Aucune
+       lecture de l'analyse ne touche `chute` ni `crash_statut`, et l'écran non
+       plus. */
+    for (const fin of ['db/analyse.ts', 'ecrans/Analyse.tsx']) {
+      const source = sansCommentaires(fichierDe(SOURCES, fin))
+      vrai(source.length > 0, `src/${fin} ne se lit plus : le témoin est muet`)
+      vrai(!/chute|crash_statut/i.test(source),
+        `src/${fin} lit les chutes : une série « sans chute » fait taire la déclaration suivante`)
+    }
+
+    /* ⚠ ET AUCUN MOT DE LA TABLE NE JUGE — mots de puce, phrases de lecture,
+       notes. On les fait RENDRE pour zéro, une et plusieurs saisons : lire leur
+       gabarit dans le fichier prouverait qu'un mot est écrit, jamais qu'il sort.
+
+       ⚠ LES MOTIFS N'ONT AUCUNE FRONTIÈRE `\b` DEVANT UNE LETTRE ACCENTUÉE :
+       `\w` est ASCII en JavaScript, donc `\bécart` ne peut JAMAIS correspondre —
+       c'est une garde qu'on croit tenue et qui ne tient pas, et ce dépôt l'a déjà
+       payée une fois sur `.tracé-argent`. */
+    const dits: string[] = []
+    for (const c of CROISEMENTS) {
+      dits.push(c.mot, c.note)
+      for (const p of [TOUTES_ANNEES, [2026], [2025, 2026]]) dits.push(c.phrase(p))
+    }
+    const tout = dits.join(' § ')
+    for (const mot of ['tendance', 'moyenne', 'projection', 'prévision', 'à ce rythme',
+      '\\bobjectif', '\\brecord', 'classement', 'palier', 'pourcentage', '%',
+      'écart', '\\bsérie\\b', '\\breste\\b', 'il te reste', 'devrait'])
+      vrai(!new RegExp(mot, 'i').test(tout),
+        `l'analyse dit « ${mot.replace(/\\b/g, '')} » : le tracé se met à juger une saison du pilote`)
+
+    /* UN MOT PAR PUCE, ET LA PRÉPOSITION VIT DANS LA PHRASE. « par poste » et
+       « selon le mois » sur cinq puces débordent la ligne à 375 px, et une rangée
+       qui passe à la ligne cesse d'être une rangée. */
+    for (const c of CROISEMENTS) {
+      vrai(!/\s/.test(c.mot),
+        `la puce « ${c.mot} » porte plus d'un mot : la rangée passe à la ligne à 375 px`)
+      vrai(c.mot.length <= 10, `la puce « ${c.mot} » est trop longue pour tenir sa rangée`)
+      vrai(c.note.trim().length > 0,
+        `« ${c.mot} » ne dit pas ce qu'il montre : un lecteur d'écran n'entend qu'une suite de nombres`)
+      for (const p of [TOUTES_ANNEES, [2026]])
+        vrai(c.phrase(p).trim().endsWith('.'),
+          `la lecture de « ${c.mot} » ne se termine pas : ce n'est plus une phrase`)
+    }
+    // Chaque croisement est UNIQUE, et la table est la seule source de son mot.
+    const couples = CROISEMENTS.map((c) => `${c.domaine}·${c.axe}`)
+    egal(couples.length, new Set(couples).size,
+      'deux croisements portent le même couple : une puce en cache une autre, définitivement')
+    for (const c of CROISEMENTS)
+      vrai(croisementDe(c.domaine, c.axe) === c,
+        `« ${c.mot} » ne se retrouve plus par son couple : la puce ouvre sur un autre tracé`)
+  }),
+
+  doit('l\'analyse — le verbe s\'accorde avec le sujet, pour zéro, une et plusieurs saisons', () => {
+    /* ⚠ « CE QUE TOUTES TES SAISONS A COÛTÉ » — VU À L'ÉCRAN, INVISIBLE À LA
+       RELECTURE. La phrase est correcte au singulier, et c'est le singulier qu'on
+       lit en écrivant le code. Le sujet, lui, VARIE : singulier pour une année
+       (« ta saison 2026 »), pluriel pour zéro (« toutes tes saisons ») comme pour
+       plusieurs. Le verbe était figé à côté d'un sujet qui bouge, et il l'était
+       dans les quatre phrases d'argent à la fois.
+
+       ⚠ ET CET ESSAI ÉPROUVE LES PHRASES RENDUES, PAS LA PRÉSENCE D'UNE
+       FONCTION. Chercher `saisonAccorde` dans le fichier prouverait qu'on l'a
+       écrite ; seul le texte rendu prouve qu'elle est APPELÉE, et c'est le texte
+       rendu que le pilote lit au-dessus de son tracé. La garde se règle donc sur
+       les périodes qu'un pilote peut avoir : aucune saison choisie, une seule,
+       plusieurs. */
+    const SUJET = /\b(toutes tes saisons|tes saisons(?:\s\d{4},?)+|ta saison\s\d{4})\s+(\S+)/g
+    const SINGULIERS = ['a', 'coûte', 'porte', 'fait', 'dit', 'vaut']
+    const PLURIELS = ['ont', 'coûtent', 'portent', 'font', 'disent', 'valent']
+    let accords = 0
+    for (const c of CROISEMENTS)
+      for (const p of [TOUTES_ANNEES, [2026], [2025, 2026], [2024, 2025, 2026]]) {
+        const phrase = c.phrase(p)
+        for (const m of phrase.matchAll(SUJET)) {
+          accords++
+          const pluriel = !m[1].startsWith('ta saison')
+          vrai(!(pluriel ? SINGULIERS : PLURIELS).includes(m[2]),
+            `« ${phrase} » : le titre est faux en français, au-dessus du tracé du pilote`)
+        }
+      }
+    /* ⚠ ET LE TÉMOIN N'EST PAS MUET. Une table qui cesserait de nommer la saison
+       ne déclencherait plus aucune vérification, et la garde passerait au vert
+       sur des phrases vidées de leur sujet — c'est la façon la plus discrète de
+       perdre un essai. Les quatre lectures d'argent la nomment, sur quatre
+       périodes. */
+    vrai(accords >= 12,
+      `seules ${accords} phrases nomment une saison : la garde de l'accord ne regarde plus rien`)
+    // Et le sujet lui-même se dit juste : une seule saison n'est pas « toutes ».
+    const argent = croisementDe('finance', 'poste')
+    vrai(!!argent, 'le croisement de l\'argent par poste a disparu : le témoin est muet')
+    vrai(/toutes tes saisons ont/.test(argent!.phrase(TOUTES_ANNEES)),
+      'sans choix de saison, le titre du tracé n\'est pas au pluriel')
+    vrai(/ta saison 2026 a/.test(argent!.phrase([2026])),
+      'sur une seule saison, le titre du tracé n\'est pas au singulier')
+    vrai(/tes saisons 2025, 2026 ont/.test(argent!.phrase([2025, 2026])),
+      'sur plusieurs saisons, le titre du tracé n\'est pas au pluriel')
+  }),
+
+  doit('l\'analyse — cinq onglets, huit caractères, et rien ne se montre à vide', () => {
+    /* ⚠ LA LARGEUR N'EST PAS UNE PRÉFÉRENCE, C'EST UNE MESURE. `.onglet` est
+       `flex: 1` sans marge ni écart, dans une `.barre` en `left: 0; right: 0` :
+       à cinq, chacun fait 75 px sur un écran de 375. Le mot le plus large est
+       ROULAGES — 61,6 px à 12 px de corps, plus 11,5 px d'interlettre à .12em,
+       soit 73,2 px, et il reste 1,8 px. Un sixième onglet, ou un mot de plus de
+       huit caractères, déborde sa case : le pilote lit « ROULAGE », ou tape à
+       côté, et rien ne rougit nulle part. */
+    const app = fichierDe(ECRANS, '/App.tsx')
+    vrai(app.length > 0, 'src/App.tsx ne se lit plus : le témoin est muet')
+    const source = sansCommentaires(app)
+    const debut = source.indexOf('<nav className="barre"')
+    vrai(debut > 0, 'la barre du bas a disparu : le témoin est muet')
+    const barre = source.slice(debut, source.indexOf('</nav>', debut))
+    /* ⚠ DEUX ONGLETS SONT DEVENUS DES GLYPHES — 2 septembre 2026, « ça fait très
+       chargé ». Ce témoin lisait le MOT de chaque onglet et exigeait quatre
+       captures : il est passé à trois d'un coup, et il avait raison de rougir —
+       une barre qui perd ses mots en silence est exactement ce qu'il garde.
+       Ce qu'il vérifie change donc de forme, pas de nature. Le compte total tient
+       toujours la largeur ; chaque MOT tient toujours sa case ; et un onglet qui
+       n'a plus de mot doit avoir un NOM — un glyphe muet est un bouton qu'on ne
+       peut ni annoncer, ni chercher, ni décrire au téléphone. */
+    /* ⚠ LES CINQ ONGLETS PORTENT UN GLYPHE DEPUIS LE 3 SEPTEMBRE 2026, et trois
+       gardent leur mot en tout petit à l'intérieur. Ce témoin lisait le mot
+       comme le SEUL contenu du bouton — `>MOT<` — et il est retombé à zéro d'un
+       coup : le mot vit maintenant dans un `<span className="mot">`. Il avait
+       raison de rougir, et c'est la troisième fois qu'il attrape ce genre de
+       bascule sans qu'aucun autre garde ne bouge.
+
+       Ce qu'il vérifie ne change toujours pas de nature : chaque onglet doit
+       avoir un NOM, chaque mot doit tenir dans sa case, et la barre ne doit pas
+       glisser vers le tout-pictogramme par petits pas. */
+    const onglets = (barre.match(/className="onglet"/g) ?? []).length
+    vrai(onglets >= 4, `seulement ${onglets} onglets lus : la lecture de la barre est cassée`)
+    vrai(onglets <= 5,
+      `la barre porte ${onglets} onglets : à six, chaque case tombe sous la largeur de ROULAGES`)
+    const mots = [...barre.matchAll(/<span(?: className="mot")?>([^<]+)</g)].map((m) => m[1].trim())
+    const nommes = [...barre.matchAll(/<Icone[^>]*titre="([^"]+)"/g)].map((m) => m[1])
+    // Both the shared wrapper and decorative Lucide components provide a glyph.
+    const glyphes = (barre.match(/<[A-Z]\w*\b[^>]*(?:aria-hidden|nom=)/g) ?? []).length
+    vrai(glyphes === onglets,
+      `${onglets} onglets mais ${glyphes} glyphes : un onglet a perdu son dessin,`
+      + ' et deux natures de bouton à trois centimètres se remarquent avant leur contenu')
+    /* ⚠ TOUT ONGLET SANS MOT DOIT AVOIR UN NOM DANS SON GLYPHE. `Icone` pose
+       alors un vrai `<title>` : le mot existe dans le document, lu par un
+       lecteur d'écran ET par le banc. Un glyphe muet est un bouton qu'on ne peut
+       ni annoncer, ni chercher, ni décrire au téléphone. */
+    vrai(mots.length + nommes.length >= onglets,
+      `${onglets} onglets, ${mots.length} mots et ${nommes.length} glyphes nommés :`
+      + ' un onglet ne dit son nom NI en toutes lettres NI dans le titre de son icône')
+    /* ⚠ TROIS MOTS AU MINIMUM. Une maison et un buste se lisent sans
+       apprentissage ; une moto, un calendrier et trois barres, non — « moto »
+       peut vouloir dire le garage ou la journée. Une barre entièrement en
+       pictogrammes se devine au lieu de se lire, et elle ne doit pas pouvoir
+       s'installer par petits pas. */
+    vrai(mots.length >= 3,
+      `la barre ne porte plus que ${mots.length} mots : au-delà du cadre, un onglet se devine`)
+    for (const m of mots) {
+      vrai(m.length <= 8,
+        `l'onglet « ${m} » fait ${m.length} caractères : il déborde de sa case à 375 px`)
+      vrai(/^[A-ZÀ-Ý]+$/.test(m),
+        `l'onglet « ${m} » n'est pas en capitales : deux casses à trois centimètres se lisent comme deux natures de bouton`)
+    }
+    egal(mots.length, new Set(mots).size, 'deux onglets portent le même mot')
+    // Et la mesure tient dans la feuille : des cases égales, sans écart.
+    const regle = FEUILLE.slice(FEUILLE.indexOf('.onglet {'), FEUILLE.indexOf('.onglet {') + 260)
+    vrai(regle.length > 0, 'la règle des onglets a disparu de la feuille')
+    vrai(/flex: 1/.test(regle),
+      'les onglets ne se partagent plus la largeur à égalité : le calcul des 75 px ne vaut plus')
+    const nav = FEUILLE.slice(FEUILLE.indexOf('.barre {'), FEUILLE.indexOf('.barre {') + 260)
+    vrai(!/gap:/.test(nav),
+      'la barre du bas a pris un écart entre ses onglets : ROULAGES perd les 1,8 px qui lui restaient')
+
+    /* ⚠ UN ONGLET APPARAÎT QUAND IL A QUELQUE CHOSE À MONTRER — UX-DR9. Et le
+       MÊME test décide de l'onglet ET de l'écran : ce qui n'a pas d'onglet n'a
+       pas d'écran, sinon le pilote atterrit sur un blanc entre les deux barres,
+       et un écran blanc se lit comme un plantage. */
+    vrai((source.match(/analysable\(porte\)/g) ?? []).length >= 2,
+      'l\'onglet d\'analyse et son écran ne se gardent plus au même test : l\'un des deux s\'ouvre sur du blanc')
+    const analysable = source.match(/const analysable = [\s\S]*?\n\n/)
+    vrai(!!analysable && !/p\.moto/.test(analysable![0]),
+      'le test de l\'onglet lit une condition qui ne peut jamais décider seule : on croit la lire')
+
+    /* ⚠ ET UN ÉCRAN NE MONTRE JAMAIS CE QU'IL N'A PAS. Les rangées se
+       recomposent : un domaine sans matière n'apparaît pas, un axe non plus.
+       Aucun gris, aucun « bientôt », aucun croisement mort — un écran vide
+       signale l'abandon dans ce produit (FR-14). */
+    const ecran = sansCommentaires(fichierDe(ECRANS, '/Analyse.tsx'))
+    vrai(ecran.length > 0, 'l\'écran d\'analyse a disparu : le témoin est muet')
+    for (const mot of ['disabled', 'bientôt', 'à venir', 'aucune donnée', 'pas encore de'])
+      vrai(!new RegExp(mot, 'i').test(ecran),
+        `l'écran d'analyse porte « ${mot} » : il dessine le squelette de ce que le pilote n'a pas`)
+    vrai(/if \(!lu \|\| !annees \|\| !trace \|\| !forme\) return null/.test(ecran),
+      'l\'écran d\'analyse se monte sans matière : un cadre en attente, puis rien')
+    // Une rangée qui n'offre pas de choix n'est pas une rangée : elle disparaît,
+    // exactement comme les années du bilan de saison.
+    for (const rangee of ['domaines', 'duDomaine', 'annees'])
+      vrai(new RegExp(`${rangee}\\.length > 1 &&`).test(ecran),
+        `la rangée « ${rangee} » s'affiche à une seule puce : un bouton toujours actif qui ne fait rien`)
+
+    /* Et les domaines gardent l'ordre de la table. Les trier par ce qu'ils
+       contiennent ferait bouger la première puce d'une ouverture à l'autre, et le
+       pilote réapprendrait la rangée à chaque fois. */
+    const faux: Trace[] = CROISEMENTS.map((c) => ({
+      croisement: c, forme: c.forme, lignes: [], manque: null, nonCompte: null,
+    }))
+    const domaines: Domaine[] = domainesDe(faux)
+    egal(domaines, [...new Set(CROISEMENTS.map((c) => c.domaine))],
+      'les domaines ne sortent plus dans l\'ordre de la table : la première puce bouge d\'une ouverture à l\'autre')
+    /* ⚠ ET LES DEUX FILTRES RETIRENT SANS RÉORDONNER. C'est la moitié que la
+       comparaison ci-dessus ne peut pas voir : un tri ajouté APRÈS le dédoublage
+       rendrait exactement la même chose sur une table complète, et ne se verrait
+       que le jour où un domaine se vide — c'est-à-dire chez le pilote qui vient
+       de commencer, et chez lui seulement. */
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    for (const nom of ['domainesDe', 'tracesDuDomaine']) {
+      const i = an.indexOf(`export const ${nom} =`)
+      vrai(i > 0, `${nom} a disparu de l'analyse : le témoin est muet`)
+      vrai(!/\.sort\(/.test(an.slice(i, i + 300)),
+        `${nom} trie ce qu'il filtre : les puces changent de place d'une ouverture à l'autre`)
+    }
+    for (const d of domaines) {
+      egal(tracesDuDomaine(faux, d).map((t) => t.croisement.axe),
+        CROISEMENTS.filter((c) => c.domaine === d).map((c) => c.axe),
+        `les axes de ${NOM_DOMAINE[d]} ne sortent plus dans l'ordre de la table`)
+      vrai(/^[A-ZÀ-Ý]+$/.test(NOM_DOMAINE[d]),
+        `le domaine ${NOM_DOMAINE[d]} n'est plus en capitales comme les onglets`)
+    }
+    /* ⚠ ET AUCUNE COULEUR NE RANGE. `--alerte` ne sert QU'À CE QUI DÉTRUIT :
+       « un rouge qui sert à deux choses ne sert plus à rien ». Un domaine, une
+       puce ou une note en rouge se lirait comme un avertissement sur un mois qui
+       n'en est pas un — et la seule variation de teinte autorisée est
+       l'atténuation de ce que le produit ne sait pas ranger. */
+    vrai(!/--alerte|--plus-lent|--record/.test(ecran),
+      'l\'écran d\'analyse emprunte le rouge de l\'alerte ou le violet du record : une couleur s\'est mise à ranger')
+    /* On lit CHAQUE règle dont le sélecteur nomme l'analyse, et pas une tranche
+       de fichier : une tranche s'arrête où la feuille s'arrête aujourd'hui, et la
+       prochaine règle ajoutée en dessous tomberait hors du témoin sans que
+       personne ne le voie. */
+    let regles = 0
+    for (const m of FEUILLE.replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .matchAll(/([^{}]*analyse[^{}]*)\{([^{}]*)\}/gi)) {
+      regles++
+      vrai(!/--alerte|--plus-lent/.test(m[2]),
+        `« ${m[1].trim()} » peint l'analyse en rouge : le rouge cesse de ne signifier qu'une destruction`)
+    }
+    vrai(regles > 0, 'l\'habillage de l\'analyse a disparu de la feuille : le témoin est muet')
+
+    /* « TOUTES LES SAISONS » EST LE TABLEAU VIDE, la seule valeur qui ne se
+       confonde avec aucune année — et l'axe ANNÉE n'existe que sous elle. */
+    egal(TOUTES_ANNEES.length, 0,
+      '« toutes les saisons » est devenu une liste d\'années : on ne distingue plus « toutes » de « les deux cochées »')
+  }),
+
+  doit('l\'analyse — les circuits se regroupent à plat, et l\'analyse ne les regroupe pas elle-même', () => {
+    /* `circuit_nom` est du TEXTE LIBRE — il n'existe aucun identifiant de circuit
+       côté client. « Pau-Arnos » tapé un soir puis « pau arnos » le suivant
+       faisaient DEUX circuits, chacun sous le seuil de trois points, donc AUCUNE
+       courbe : le pilote qui roulait le plus voyait le moins. */
+    egal(aplati('Pau-Arnos'), aplati('pau arnos'),
+      'deux façons d\'écrire le même circuit font deux tracés : chacun sous le seuil, donc aucun')
+    egal(aplati('Pau-Arnos'), aplati('PAU  ARNOS'),
+      'la casse et les espaces séparent encore un circuit de lui-même')
+
+    /* ⚠ ET LE REGROUPEMENT NE SE REFAIT PAS ICI. `circuitsAvecCourbe` et
+       `courbeDuCircuit` le portent déjà : un second rapprochement écrit dans
+       l'analyse serait un second endroit où « Pau-Arnos » et « pau arnos »
+       peuvent se séparer à nouveau, et il divergerait au premier accent. */
+    const an = sansCommentaires(fichierDe(SOURCES, 'db/analyse.ts'))
+    vrai(an.length > 0, 'src/db/analyse.ts ne se lit plus : le témoin est muet')
+    vrai(/circuitsAvecCourbe\(/.test(an) && /courbeDuCircuit\(/.test(an),
+      'l\'analyse est allée chercher les chronos ailleurs que dans les courbes qui existent')
+    /* ⚠ ET ELLE NE TOUCHE `circuit_nom` QUE POUR NOMMER UNE JOURNÉE. La colonne
+       est bien lue une fois — « Pau-Arnos · 12/04 » est le nom d'un pas de la
+       suite — et c'est légitime : nommer n'est pas rapprocher. Ce qui est refusé,
+       c'est de GROUPER ou de COMPARER sur ce texte libre, en SQL : l'égalité
+       stricte a déjà séparé un circuit de lui-même une fois, et le pilote qui
+       roulait le plus voyait le moins. */
+    for (const { fichier, sql } of gabaritsSql()) {
+      if (!fichier.endsWith('db/analyse.ts')) continue
+      vrai(!/GROUP BY[^\n]*circuit/i.test(sql),
+        'l\'analyse regroupe les circuits en SQL : l\'égalité stricte sépare « Pau-Arnos » de « pau arnos »')
+      vrai(!/circuit_nom\s*(=|LIKE|IN\b)/i.test(sql),
+        'l\'analyse compare des noms de circuit bruts : deux façons de l\'écrire redeviennent deux circuits, chacun sous le seuil')
+    }
+  }),
+
+  doit('l\'analyse — les commentaires abrogés de Barres.tsx sont morts, et le nouveau nomme la levée', () => {
+    /* ⚠ UN COMMENTAIRE FAUX EST PIRE QU'UN COMMENTAIRE ABSENT : ON LE CROIT. Le
+       propriétaire a LEVÉ l'interdit de RELIER des paniers mensuels le 1er
+       septembre 2026 — un segment droit entre deux paniers ne dit rien de plus
+       que les deux paniers, il les ORDONNE. Ce fichier interdisait encore de
+       relier, en deux endroits, avec l'aplomb d'une règle : le prochain lecteur
+       aurait défait la suite au nom d'un interdit qui n'existe plus.
+
+       Ce qui reste debout et n'a pas bougé d'un mot : le LISSAGE — une courbe
+       passe par des valeurs que personne n'a mesurées — et la DROITE DE TENDANCE,
+       qui n'invente pas entre les points mais AU-DELÀ. La levée porte sur RELIER,
+       jamais sur PROLONGER. */
+    const brut = fichierDe(ECRANS, '/Barres.tsx')
+    vrai(brut.length > 0, 'src/ecrans/Barres.tsx a disparu : le témoin est muet')
+
+    vrai(!/aucune droite ne se tire/i.test(brut),
+      'Barres.tsx interdit de nouveau de relier : la suite se fera défaire au nom d\'une règle levée')
+    vrai(!/RIEN NE SE COMPARE AU PRÉCÉDENT/.test(brut),
+      'le paragraphe qui mettait relier et comparer dans le même sac est revenu')
+    /* La phrase abrogée peut rester CITÉE — c'est même ce qui rend la levée
+       lisible — mais alors la levée la suit immédiatement. Une citation sans sa
+       levée redevient une règle. */
+    const cite = brut.indexOf('inventerait des valeurs entre eux')
+    if (cite > 0)
+      vrai(brut.indexOf('A LEVÉ CE POINT') > cite
+        && brut.indexOf('A LEVÉ CE POINT') - cite < 200,
+      'la phrase abrogée traîne sans sa levée : elle se relit comme une règle en vigueur')
+    vrai(/1er septembre[\s*\n]*2026/i.test(brut),
+      'la levée ne porte plus sa date : on ne sait plus ce qui a été décidé, ni quand')
+
+    // ET CE QUI RESTE INTERDIT EST TOUJOURS ÉCRIT, en toutes lettres.
+    for (const clause of ['LISSAGE', 'DROITE DE TENDANCE'])
+      vrai(new RegExp(clause).test(brut),
+        `Barres.tsx ne refuse plus le ${clause.toLowerCase()} : la levée a débordé de « relier » vers « prolonger »`)
+    /* Et le fichier ne trace toujours aucune ligne : une barre est un RECTANGLE,
+       deux `div` et une largeur en pourcentage la font. La ligne vit dans
+       Courbe.tsx, et le produit a DEUX fichiers qui ont le droit de poser un
+       `<svg>`, pas trois. */
+    vrai(!/<svg\b/.test(sansCommentaires(brut)),
+      'le tracé de l\'argent pose un <svg> à lui : le jeu d\'icônes se rouvre')
+    vrai(/<polyline/.test(sansCommentaires(fichierDe(ECRANS, '/Courbe.tsx'))),
+      'la ligne a quitté Courbe.tsx : elle est allée poser un <svg> dans un troisième fichier')
   }),
 ]
 

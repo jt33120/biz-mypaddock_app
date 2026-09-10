@@ -18,10 +18,36 @@ import { formaterChrono, formaterEuros } from '../db/depot'
  * chrono est fausse deux fois : elle divise par le mauvais nombre, et elle
  * présente comme une mesure ce qui est une estimation.
  */
-export function Saison({ db }: { db: PowerSyncDatabase }) {
+export function Saison({ db, onArgentParPoste }: {
+  db: PowerSyncDatabase
+  /** LA PORTE VERS L'ANALYSE, PRÉ-RÉGLÉE SUR FINANCE · POSTE — 1er septembre
+   *  2026. Ce bilan dit « dépensé : 2 180 € » et s'arrête là ; la composition de
+   *  ces 2 180 € vivait au fond du garage, verrouillée sur l'année courante.
+   *  C'est le lien qui manquait entre le chiffre et sa forme.
+   *
+   *  `null` quand rien n'est saisi : App.tsx le retire plutôt que de laisser un
+   *  lien qui ouvre un écran sans matière. */
+  /** Reçoit l'année REGARDÉE : la porte ouvre sur la saison qu'on quitte,
+   *  pas sur celle que l'analyse choisirait par défaut. */
+  onArgentParPoste: ((annee: number) => void) | null
+}) {
   const [annees, setAnnees] = useState<number[]>([])
   const [annee, setAnnee] = useState<number | null>(null)
   const [b, setB] = useState<Bilan | null>(null)
+  /* ⚠ REPLIÉ PAR DÉFAUT — 2 septembre 2026, lot 3. Mesuré à 637 px sur 759 px
+     utiles à 375 × 812 : ce seul bloc mangeait une vue d'iPhone entière AVANT
+     que la liste des roulages commence. Or on vient sur cet écran pour SA
+     LISTE ; le bilan est la vue d'ensemble qu'on consulte, pas celle qu'on
+     traverse. FR-55 le veut consultable à tout moment — il l'est, en un tap, et
+     rien n'y relance.
+
+     ⚠ ET LA COMPLÉTUDE RESTE DEHORS. « La complétude d'abord » (FR-55) n'est pas
+     une question de position dans le bloc, c'est une question de ce qu'on lit
+     AVANT les chiffres : replier « 5 roulages saisis, 1 sans chrono » derrière un
+     tap rendrait les chiffres accessibles sans leur réserve, ce qui est
+     exactement l'ordre que ce récit interdit. Elle est donc dans l'en-tête, et
+     c'est l'en-tête qui la porte quand le reste est plié. */
+  const [ouvert, setOuvert] = useState(false)
   const [report, setReport] = useState<Report>(null)
 
   useEffect(() => {
@@ -47,19 +73,38 @@ export function Saison({ db }: { db: PowerSyncDatabase }) {
      l'absence se rend, elle ne se calcule pas. */
   const repereDuMois = repereMensuel(b.budgetCentimes)
 
+  const complet = `${b.roulages} roulage${b.roulages > 1 ? 's' : ''} saisi${b.roulages > 1 ? 's' : ''}`
+    + `${b.sansChrono > 0 ? `, ${b.sansChrono} sans chrono` : ''}`
+    + `${b.sansGroupe > 0 ? `, ${b.sansGroupe} sans groupe` : ''}.`
+
   return (
     <div className="bloc pile saison">
-      <div className="rang">
-        <span className="libelle">Saison {b.annee}</span>
-        {annees.length > 1 && (
-          <div className="puces">
-            {annees.map((a) => (
-              <button key={a} className="puce" data-actif={a === annee ? '1' : '0'}
-                      onClick={() => setAnnee(a)}>{a}</button>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* ⚠ LES PUCES D'ANNÉE SONT SORTIES DE LA TÊTE, et il le fallait : la tête
+          est devenue un `<button>`, et un bouton dans un bouton n'est pas du
+          HTML valide — le navigateur défait l'imbrication, et la puce cesse
+          d'être cliquable sans que rien ne le dise. Elles descendent donc dans
+          le corps déplié, où elles servent : choisir une saison est un geste
+          qu'on fait en regardant le bilan, pas en le repliant. */}
+      <button className="rang atelier-tete" onClick={() => setOuvert(!ouvert)}
+              aria-expanded={ouvert}>
+        <span className="pile" style={{ gap: 1 }}>
+          <span className="libelle">Saison {b.annee}</span>
+          {/* FR-55 — LA COMPLÉTUDE D'ABORD, et elle reste dehors quand le reste
+              est plié : voir le commentaire de `ouvert` ci-dessus. */}
+          <span className="sous-titre">{complet}</span>
+        </span>
+        <span className="signe">{ouvert ? '–' : '+'}</span>
+      </button>
+
+      {ouvert && (<>
+      {annees.length > 1 && (
+        <div className="puces">
+          {annees.map((a) => (
+            <button key={a} className="puce" data-actif={a === annee ? '1' : '0'}
+                    onClick={() => setAnnee(a)}>{a}</button>
+          ))}
+        </div>
+      )}
 
       {/* FR-52 — la saison est un ÉTAT DÉRIVÉ : du premier au dernier roulage
           saisi. Aucune plage de dates, aucun réglage, aucune bascule. */}
@@ -70,13 +115,6 @@ export function Saison({ db }: { db: PowerSyncDatabase }) {
           pas un calendrier.
         </p>
       )}
-
-      {/* FR-55 — LA COMPLÉTUDE D'ABORD. */}
-      <p className="texte">
-        <b>{b.roulages}</b> roulage{b.roulages > 1 ? 's' : ''} saisi{b.roulages > 1 ? 's' : ''}
-        {b.sansChrono > 0 ? `, ${b.sansChrono} sans chrono` : ''}
-        {b.sansGroupe > 0 ? `, ${b.sansGroupe} sans groupe` : ''}.
-      </p>
 
       <div className="chiffres-saison">
         <div><p className="et">circuits</p><p className="va">{b.circuits}</p></div>
@@ -111,6 +149,30 @@ export function Saison({ db }: { db: PowerSyncDatabase }) {
         </p>
       )}
 
+      {/* ⚠ UN LIEN, ET IL SUIT LE CHIFFRE QU'IL EXPLIQUE. Il est posé après tout
+          ce que ce bilan dit de l'argent — le « dépensé » des chiffres, puis le
+          plafond quand il y en a un — parce que c'est là qu'on se demande « en
+          quoi ? ». En tête d'écran il serait passé avant le chiffre qu'il
+          commente, donc avant la question.
+
+          ⚠ ET IL NE PROMET AUCUNE ANNÉE. Les puces de ce bilan choisissent une
+          saison ; le raccourci, lui, ne tourne que les DEUX PREMIÈRES molettes de
+          l'analyse — domaine et axe — et la période là-bas vaut la saison la plus
+          récente, comme partout ailleurs. Écrire « ta saison 2025 » sur ce lien
+          alors qu'il ouvre 2026 serait exactement le défaut que ce produit paie
+          le plus cher : une phrase qui contredit ce qu'elle montre. La période se
+          retape en une puce une fois là-bas.
+
+          ⚠ ET AUCUN CHIFFRE DESSUS. Un total posé sur un lien serait un cinquième
+          montant dans un écran qui en compte déjà quatre, et il ne se rattacherait
+          à rien — c'est l'argument qui a sorti « ce qu'elle a coûté » des trois
+          cases du garage, mot pour mot (Garage.tsx). */}
+      {onArgentParPoste && b.depenseCentimes > 0 && (
+        <button className="lien" onClick={() => onArgentParPoste(b.annee)}>
+          Cet argent, poste par poste
+        </button>
+      )}
+
       {report && (
         /* FR-56 — UN REPORT, PAS UNE PRÉVISION. Le produit ne modélise rien,
            ne majore de rien, n'applique aucune inflation. Il recopie un chiffre
@@ -132,6 +194,7 @@ export function Saison({ db }: { db: PowerSyncDatabase }) {
           </button>
         </div>
       )}
+      </>)}
     </div>
   )
 }

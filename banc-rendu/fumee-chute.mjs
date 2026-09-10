@@ -6,7 +6,8 @@
 import { chromium } from 'playwright-core'
 
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -81,7 +82,9 @@ await page.waitForSelector('.chute:has-text("Virage 3")', { timeout: 15_000 })
 verifier('   le récit reste mot pour mot',
   (await page.textContent('.chute .texte.faible')).trim() === RECIT)
 
-// Photo liée à la chute, sans vidéo ni média seulement local inventé.
+// Photo liée à la chute. La VIDÉO du crash a son propre banc depuis le récit
+// 23.10 — `fumee-video.mjs` — parce que son versement reprenable, son quota et
+// sa compression n'ont rien de commun avec un cliché.
 for (const largeur of [375, 390, 430]) {
   await page.setViewportSize({ width: largeur, height: 844 })
   const cible = await page.locator('button.ajout-photo-crash').boundingBox()
@@ -145,10 +148,19 @@ verifier('   la journée reçoit aussi la réparation une seule fois',
   coutJournee.includes('123,45 €') && !coutJournee.includes('246,90 €'), coutJournee)
 await onglet('GARAGE')
 await page.waitForSelector('.atelier.budget .atelier-tete', { timeout: 20_000 })
-await page.waitForFunction(() =>
-  document.querySelector('.atelier.budget .atelier-tete')?.textContent.includes('123,45 €'),
-null, { timeout: 20_000 })
-const budget = await texte('.atelier.budget .atelier-tete')
+/* ⚠ LA LECTURE SE FAIT DANS L'ATTENTE, PAS APRÈS ELLE — 1er septembre 2026.
+   Attendre le montant puis le relire dans un second appel laisse un intervalle,
+   et le module de budget passe par un état VIDE à chaque montage : `charger()`
+   part de `lignes = []`, donc d'un total à zéro, donc du tiret. Sous la charge
+   du banc complet cet état dure assez longtemps pour tomber entre les deux
+   appels — l'attente réussissait, la relecture lisait « — », et l'essai rougissait
+   deux fois sur trois AU BANC en restant vert seul. Un essai qui dépend de la
+   machine qui le fait tourner est un essai qu'on finit par ne plus croire.
+   L'attente rend donc le texte qu'elle a vu, et c'est celui-là qu'on éprouve. */
+const budget = (await (await page.waitForFunction(() => {
+  const t = document.querySelector('.atelier.budget .atelier-tete')?.textContent
+  return t && t.includes('123,45 €') ? t : null
+}, null, { timeout: 20_000 })).jsonValue()).replace(/\s+/g, ' ')
 verifier('⑤ le budget reçoit la dépense une seule fois',
   budget.includes('123,45 €') && !budget.includes('246,90 €'), budget)
 await page.click('button.atelier:has-text("Bricoles")')
@@ -174,18 +186,19 @@ verifier('   le nom accessible conserve circuit, date, chrono et crash',
   nomAccessibleCarte ?? 'absent')
 await page.click('.glissable:has-text("Nogaro")')
 await page.waitForSelector('.chute:has-text("Virage 3")', { timeout: 20_000 })
-// The dossier, linked repairs and local image bytes load independently.
-// Its narrative alone cannot establish that all three reads have completed.
-await page.waitForFunction(() => {
+// Narrative, repairs and photo bytes load independently; wait for their actual data.
+const dossierPret = await page.waitForFunction(() => {
   const dossier = document.querySelector('.chute')
   const image = document.querySelector('.case-photo-crash img')
   return dossier?.textContent.includes('Levier droit')
     && dossier.textContent.includes('123,45') && image?.complete && image.naturalWidth > 0
-}, null, { timeout: 20_000 })
+}, null, { timeout: 20_000 }).then(() => true, () => false)
+const laPhotoEstLa = dossierPret && await page.isVisible('.case-photo-crash img')
+const dossier = await texte('.chute')
 verifier('   récit, réparation et photo sont relus',
-  (await texte('.chute')).includes('Levier droit')
-    && (await texte('.chute')).includes('123,45')
-    && await page.isVisible('.case-photo-crash img'))
+  dossier.includes('Levier droit') && dossier.includes('123,45') && laPhotoEstLa,
+  `réparation ${dossier.includes('Levier droit')} · montant ${dossier.includes('123,45')}`
+  + ` · photo ${laPhotoEstLa}`)
 
 // Plusieurs chutes restent possibles ; la carte affiche le pluriel sans créer
 // une statistique de saison.

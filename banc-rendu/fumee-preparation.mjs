@@ -15,8 +15,10 @@
 //   ⚠ ELLE N'APPARAÎT PAS SUR UNE JOURNÉE PASSÉE. « Ce qui reste à faire » sur
 //     un roulage déjà vécu serait un reproche.
 import { chromium } from 'playwright-core'
+import { ouvrirTousLesPlis } from './plis.mjs'
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -31,6 +33,9 @@ const verifier = (titre, vrai, detail = '') => {
   if (!vrai) manques.push(titre)
 }
 const texte = async (sel) => (await page.textContent(sel)).replace(/\s+/g, ' ')
+// The pending render already contains Ajout but no fold header. Wait for the
+// loaded state before opening folds, or its arrival can hide the filled form.
+const preparationPrete = () => page.waitForSelector('.preparation[data-etat="su"]', { timeout: 20_000 })
 
 await page.goto('http://localhost:4173', { waitUntil: 'networkidle' })
 await pret()
@@ -71,9 +76,13 @@ await page.click('text=Acheté, pas encore monté')
 await page.waitForTimeout(700)
 await page.click('.poste-page .lien:has-text("garage")')
 await page.click('nav.barre .onglet:has-text("ACCUEIL")')
-await page.waitForSelector('.preparation', { timeout: 20_000 })
+await preparationPrete()
 await page.waitForTimeout(500)
 
+// Sur l'ACCUEIL la préparation est un aperçu, et elle s'y replie depuis le lot 3
+// (397 px sur 1562). Sur l'écran de la journée elle reste dépliée : c'est le
+// sujet. Ce que cet essai lit est son CONTENU, donc il l'ouvre.
+await ouvrirTousLesPlis(page)
 const prep = await texte('.preparation')
 
 // ── ② CHAQUE LIGNE VIENT D'UNE DONNÉE SAISIE, et le dit.
@@ -100,7 +109,11 @@ verifier('   « Plaquettes » mène au garage', await page.isVisible('.garage'))
 
 // ── ⑤ CE QU'ON AJOUTE À LA MAIN SE COCHE ; ce qui est dérivé, non.
 await page.click('nav.barre .onglet:has-text("ACCUEIL")')
-await page.waitForSelector('.preparation', { timeout: 20_000 })
+await preparationPrete()
+// Retour sur l'accueil : la préparation y repart repliée (c'est un aperçu, et
+// le pli est un état de rendu qui ne survit pas au changement d'écran). La
+// saisie vit à l'intérieur.
+await ouvrirTousLesPlis(page)
 await page.fill('.ajout-tache .champ', 'Passer chercher le bidon')
 await page.click('.ajout-tache .bouton')
 await page.waitForSelector('.preparation .coche', { timeout: 15_000 })
@@ -126,6 +139,7 @@ await page.waitForTimeout(400)
 await page.click('.bloc:has-text("Prochain roulage")')
 await page.waitForTimeout(800)
 
+await ouvrirTousLesPlis(page)
 const composable = await page.isVisible('text=Préparer le chargement')
 verifier('⑥ le chargement reste composable après une tâche de préparation', composable)
 
@@ -152,7 +166,7 @@ if (composable) {
 
 // ── ⑦ Le bloc ne déborde pas — le champ d'ajout l'a déjà fait une fois.
 await page.click('nav.barre .onglet:has-text("ACCUEIL")')
-await page.waitForSelector('.preparation', { timeout: 20_000 })
+await preparationPrete()
 verifier('⑦ le bloc tient dans l\'écran',
   await page.$eval('.preparation', n => n.scrollWidth <= n.clientWidth + 1))
 

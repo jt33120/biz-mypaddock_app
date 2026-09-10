@@ -27,8 +27,10 @@
 // Les refus sont donc joués DEUX FOIS : une fois sans plafond (l'état de
 // démarrage, qui est réel), une fois avec (l'état où la tentation existe).
 import { chromium } from 'playwright-core'
+import { ouvrirTousLesPlis } from './plis.mjs'
 const nav = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 })
 const page = await nav.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const erreurs = []
@@ -76,11 +78,19 @@ verifier('   l\'équipement aussi', await page.isVisible('.atelier.equipement'))
 // ── ① LE BUDGET ────────────────────────────────────────────────────────────
 await page.click('.atelier-tete:has-text("Budget ·")')
 const POSTES = [['Engagement', '230'], ['Pneus', '389,90'], ['Essence', '96,40']]
+let totalAttendu = 0
 for (const [poste, montant] of POSTES) {
   await page.click(`.ligne-atelier.poste:has-text("${poste}")`)
   await page.fill('.champ[placeholder="montant en €"]', montant)
   await page.click('.bouton.secondaire:has-text("Ajouter à")')
-  await page.waitForTimeout(400)
+  totalAttendu += enCentimes(montant)
+  // La relecture du total est asynchrone : attendre son résultat, pas 400 ms.
+  await page.waitForFunction((attendu) => {
+    const total = document.querySelector('.atelier.budget .atelier-tete .chiffre')
+    if (!total) return false
+    const lu = Math.round(Number(total.textContent.replace(/[^\d,.-]/g, '').replace(',', '.')) * 100)
+    return lu === attendu
+  }, totalAttendu, { timeout: 20_000 })
 }
 const tete = (await page.textContent('.atelier.budget .atelier-tete')).replace(/\s+/g, ' ')
 verifier('① le total additionne les trois postes', tete.includes('716,30'), tete)
@@ -105,21 +115,72 @@ verifier('   un poste vide ne s\'affiche ni à zéro ni en tiret',
 // pas compter au mois, parce que la dépense ne portait aucune date. Les trois
 // dépenses ci-dessus sont saisies au jour d'aujourd'hui — elles doivent donc se
 // retrouver dans le mois courant, et pour le montant exact.
+//
+// ⚠ ET ON NE LE LIT PLUS DANS LE BUDGET — 1er septembre 2026. Le tracé des mois
+// a quitté ce module pour l'écran d'analyse, où il gagne une rangée de périodes
+// (il était verrouillé sur l'année courante, donc muet sur toute saison passée).
+// Le récit, lui, n'a pas bougé d'un mot : ce sont les MÊMES trois exigences,
+// posées à l'endroit où le mois se rend maintenant. Les supprimer parce que le
+// tracé a déménagé aurait rendu le déplacement invisible — et c'est précisément
+// ce déplacement-là qui pouvait perdre quelque chose en route.
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 const moisCourant = `${MOIS[new Date().getMonth()]} ${new Date().getFullYear()}`
-verifier('①bis le mois existe', budget.includes('Par mois') && budget.includes(moisCourant),
-  moisCourant)
+
+/** Le texte de FINANCE · MOIS, lu dans l'onglet ANALYSE, puis retour au garage.
+ *  La rangée des domaines se tait tant qu'un seul domaine a de la matière :
+ *  on ne clique donc dessus que si elle est là. */
+const moisSelonLAnalyse = async () => {
+  await page.click('nav.barre .onglet:has-text("ANALYSE")')
+  await page.waitForSelector('.analyse-ecran', { timeout: 20_000 })
+  const finance = page.locator(
+    '.analyse-choix .puces[aria-label="Domaine"] .puce:has-text("FINANCE")')
+  if (await finance.count()) await finance.first().click()
+  await page.click('.analyse-choix .puces[aria-label="Selon quoi"] .puce:has-text("Mois")')
+  await page.waitForFunction(() => {
+    const n = document.querySelector('.analyse-ecran .sous-titre')
+    return !!n && n.textContent.includes('mois après mois')
+  }, null, { timeout: 20_000 })
+  const t = (await page.textContent('.analyse-ecran')).replace(/\s+/g, ' ')
+  await page.click('nav.barre .onglet:has-text("GARAGE")')
+  await page.waitForSelector('.atelier.budget', { timeout: 20_000 })
+  // ⚠ LE MODULE REVIENT REPLIÉ : changer d'onglet démonte le garage, et `ouvert`
+  // repart à faux. On le rouvre donc SI besoin — cliquer l'en-tête sans regarder
+  // le refermerait un jour sur deux, et l'essai suivant chercherait des lignes
+  // qui existent mais ne sont pas rendues. C'est exactement ce qui est arrivé.
+  if (!await page.locator('.ligne-atelier.poste').count()) {
+    await page.click('.atelier-tete:has-text("Budget ·")')
+    await page.waitForSelector('.ligne-atelier.poste', { timeout: 20_000 })
+  }
+  return t
+}
+const analyseMois = await moisSelonLAnalyse()
+verifier('①bis le mois existe', analyseMois.includes(moisCourant), moisCourant)
 verifier('   le mois porte le total des trois postes',
-  new RegExp(`${moisCourant}[^€]*716,30`).test(budget), budget.slice(budget.indexOf('Par mois'), budget.indexOf('Par mois') + 160))
+  new RegExp(`${moisCourant}[^€]*716,30`).test(analyseMois),
+  analyseMois.slice(analyseMois.indexOf(moisCourant), analyseMois.indexOf(moisCourant) + 160))
 // ⚠ LA FENÊTRE EST BORNÉE EN CARACTÈRES, PLUS EN « AVANT LE PREMIER € ». Le
 // récit 19.4 a mis le montant AVANT la composition — nom, montant, barre,
 // composition — et `[^€]*` ne pouvait plus franchir le montant. L'assertion
 // serait devenue rouge sur un écran juste ; la borne dit ce qu'elle veut
 // vraiment : la composition est ATTACHÉE à ce mois-là, pas au suivant.
+//
+// ⚠ ET LA COMPOSITION NE SE REND QUE SOUS UNE COMPOSITION. Un seul mois saisi :
+// `formeRendue` rend donc des barres, qui ont une ligne où l'écrire. Au-delà de
+// trois mois la forme devient une SUITE, et douze points reliés n'ont aucun
+// endroit où loger douze compositions — c'est dit dans `LigneAnalyse.detail`, et
+// c'est la perte assumée du déménagement.
 verifier('   le mois dit de quoi il était fait',
-  new RegExp(`${moisCourant}[\\s\\S]{0,40}engagement`).test(budget),
-  budget.slice(budget.indexOf(moisCourant), budget.indexOf(moisCourant) + 90))
+  new RegExp(`${moisCourant}[\\s\\S]{0,60}engagement`).test(analyseMois),
+  analyseMois.slice(analyseMois.indexOf(moisCourant), analyseMois.indexOf(moisCourant) + 120))
+
+// ⚠ ET LE BUDGET, LUI, N'EN PARLE PLUS DU TOUT. Sans cette assertion le
+// déménagement pouvait se faire à moitié — les deux endroits montrant le même
+// mois, l'un verrouillé sur l'année courante et l'autre non, avec deux totaux
+// qui divergent le jour où l'un des deux filtres change.
+verifier('   et le budget ne rend plus aucun tracé',
+  !budget.includes('Par mois') && !budget.includes('Par poste'),
+  budget.slice(0, 120))
 
 // ⚠ LES TROIS REFUS DU MOIS, et ils comptent autant que son existence. Un total
 // mensuel est l'endroit du produit où la comparaison, le pourcentage et le
@@ -127,9 +188,11 @@ verifier('   le mois dit de quoi il était fait',
 // où l'on a roulé, pas une faute.
 const projections = [/\d\s?%/, /à ce rythme/i, /projection/i, /prévisionnel/i,
   /par rapport/i, /reste à/i, /tendance/i, /moyenne/i]
+// Les deux textes, parce que le mois vit maintenant dans l'un et le total dans
+// l'autre : n'en relire qu'un laisserait la moitié de l'interdit sans témoin.
 verifier('   aucune comparaison de mois, aucune projection',
-  !projections.some((r) => r.test(budget)),
-  projections.filter((r) => r.test(budget)).map(String).join(' '))
+  !projections.some((r) => r.test(budget) || r.test(analyseMois)),
+  projections.filter((r) => r.test(budget) || r.test(analyseMois)).map(String).join(' '))
 // Et AUCUNE jauge dans ce module : une barre qui se remplit vers un plafond du
 // mois ferait du repère un compteur à rebours — exactement ce que les deux
 // clauses d'argent refusent. La seule jauge du produit est celle de l'année, et
@@ -224,11 +287,11 @@ await page.click('nav.barre .onglet:has-text("GARAGE")')
 await page.waitForSelector('.atelier.budget', { timeout: 20_000 })
 await page.click('.atelier-tete:has-text("Budget ·")')
 await page.waitForSelector('.atelier.budget .ligne-atelier', { timeout: 20_000 })
-const apresEngagement = (await page.textContent('.atelier.budget')).replace(/\s+/g, ' ')
+const apresEngagement = await moisSelonLAnalyse()
 verifier('   l\'engagement tombe dans le mois du PAIEMENT',
   new RegExp(`${moisCourant}[^€]*946,30`).test(apresEngagement),
-  apresEngagement.slice(apresEngagement.indexOf('Par mois'), apresEngagement.indexOf('Par mois') + 200))
-verifier('   et AUCUN mois à venir n\'apparaît dans le budget',
+  apresEngagement.slice(apresEngagement.indexOf(moisCourant), apresEngagement.indexOf(moisCourant) + 200))
+verifier('   et AUCUN mois à venir n\'apparaît dans le tracé',
   !apresEngagement.includes(moisFutur), `mois de la journée cherché : ${moisFutur}`)
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -252,10 +315,18 @@ if (await page.isVisible('section.recap')) {
   await page.click('text=Retour au roulage')
 }
 await page.waitForSelector('text=Meilleur tour du jour', { timeout: 20_000 })
+await ouvrirTousLesPlis(page)
 await page.click('text=Ajouter une dépense')
 await page.waitForSelector('section.depense', { timeout: 20_000 })
 await page.fill('#montant', '180,50')
 await page.click('section.depense .bouton:not(.secondaire)')
+/* ⚠ ON ATTEND LE RETOUR AVANT D'OUVRIR. La saisie de dépense remplace l'écran ;
+   ouvrir les plis pendant qu'elle est encore là n'ouvre rien, et le `#budget`
+   qu'on cherche ensuite est resté fermé. On attend donc que le bloc du coût
+   soit revenu — replié, avec son montant en tête — puis on l'ouvre. */
+await page.waitForSelector('.atelier-tete:has-text("Ce que la journée a coûté")',
+  { timeout: 20_000 })
+await ouvrirTousLesPlis(page)
 await page.waitForSelector('#budget', { timeout: 20_000 })
 await page.fill('#budget', '2000')
 await page.click('text=Poser le budget')
@@ -342,14 +413,16 @@ await page.waitForSelector('.atelier.budget', { timeout: 20_000 })
 await page.click('nav.barre .onglet:has-text("ACCUEIL")')
 verifier('   la confirmation part après avoir quitté l’accueil',
   !await page.isVisible('text=Dépense notée'))
-await page.click('nav.barre .onglet:has-text("GARAGE")')
-await page.waitForSelector('.atelier.budget', { timeout: 20_000 })
-await page.click('.atelier-tete:has-text("Budget ·")')
-await page.waitForSelector('.atelier.budget .ligne-atelier', { timeout: 20_000 })
-const verifie = (await page.textContent('.atelier.budget')).replace(/\s+/g, ' ')
+// ⚠ ET ON LA CHERCHE DANS LE TRACÉ DES MOIS, PAS DANS LE BUDGET. Le raccourci
+// de l'accueil promet « c'est au garage » ; ce qu'on éprouve ici est que le jour
+// SAISI (le 15 janvier, corrigé à la main) survit jusqu'au mois où il tombe — et
+// c'est le mois qui est parti à l'analyse, pas la ligne de poste. Deux mois
+// saisis : la forme est encore une composition, donc chaque mois porte son nom.
+const verifie = await moisSelonLAnalyse()
 verifier('   et elle Y EST — l\'annonce était vraie',
   new RegExp(`janvier ${anneeEnCours}[^€]*42 €`).test(verifie),
-  verifie.slice(verifie.indexOf('Par mois'), verifie.indexOf('Par mois') + 220))
+  verifie.slice(verifie.indexOf(`janvier ${anneeEnCours}`),
+    verifie.indexOf(`janvier ${anneeEnCours}`) + 220))
 
 await page.screenshot({ path: process.argv[2] ?? '/tmp/budget.png', fullPage: true })
 verifier('⑦ aucune erreur de console', erreurs.length === 0, erreurs.join(' | '))

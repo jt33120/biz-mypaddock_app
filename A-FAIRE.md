@@ -10,9 +10,32 @@ et je continue. Chaque entrée dit ce qui est bloqué, par quoi, et ce que ça d
 **Ce qui attend :** poser le secret `GEMINI_IMAGE` dans Supabase → Project Settings →
 Edge Functions → Secrets.
 
-**Pourquoi c'est bloqué :** les crédits ont été épuisés le 19 août 2026
-(`429 · prepayment credits are depleted`). Tant qu'ils ne sont pas rechargés, poser la clé
-ne servirait à rien — la fonction appellerait et recevrait un refus.
+**Pourquoi c'est bloqué — et ce point a changé le 3 septembre 2026.** Tu as écrit « je
+pense avoir des crédits clé Gemini ». C'est possible, et ça ne change rien : **le secret
+n'est pas posé sur le projet**. Ce n'est plus une hypothèse, c'est lu dans les journaux.
+
+La fonction n'a qu'une seule branche qui lise `pilote.quota_sprites` puis compte
+`generation` : celle qui s'exécute quand `GEMINI_IMAGE` est absent. Ces deux requêtes
+apparaissent dans les journaux à chaque fois que tu as tapé « En faire un portrait »
+(2 sept. 06:36, 3 sept. 05:06 et 05:34), à 500 ms du démarrage de la fonction. Aucun appel
+n'est jamais parti chez Gemini — donc aucun crédit n'a jamais été consommé, ni le 19 août
+ni depuis.
+
+Le refus du 19 août (`429 · prepayment credits are depleted`) reste vrai pour ce jour-là.
+Mais la panne d'aujourd'hui est en amont : pas de clé, pas d'appel.
+
+**Ce qu'il faut faire, dans cet ordre :**
+
+1. Poser le secret (Supabase → Project Settings → Edge Functions → Secrets), ou en ligne
+   de commande : `supabase secrets set GEMINI_IMAGE=… --project-ref oghmwkiklwaptjfouprx`.
+2. Retaper « En faire un portrait ». Si les crédits sont bien là, le portrait sort. S'ils
+   ne le sont pas, tu liras **« Le modèle d'image a refusé la demande »** avec le code
+   exact — plus jamais « le serveur est resté injoignable », qui était faux et t'a coûté
+   deux semaines de diagnostic (voir § 14).
+
+**Ton compte ne compte plus ses crédits** depuis le 3 septembre (§ 6) : il est en illimité,
+et le compteur en haut à gauche affiche ∞. Rien ne t'arrêtera au troisième essai — sauf le
+plafond global des 24 h, qui protège ta facture et pas ton quota.
 
 **Ce que ça débloque :** la fabrique de portraits pixel (récit 3bis.3). Tout le reste est
 en place et vérifié : fonction déployée, quota de 3 par compte, réservation avant appel,
@@ -22,6 +45,99 @@ spritification déterministe. Il ne manque que la clé.
 du prompt v6**, qui n'a jamais tourné. Ce qu'il faudra regarder, dans cet ordre : la livrée
 est-elle la vraie · l'orientation est-elle le profil du bon flanc · reste-t-il des lettres
 inventées · le fond vert se détache-t-il sans frange.
+
+---
+
+## 1bis · Le premier rendu du CASQUE et de la COMBINAISON — la manip est prête
+
+**Ce qui attend :** trois générations réelles, à lancer **le jour où les crédits sont
+rechargés**, et pas avant. Le prompt de la tenue (`supabase/functions/sprite/tenue.ts`,
+version `v7-tenue`) **n'a jamais tourné**, exactement comme v6 en son temps : il est écrit,
+relu et déployable, il n'est pas éprouvé. Aucun appel n'a été fait pour l'écrire — ni depuis
+le banc, ni depuis la fonction.
+
+**Pourquoi c'est bloqué :** les mêmes crédits que le §1, épuisés le 19 août 2026
+(`429 · prepayment credits are depleted`).
+
+**Ce que ça débloque :** le casque et la combinaison en portrait pixel — « la combinaison
+c'est comme un skin, et le casque aussi ». Jusqu'ici un casque partait avec le prompt de la
+MOTO : il recevait littéralement « c'est CETTE moto » et « l'angle est un PROFIL STRICT ».
+Le serveur choisit désormais son prompt d'après un champ `sujet`, et l'angle de la tenue est
+l'INVERSE de celui de la moto — trois-quarts, pour montrer l'écran et la mentonnière.
+
+**Ce que ça coûtera :** ≈ 0,16 € la pièce, ≈ 0,48 € pour les trois. C'est exactement le quota
+par défaut : ces trois-là le consomment en entier. Relève-le d'abord si tu veux pouvoir
+recommencer (`update pilote set quota_sprites = 10 …`, A-BRANCHER §4).
+
+### La manip, dans l'ordre
+
+**① Le secret.** `GEMINI_IMAGE` dans Supabase → Project Settings → Edge Functions → Secrets
+(§1 ci-dessus). S'il est déjà posé, rien à faire.
+
+**② Redéployer la fonction.** Elle porte maintenant deux fichiers de prompt, et la version
+actuellement en ligne ignore le champ `sujet` — elle dessinerait une moto :
+
+    supabase functions deploy sprite --no-verify-jwt
+
+`--no-verify-jwt` n'est pas un confort : l'authentification est faite **dans le corps** de la
+fonction pour distinguer « sans compte » de « quota atteint » et le dire au pilote. Sans ce
+drapeau, la porte de plateforme rejette avec un corps opaque et le produit n'a plus rien à
+dire.
+
+**③ Vérifier les refus AVANT de dépenser.** Ces deux appels ne coûtent rien, et ce sont eux
+qui protègent la suite. Sans jeton :
+
+    curl -s -X POST "$SUPABASE_URL/functions/v1/sprite"      → {"refus":"sans_compte"}
+
+Avec ton jeton, mais un sujet que la fonction ne connaît pas — le refus doit tomber **avant**
+la réservation, donc sans consommer de créneau :
+
+    curl -s -X POST "$SUPABASE_URL/functions/v1/sprite" \
+      -H "Authorization: Bearer <ton jeton>" -H 'Content-Type: application/json' \
+      -d '{"photo":"AAAA","sujet":"gants"}'                  → {"refus":"sujet_inconnu"}
+
+Si cette seconde ligne répond autre chose que `sujet_inconnu`, **arrête-toi là** : la garde ne
+tient pas, et tout ce qui suit dépense. (Ne remplace pas `"gants"` par `"machine"` pour
+« voir » : celui-là, lui, part et se paie.)
+
+**④ Les trois pièces, dans cet ordre : casque, combinaison NOIRE, combinaison colorée.**
+L'ordre n'est pas arbitraire. Le casque porte la demande — c'est son angle qui est en jeu. La
+combinaison noire est le cas le plus facile à rater : sans les trois gris froids, elle revient
+en silhouette pleine, illisible. La colorée vient en dernier et ne sert qu'à confirmer que ses
+bandes passent le budget de 3 carrés.
+
+Pour chacune : **Garage → Équipement → la pièce** — elle doit porter son **genre**
+(casque ou combinaison), sinon l'écran le dit et **n'appelle pas** → « Photographier » →
+« En faire un portrait pixel » → « Lancer la fabrication ».
+
+**⑤ Le verdict, dans cet ordre. Ce qui fait REFUSER :**
+
+1. **l'angle** — trois-quarts avant, ouverture d'écran vers la gauche. Un casque de profil
+   strict (une forme d'œuf) ou vu de face est à refuser : c'est l'exigence même de la demande.
+2. **la stabilité** — pose les deux premiers casques côte à côte. S'ils ne sont pas sous le
+   même angle, à la même hauteur d'écran et à la même taille, le prompt a échoué **même si
+   chaque image est jolie prise seule**. C'est le critère qui compte, et c'est le seul qui ne
+   se voit pas sur une image isolée.
+3. **les lettres** — la marque au front, sur la platine d'écran, sur la jugulaire, sur la
+   poitrine. Une seule lettre inventée = refus. Une suite de petits blocs alignés comme un mot
+   = refus aussi, c'est encore du faux texte.
+4. **le noir** — la combinaison noire garde ses arêtes et reste FROIDE. Silhouette pleine, ou
+   noir viré violet, ou noir éclairci en gris moyen = refus.
+5. **le fond vert** — aucune frange verte au contour, et aucun vert dans les creux : col,
+   poignets, bas de jambes, intérieur de l'ouverture d'écran. C'est ce qui se voit après
+   spritification, pas avant.
+6. **personne dedans** — aucune tête, aucun visage, aucune main, aucun mannequin, aucun
+   cintre, aucun socle, aucune ombre portée.
+
+**⑥ Ce qu'on fait d'un refus.** On ne relance pas au hasard : chaque relance se paie et
+consomme un créneau. Le prompt se corrige dans `supabase/functions/sprite/tenue.ts`, il se
+rejoue **au banc** sur les mêmes photos, et seulement ensuite on redéploie :
+
+    node banc-rendu/generer.mjs prompts/v7-tenue.js
+
+Le banc lit le sujet dans un fichier posé à côté de la photo — `casque.jpg.cadre.json`
+contenant `{"genre":"casque"}`. Sans lui il refuse la photo au lieu de deviner, et il refuse
+**avant** l'appel : une photo mal étiquetée ne coûte rien.
 
 ---
 
@@ -70,10 +186,15 @@ première publicité.
 
 ## 5 · La récolte — DÉPLOYÉE, et volontairement muette
 
-**Fait le 19 août 2026.** Le service tourne sur Railway, projet `mypaddock-recolte`, service
-`recolte`, racine `recolte/`, sonde de santé sur `/sante` :
+**Fait le 19 août 2026. DÉMÉNAGÉ le 5 septembre 2026** — voir § 15, qui dit pourquoi et ce
+qu'il te reste à faire. Le service tourne sur Railway, projet `mypaddock_api` (à renommer
+`mypaddock`), service `recolte`, racine `recolte/`, sonde de santé sur `/sante` :
 
-    https://recolte-production.up.railway.app/sante
+    https://recolte-production-ff41.up.railway.app/sante
+
+⚠ L'ancienne adresse `recolte-production.up.railway.app` répond encore : elle appartient au
+service de l'ancien projet, qui n'a pas été supprimé. Les deux tournent en parallèle, et les
+deux sont muets — c'est voulu le temps que tu tranches (§ 15).
 
 **Deux interrupteurs, indépendants, tous les deux fermés — vérifié en ligne :**
 
@@ -125,7 +246,7 @@ remplace-le d'un clic dans le tableau de bord — rien d'autre n'en dépend.
 **Déclencher un tour, une fois les clés posées :**
 
     curl -X POST -H "Authorization: Bearer <RECOLTE_JETON>" \
-      https://recolte-production.up.railway.app/recolter
+      https://recolte-production-ff41.up.railway.app/recolter
 
 **Ce qu'il ne fera jamais :** écraser une correction du pilote. Une ligne marquée
 `corrige_par_pilote` n'est pas réécrite — une extraction par IA est une reconstruction, pas
@@ -165,63 +286,75 @@ bibliothèque.
 
 ---
 
-## 6 · Le système de crédit — ta décision de monétisation à écrire
+## 6 · Le système de crédit — ✅ TRANCHÉ ET EN LIGNE le 3 septembre 2026
 
-**Ton idée, du 19 août :** « On va avoir pas mal de fonctionnalités IA : analyse de vidéo,
-génération d'image. Penser à un système de crédit pour ceux qui veulent ces fonctionnalités
-ou pas. Ne pas l'inclure dans un premium qui pourrait déborder, et quand plus de crédit, ça
-s'arrête. À la place ou au-dessus d'un freemium ? »
+**Ta décision, mot pour mot :** « Ne pas marquer 16 cts, faire un système de crédit et ce
+compte test en illimité, avec un compteur en haut à gauche qui peut se faire rajouter. Un
+crédit couvre un appel IA en gros sur la clé Gemini, la clé Mistral gratuite pour le moment. »
 
-**Ce que le code fait DÉJÀ, et qui va dans ton sens.** Le mécanisme existe, il n'est
-simplement pas achetable :
+Elle referme les deux premiers manques que cette entrée décrivait depuis le 19 août — un
+solde générique au lieu d'un quota par fonctionnalité, et un prix en crédits par acte.
 
-- `pilote.quota_sprites` — un solde, par compte, défaut 3.
-- `generation` — un registre : une ligne par appel, avec son coût réel en centimes. **Aucune
-  politique d'insertion** : seule la fonction serveur y écrit. Un compteur que le compté peut
-  écrire ne compte rien.
-- `plafond` — un plafond global sur 24 h, en base et non compilé, plus le prix unitaire.
-- `reserver_generation()` — réserve **avant** d'appeler, sous verrou consultatif, et refuse
-  si le solde ou le plafond est atteint. « Quand plus de crédit, ça s'arrête » est déjà vrai.
+**Ce qui est en place** (migration `20260903000001`, appliquée et vérifiée) :
 
-**Ce qui manque, et c'est exactement ce que tu décris :**
+| | |
+|---|---|
+| Un seul solde | Fini `quota_sprites` (3) et `quota_manuels` (5) : deux portefeuilles pour un pilote qui n'en voit qu'un. Les deux colonnes sont supprimées. |
+| Le solde se **dérive** | Accueil + accordés − consommés. Aucune colonne ne le stocke : un solde stocké et un registre finissent par se contredire, et c'est le registre qui a raison. |
+| Un portrait | **1 crédit** (`plafond.credits_sprite`) |
+| Une recherche de manuel | **0 crédit** (`plafond.credits_manuel`) — la clé Mistral est gratuite pour le moment |
+| Crédits d'accueil | **3** par compte (`plafond.credits_accueil`) |
+| Ton compte | **illimité** (`pilote.credits_illimites`) |
+| Le compteur | En haut à gauche, sur tous les écrans. Absent sans compte. |
 
-1. **Un solde générique au lieu d'un quota par fonctionnalité.** `quota_sprites` est nommé
-   d'après une seule fonctionnalité. L'analyse de vidéo arriverait avec `quota_videos`, et on
-   aurait deux portefeuilles là où le pilote en voit un. À renommer en un solde unique, avec
-   un prix en crédits par acte — une génération d'image n'a aucune raison de coûter autant
-   qu'une minute de vidéo analysée.
-2. **De quoi en acheter.** C'est la seule vraie brique manquante, et elle demande un compte
-   marchand.
-3. **Le prix.** Le coût réel est connu et déjà écrit ligne par ligne dans `generation` : c'est
-   la seule base honnête pour fixer un tarif, et elle sera mesurée avant d'être devinée.
+**Les trois prix sont des DONNÉES, pas du code.** Le jour où Mistral se met à facturer, tu
+passes `credits_manuel` à 1 — sans redéploiement, sans PR, sans moi :
 
-**⚠ CORRECTION — L'ARGUMENT QUI ÉTAIT ÉCRIT ICI ÉTAIT PÉRIMÉ, ET IL VENAIT DE MOI.**
+```sql
+update plafond set credits_manuel = 1;
+```
 
-Cette entrée disait : « le produit s'ouvre onze fois par an, donc l'abonnement mensuel est une
-machine à résiliation ». C'est faux depuis le 18 août 2026, et la rétractation est écrite noir
-sur blanc dans `_bmad/custom/mypaddock-contraintes.md` §3 : **onze est le nombre de ROULAGES,
-pas le nombre d'ouvertures.** On en avait tiré un rythme d'usage qui n'a jamais été mesuré.
-« Aucun nombre ne remplace celui-là, et c'est délibéré. »
+**Pour te rajouter des crédits** (ou en donner à quelqu'un). Chaque ajout laisse une trace
+avec son motif, parce qu'un solde que personne ne peut expliquer est un solde auquel personne
+ne croit :
 
-Conséquence directe : **l'abonnement n'est plus disqualifié d'office.** Je l'avais pourtant
-répété comme un acquis, ici et de vive voix — c'est le genre d'argument qui s'installe parce
-qu'il sonne bien, et qui survit à sa propre réfutation.
+```sql
+select crediter('4ab5b551-e695-41f9-9f90-8009887574e2', 20, 'test de recette');
+```
 
-Ce qui reste vrai, et qui est plus étroit : **le moment de saisie au paddock** est rare —
-gants aux mains, plein soleil, sans réseau. C'est une contrainte d'interface, pas un argument
-de tarification.
+Elle rend le nouveau solde. Un montant **négatif** est accepté — c'est ainsi qu'on reprend un
+geste commercial ou qu'on corrige une erreur, et le registre garde la trace des deux sens.
+`crediter` est retirée à tous les rôles joignables depuis un navigateur : c'est la leçon du
+19 août, où un `PATCH /rest/v1/pilote` portait un quota à 32767, soit 5 242 € en un appel.
 
-**Ce qui est vraiment écarté, et pour un tout autre motif : le pass saison.** La revue produit
-lui reproche de fabriquer un coût échoué — « j'ai payé, il faut que ça serve » — c'est-à-dire
-exactement la pression à rouler que l'interdit n°4 proscrit. Et le PRD juge ce défaut PIRE
-qu'une mécanique de jeu, parce qu'il est invisible dans l'interface : rien à l'écran ne le
-montre, il n'agit que dans la tête du pilote.
+**⚠ « ILLIMITÉ » PORTE SUR LE SOLDE, PAS SUR LA FACTURE.** Ton compte ne consomme aucun
+crédit, mais il reste sous le plafond global des 24 h — 5 € par jour, tous comptes confondus,
+soit une trentaine de portraits. C'est le seul garde-fou contre une boucle qui partirait en
+vrille sur ta vraie clé, et le retirer pour un compte de test serait le retirer précisément
+là où on fait des bêtises. Il se relève en base si la recette l'exige :
 
-**Ma recommandation, à confirmer par toi**, débarrassée de l'argument mort : crédit prépayé
-pour tout ce qui appelle une IA, noyau gratuit et sans limite. Deux raisons qui tiennent
-toutes seules — il **facture exactement ce qui coûte**, et il ne crée aucun coût échoué. À
-trancher quand un vrai utilisateur aura demandé une de ces fonctionnalités : c'est le seul
-moment où la réponse coûte moins qu'elle ne rapporte.
+```sql
+update plafond set par_jour_centimes = 2000;
+```
+
+**Le centime n'a pas disparu, il a quitté l'écran.** `generation.cout_centimes` enregistre
+toujours le coût réel, acte par acte. C'est délibéré et c'est le point ③ ci-dessous : le prix
+de vente se fixera sur des relevés, pas sur une intuition.
+
+**Ce qui reste, et c'est toujours ta décision : VENDRE.** Il n'y a aucun moyen d'acheter des
+crédits — il faut un compte marchand, et c'est le seul point de cette entrée que le code ne
+peut pas trancher à ta place. Ma recommandation n'a pas bougé : crédit prépayé pour tout ce
+qui appelle une IA, noyau gratuit et sans limite. Il facture exactement ce qui coûte, et il ne
+crée aucun coût échoué — contrairement au pass saison, que la revue produit écarte parce qu'il
+fabrique une pression à rouler (« j'ai payé, il faut que ça serve »), invisible dans
+l'interface et donc impossible à corriger par elle.
+
+**⚠ Rappel de l'argument mort, pour qu'il ne revienne pas.** Cette entrée a longtemps dit
+« le produit s'ouvre onze fois par an, donc l'abonnement est une machine à résiliation ».
+C'est faux : **onze est le nombre de ROULAGES, pas d'ouvertures**
+(`_bmad/custom/mypaddock-contraintes.md` §3). L'abonnement n'est donc pas disqualifié
+d'office. Ce qui reste vrai, et qui est plus étroit : le moment de saisie **au paddock** est
+rare, gants aux mains et sans réseau — une contrainte d'interface, pas de tarification.
 
 ---
 
@@ -349,3 +482,188 @@ Sinon, c'est un bouton dans Settings → General → Change visibility.
 
 *(Les dates de la saison 2026 sont sorties de cette liste : tu les saisis dans l'application.
 Le bouton « Reprendre la saison 2026 » du garage reste, comme raccourci d'essai.)*
+
+---
+
+## 12 · Une perte assumée du 1er septembre 2026, à trancher quand tu l'auras vue
+
+**La composition d'un mois ne se lit plus dès qu'il y a trois mois.** Le tracé des mois a
+quitté le budget pour l'écran d'analyse — il y gagne une rangée de périodes, alors qu'il était
+verrouillé sur l'année courante et donc muet sur toute saison passée. Mais il y devient une
+**suite** (des points reliés, la forme que tu as choisie pour les évolutions), et douze points
+reliés n'ont aucun endroit où écrire douze compositions.
+
+Concrètement : « septembre 2026 · 716,30 € · pneus · engagement · essence » se lit encore sous
+trois mois, où la forme reste une composition ; au-delà, il ne reste que le montant du mois.
+La moitié « de quoi il était fait » du récit 19.2 est donc **rendue par intermittence**.
+
+Ce n'est pas un oubli, c'est un arbitrage entre deux clauses qui se contredisent ici, et il
+t'appartient : soit la suite gagne une manière de dire la composition d'un point (une ligne
+sous le tracé, qui suivrait le point touché), soit FINANCE · MOIS redevient une composition et
+perd sa ligne continue, soit on s'en tient à ce qu'il y a. Rien ne presse — mais rien ne doit
+non plus l'oublier, d'où cette ligne.
+
+---
+
+## 13 · Le serveur avait CINQ JOURS de retard, et rien ne le disait
+
+**Rattrapé le 2 septembre 2026, depuis la session cloud.** Ce paragraphe existe pour que
+la panne se reconnaisse la prochaine fois, parce qu'elle ne ressemblait pas à une panne.
+
+**Ce qui s'était passé.** Fusionner une PR déploie Vercel, et Vercel ne déploie que le
+*paquet servi au navigateur*. Ni les migrations, ni les fonctions de bord ne partent avec.
+Deux lots avaient donc été livrés, testés au banc, mergés — et n'existaient que côté client :
+
+| | appliqué le | manquait |
+|---|---|---|
+| `20260828000001` la vidéo de crash | 2 sept. | table `video`, bucket `videos`, 4 politiques RLS |
+| `20260901000001` la tenue du jour | 2 sept. | `equipement.genre`, `roulage.casque_id`, `roulage.combinaison_id` |
+| fonction `sprite` | 2 sept. (v4) | elle datait du 19 août et ignorait le champ `sujet` |
+
+**Pourquoi c'était invisible.** Le schéma PowerSync local, lui, déclarait bien `genre`.
+Taper « Casque » écrivait donc en base LOCALE, la puce s'allumait, et tout paraissait
+marcher — jusqu'à ce que l'envoi au serveur soit refusé (colonne inconnue) et que la
+valeur revienne. Le symptôme lu par le pilote était « le bouton ne marche pas ». Le vrai
+symptôme était plus grave : **une opération d'envoi qui échoue en boucle bloque la file
+d'envoi**, donc tout ce qui suit cesse aussi de remonter.
+
+Même mécanique pour les skins : la fonction en ligne ne connaissait pas `sujet`, donc
+l'appel n'atteignait jamais Gemini. La clé et ses crédits n'y étaient pour rien.
+
+**Ce qui reste à ta main — et c'est le même piège, un cran plus loin.**
+Les règles de synchronisation vivent sur l'instance PowerSync **cloud**, pas dans Supabase :
+je n'y ai aucun accès depuis ici. `powersync/sync-config.yaml:37` fait descendre `video`,
+et cette ligne n'a jamais été déployée. Tant qu'elle ne l'est pas, la table existe des deux
+côtés et **ne descend sur aucun second appareil** — exactement la panne silencieuse que la
+migration elle-même décrit en son ③.
+
+    powersync deploy
+
+Les colonnes de la tenue, elles, n'ont besoin de rien : toutes les règles sont en
+`SELECT *`, donc une colonne nouvelle descend d'elle-même.
+
+**La leçon, en une ligne :** un lot qui touche `supabase/` n'est pas livré quand la PR est
+mergée. Il est livré quand la migration est appliquée ET la fonction redéployée.
+
+---
+
+## 14 · Pourquoi « le serveur est resté injoignable » était faux — corrigé le 3 septembre 2026
+
+**Tu n'as rien à faire ici.** C'est le compte rendu de la panne que ton code d'erreur a
+permis de trouver, et il vaut d'être gardé parce que la leçon se reproduira.
+
+**Ce que tu voyais :** un témoin qui tourne pendant une minute, puis *« Le serveur est
+resté injoignable. Rien n'a été décompté, et la photo est intacte. (Load failed) »*.
+
+**Ce qui se passait vraiment.** Le serveur répondait — deux fois, en 500 ms. Puis il se
+taisait 150 secondes et le runtime le tuait. La trace, relevée trois fois à l'identique :
+
+    booted (30 ms)
+    GET  /auth/v1/user                        200
+    GET  /rest/v1/pilote?select=quota_sprites 200   ← résolu
+    HEAD /rest/v1/generation?select=id        200   ← la passerelle répond…
+    … 150 s de silence …                            ← … mais la promesse, jamais
+    shutdown
+
+La branche « la fabrique n'est pas ouverte » ornait son refus de deux nombres, lus en deux
+allers-retours. Le second était une requête **HEAD** — et une réponse HEAD n'a pas de corps,
+là où le client Deno en attend un. La promesse ne se réglait jamais. Safari, lui, abandonne
+à 60 s avec `TypeError: Load failed`, que le client traduisait en « injoignable ».
+
+Donc : **la branche chargée de dire poliment « rien n'est branché » était précisément celle
+qui ne pouvait pas répondre.** Et c'est la seule que tu pouvais atteindre, faute de clé.
+
+**Ce qui a été corrigé** (fonction redéployée en v5, elle répond aujourd'hui en 0,4 s) :
+
+- la branche ne lit plus rien du tout — zéro `await` entre le jeton et la réponse ;
+- l'appel au modèle est borné à 100 s, sous la limite du runtime : un modèle lent rend
+  désormais ton créneau au lieu de le brûler ;
+- le téléphone attend 120 s, donc plus longtemps que le serveur — celui qui renonce en
+  premier doit être celui qui peut rembourser ;
+- une attente qui expire ne se dit plus « injoignable » : elle a son propre message, qui
+  ne promet pas ce qu'on ne sait pas ;
+- le type de l'image part avec elle. Il était écrit en dur à `image/jpeg` alors que le
+  téléphone envoie du **WebP**. Ce défaut n'avait jamais pu se montrer — aucun appel n'est
+  allé jusqu'au modèle — donc c'est ton premier portrait payant qui l'aurait découvert.
+
+**La leçon, en une ligne :** le chemin le plus dégradé d'un service doit être le moins cher
+et le plus sûr, pas celui qui fait du réseau pour orner un refus.
+
+---
+
+## 15 · Railway — un seul projet MyPaddock, et ce qui reste de ta main
+
+**Ta demande du 5 septembre 2026 :** « merge both projects to have only one project for
+mypaddock with all the backend intelligence with it. Even if sth is not currently used keep
+it as an archive. »
+
+**⚠ RAILWAY NE DÉPLACE PAS UN SERVICE D'UN PROJET À L'AUTRE.** Il n'y a pas de « move » :
+fusionner veut dire RECRÉER. C'est ce qui décide de la direction, et elle n'est pas
+symétrique :
+
+| direction | services à reconstruire | ce qu'on risque |
+|---|---|---|
+| garder `mypaddock_api`, y amener `recolte` | **1** | l'URL de la récolte change (elle n'est appelée par aucun code) |
+| garder `mypaddock-recolte`, y amener les 7 | **7** | on perd `mypaddockapi-production.up.railway.app`, l'API de valuation |
+
+D'où le choix : **`mypaddock_api` survit**, et il ne reste qu'à le renommer.
+
+**⚠ ET CE SONT DEUX DOS DIFFÉRENTS, PAS UN SYSTÈME.** Il faut le savoir avant de les voir
+côte à côte : ils ne partagent ni dépôt, ni base, ni réseau privé.
+
+| | `recolte` | les sept autres |
+|---|---|---|
+| dépôt | `biz-mypaddock_app` (le carnet), racine `recolte/` | `biz-MyPaddock_api` |
+| langage | Node | Python / FastAPI |
+| base | Supabase `oghmwkiklwaptjfouprx` (le carnet) | deux autres projets Supabase |
+| objet | récolte des règles de circuits | valuation moto US, crawlers, entraînement HNN |
+
+Les réunir donne **un seul tableau de bord**, pas un seul système. C'est bien ce que tu
+demandais, et c'est utile — mais aucune des deux moitiés ne gagne à parler à l'autre.
+
+**Ce qui est fait, et vérifié en ligne :**
+
+- service `recolte` créé dans `mypaddock_api`, même dépôt, même branche `main`, même racine
+  `recolte/`, même commande `node index.mjs`, même sonde `/sante`, mêmes déclencheurs de
+  rebuild (`recolte/**`) ;
+- `GET /sante` → `{"pret":false,"refus":"base non configurée"}` — identique à l'ancien ;
+- `POST /recolter` sans jeton et avec un mauvais jeton → `401 {"refus":"jeton"}` ;
+- les sept services d'origine n'ont pas bougé : `valuation` répond toujours (`/docs` en 200).
+
+**Ce qui reste à ta main — quatre gestes, dans cet ordre :**
+
+1. **Copier trois variables** depuis l'ancien service vers le nouveau. Je ne peux pas les
+   lire : Railway me renvoie les NOMS et masque les valeurs (`valuesRedacted`), et c'est une
+   bonne chose pour `RECOLTE_JETON` — un secret que je n'ai jamais vu vaut mieux qu'un secret
+   que j'ai relu.
+
+   | variable | pourquoi je ne l'ai pas posée |
+   |---|---|
+   | `RECOLTE_JETON` | secret, jamais lu |
+   | `MISTRAL_MODELE` | tu l'as choisi ; le défaut du code est `mistral-small-latest` et je ne veux pas le deviner à ta place |
+   | `RECOLTE_PLAFOND` | idem, défaut du code : 20 |
+
+   `NODE_ENV` et `SUPABASE_URL` sont déjà posées — les deux se savent sans rien lire.
+
+   ⚠ **Ne recopie PAS `RECOLTE_RACINE`.** Elle est posée sur l'ancien service et **n'est lue
+   nulle part dans le code** (`grep` sur `recolte/` : zéro occurrence). C'est une variable
+   morte ; la recopier la ferait vivre un an de plus.
+
+2. **Renommer le projet** `mypaddock_api` → `mypaddock`, dans le tableau de bord. L'API ne
+   me donne pas le renommage de projet. Le renommage ne touche aucun domaine : ils
+   appartiennent aux services.
+
+3. **Supprimer le projet `mypaddock-recolte`.** ⚠ C'est le seul geste irréversible de la
+   liste, et c'est pour ça que je ne l'ai pas fait. Tant qu'il existe, les deux récoltes
+   tournent en parallèle — sans danger, elles sont muettes toutes les deux — et tu peux
+   revenir en arrière d'un clic.
+
+4. **Reprendre le joli domaine.** Une fois l'ancien projet supprimé,
+   `recolte-production.up.railway.app` se libère : tu peux retirer le suffixe `-ff41` dans les
+   réglages du nouveau service. Le `-ff41` existe seulement parce que le nom était pris au
+   moment de la création. Repasse alors ce fichier à l'ancienne adresse (§ 5).
+
+**Ce qui n'a PAS été touché, et qui reste tel quel comme tu l'as demandé :** les cinq
+services hors ligne ou en échec de `mypaddock_api` — `Training_HNN`, `crawler_discover_US`,
+`crawler_crawl_US`, `scraper_postprocessing`, `gamme_discovery`. Ils gardent leur
+configuration, leurs variables et leur historique. C'est l'archive.

@@ -372,6 +372,7 @@
 }
 
 .garage-selection .equipement .actions-materiel {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: var(--space-2);
   gap: var(--space-2) var(--space-4);
 }
@@ -380,6 +381,11 @@
   min-height: var(--target-small);
   flex-shrink: 1;
   font-size: var(--text-sm);
+}
+
+.garage-selection .equipement .actions-materiel > .bouton:first-child {
+  grid-column: 1 / -1;
+  min-height: var(--cible-min);
 }
 
 /* Account hierarchy: identity, connected services, privacy, then sensitive actions. */
@@ -489,28 +495,28 @@
   line-height: 1.6;
 }
 
-.compte-page .compte-diagnostic > summary {
+.compte-page details.compte-groupe > summary {
   min-height: var(--target-small);
   cursor: pointer;
   list-style: none;
 }
 
-.compte-page .compte-diagnostic > summary::-webkit-details-marker {
+.compte-page details.compte-groupe > summary::-webkit-details-marker {
   display: none;
 }
 
-.compte-page .compte-diagnostic > summary::after {
+.compte-page details.compte-groupe > summary::after {
   content: '+';
   margin-left: auto;
   color: var(--encre-tenue);
   font-size: var(--text-xl);
 }
 
-.compte-page .compte-diagnostic[open] > summary::after {
+.compte-page details.compte-groupe[open] > summary::after {
   content: '−';
 }
 
-.compte-page .compte-diagnostic[open] > .lien {
+.compte-page details.compte-groupe[open] > .lien {
   margin-top: var(--space-4);
 }
 
@@ -582,7 +588,8 @@
     align-items: stretch;
   }
 
-  .garage-selection .equipement > .pile > .sous-titre {
+  .garage-selection .equipement > .pile > .sous-titre,
+  .garage-selection .equipement > .pile > .note {
     grid-column: 1 / -1;
   }
 
