@@ -331,6 +331,22 @@ export default function App() {
     void rafraichir(db).finally(() => setPretPremierEcran(true))
   }, [db, rafraichir])
 
+  // A fresh device can finish its first local read before the account arrives.
+  // Refresh home and Analysis once per completed sync, without delaying startup.
+  useEffect(() => {
+    if (!db) return
+    let derniereLecture: number | undefined
+    const relire = (status: Db['currentStatus']) => {
+      const passage = status.lastSyncedAt?.getTime()
+      if (!status.hasSynced || passage === undefined || passage === derniereLecture) return
+      derniereLecture = passage
+      void rafraichir(db).catch(() => { /* Keep the last usable screen on a transient read failure. */ })
+    }
+    const arreter = db.registerListener({ statusChanged: relire })
+    relire(db.currentStatus)
+    return arreter
+  }, [db, rafraichir])
+
   /* L'abri se relit au retour au premier plan et quand l'invitation arrive :
      l'événement `beforeinstallprompt` est tiré une fois, tôt, et il ne repasse
      pas — l'écran doit pouvoir se mettre à jour après coup. */
@@ -426,7 +442,7 @@ export default function App() {
     return () => { vivant = false }
   }, [db, identite, essai, rafraichir])
 
-  /* AD-6 — LES DEUX SEULS DÉCLENCHEURS, et il n'y en aura jamais d'autres :
+  /* AD-6 — Les deux événements de reprise du téléphone :
      le retour au premier plan et le retour de connectivité. Sur iOS rien ne
      s'exécute pendant que l'application est fermée — WebKit a refusé Background
      Sync et n'a jamais implémenté Background Fetch. Toute file de requêtes de

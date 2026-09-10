@@ -36,7 +36,7 @@
 
 .garage-vehicle {
   overflow: hidden;
-  border: 1px solid var(--filet);
+  border: 1px solid color-mix(in srgb, var(--bleu-electrique) 18%, var(--filet));
   border-radius: var(--radius-card);
   background: var(--surface);
 }
@@ -45,6 +45,17 @@
   position: relative;
   z-index: 1;
   padding: var(--space-6) var(--space-6) var(--space-3);
+}
+
+.garage-selection .garage-vehicle > .garage-titre::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--space-6);
+  width: var(--space-16);
+  height: 2px;
+  background: linear-gradient(90deg, var(--bleu-electrique), var(--violet-electrique));
+  border-radius: var(--radius-pill);
 }
 
 .garage-identity-line {
@@ -98,7 +109,7 @@
   isolation: isolate;
   min-height: var(--showroom-min);
   padding: var(--space-3) var(--space-4) var(--space-4);
-  background: var(--nuit-2);
+  background: radial-gradient(ellipse at 12% 90%, color-mix(in srgb, var(--bleu-electrique) 7%, transparent), transparent 58%), radial-gradient(ellipse at 88% 16%, color-mix(in srgb, var(--violet-electrique) 8%, transparent), transparent 62%), var(--nuit-2);
 }
 
 .garage-selection .garage-showroom::before {

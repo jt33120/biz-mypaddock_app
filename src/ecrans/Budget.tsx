@@ -440,6 +440,7 @@ export function Equipement({ db, onEcrit, appele }: {
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState(false)
   const bloc = useRef<HTMLDivElement>(null)
+  const lectureEquipement = useRef(0)
 
   useEffect(() => {
     if (!appele) return
@@ -451,8 +452,11 @@ export function Equipement({ db, onEcrit, appele }: {
   }, [appele])
 
   const charger = useCallback(async () => {
-    setListe(await listerEquipement(db))
-    setCout(await coutEquipement(db))
+    const lecture = ++lectureEquipement.current
+    const [materiel, total, casques, combinaisons] = await Promise.all([
+      listerEquipement(db), coutEquipement(db), piecesDeGenre(db, 'casque'), piecesDeGenre(db, 'combinaison'),
+    ])
+    if (lecture !== lectureEquipement.current) return
     /* ⚠ LE GENRE SE LIT PAR LA MÊME REQUÊTE QUE LE SÉLECTEUR DE TENUE, et c'est
        la raison de cette map plutôt qu'une colonne de plus sur l'inventaire.
        `piecesDeGenre` est le SEUL endroit où le produit décide ce qui compte
@@ -462,12 +466,17 @@ export function Equipement({ db, onEcrit, appele }: {
        désaccord sur le même fait, et c'est le genre de divergence qu'on ne voit
        qu'une fois payée. */
     const m = new Map<string, GenreDeTenue>()
-    for (const g of ['casque', 'combinaison'] as const) {
-      for (const p of await piecesDeGenre(db, g)) m.set(p.id, g)
-    }
+    for (const p of casques) m.set(p.id, 'casque')
+    for (const p of combinaisons) m.set(p.id, 'combinaison')
+    setListe(materiel)
+    setCout(total)
     setGenres(m)
   }, [db])
-  useEffect(() => { void charger() }, [charger])
+  useEffect(() => {
+    const stop = db.onChange({ onChange: () => { void charger() } }, { tables: ['equipement'], throttleMs: 50 })
+    void charger()
+    return () => { stop(); lectureEquipement.current++ }
+  }, [db, charger])
 
   return (
     <div className="bloc pile atelier equipement" ref={bloc}>

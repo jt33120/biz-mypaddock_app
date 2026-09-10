@@ -56,7 +56,8 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
   onArgentParMoto: (() => void) | null
 }) {
   const [machines, setMachines] = useState<Machine[]>([])
-  const [actif, setActif] = useState(0)
+  const [machineActiveId, setMachineActiveId] = useState<string | null>(null)
+  const actif = Math.max(0, machines.findIndex((m) => m.id === machineActiveId))
   const [bilan, setBilan] = useState<BilanMachine | null>(null)
   const [corriger, setCorriger] = useState(false)
   /** Le poste d'atelier ouvert EN PAGE. Non nul = le garage cède l'écran. */
@@ -77,13 +78,22 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
   const [illustrationCandidate, setIllustrationCandidate] = useState<{ machineId: string; src: string } | null>(null)
   const [importeIllustration, setImporteIllustration] = useState(false)
   const [gardeIllustration, setGardeIllustration] = useState(false)
+  const [revisionPhoto, setRevisionPhoto] = useState(0)
+  const lectureMachines = useRef(0)
 
   const charger = useCallback(async () => {
+    const lecture = ++lectureMachines.current
     const m = await listerMachines(db)
+    if (lecture !== lectureMachines.current) return
     setMachines(m)
-    setActif((a) => Math.min(a, Math.max(0, m.length - 1)))
+    setMachineActiveId((id) => m.some((machine) => machine.id === id) ? id : m[0]?.id ?? null)
   }, [db])
-  useEffect(() => { void charger() }, [charger])
+  useEffect(() => {
+    // First sync may arrive after this screen has mounted on a new device.
+    const stop = db.onChange({ onChange: () => { void charger() } }, { tables: ['machine'], throttleMs: 50 })
+    void charger()
+    return () => { stop(); lectureMachines.current++ }
+  }, [db, charger])
 
   const machine = machines[actif]
   const machineSelectionnee = machine?.id
@@ -100,18 +110,23 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
   // d'envoi » ne peut pas être une photo absente à l'écran (FR-10, NFR-7).
   useEffect(() => {
     setCandidat(null); setIllustrationCandidate(null); setSouci(null)
+  }, [machineSelectionnee])
+  const photoChemin = machine?.photo_chemin ?? null
+  useEffect(() => {
     let vivant = true
-    void photoMachine(machine?.photo_chemin ?? null).then((f) => {
+    void photoMachine(photoChemin).then((f) => {
       if (!vivant) return
       setPhotoUrl((a) => { if (a) URL.revokeObjectURL(a); return f ? URL.createObjectURL(f) : null })
     })
     return () => { vivant = false }
-  }, [machine])
+  }, [machineSelectionnee, photoChemin, revisionPhoto])
 
   const verser = async (f: File) => {
     if (!machine) return
     setSouci(null)
     await verserPhotoMachine(db, machine.id, f)
+    setRevisionPhoto((n) => n + 1)
+    setCandidat(null); setIllustrationCandidate(null)
     await charger(); onEcrit()
   }
 
@@ -300,7 +315,7 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
           {machines.map((m, i) => (
             <button key={m.id} className={`onglet ${i === actif ? 'actif' : ''}`}
                     aria-current={i === actif ? 'true' : undefined}
-                    onClick={() => setActif(i)}>{m.modele}</button>
+                    onClick={() => setMachineActiveId(m.id)}>{m.modele}</button>
           ))}
         </nav>
       )}
