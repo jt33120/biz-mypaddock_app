@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { Bike, Camera, ChevronRight, Flag, ImagePlus, MapPin, Pencil, Plus, Shirt, X } from 'lucide-react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
   ajouterSession, anneeSaison, bilanMachine, creerMachine, creerRoulage, enCentimes,
@@ -17,6 +18,9 @@ import { Refaire } from './Refaire'
 import type { Categorie } from '../db/atelier'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
 import { aujourdhui } from '../db/vecu'
+import { useLocalPortrait } from '../visuals/local-portraits'
+import { estIllustrationImportee, importerIllustration } from '../visuals/import-illustration'
+import '../styles/garage-night.css'
 
 /**
  * Le garage — l'axe machine d'AD-2 gagne enfin une surface.
@@ -53,6 +57,10 @@ export function Garage({ db, onEcrit }: {
   const [enCours, setEnCours] = useState(false)
   const [souci, setSouci] = useState<string | null>(null)
   const fichier = useRef<HTMLInputElement>(null)
+  const fichierIllustration = useRef<HTMLInputElement>(null)
+  const [illustrationCandidate, setIllustrationCandidate] = useState<{ machineId: string; src: string } | null>(null)
+  const [importeIllustration, setImporteIllustration] = useState(false)
+  const [gardeIllustration, setGardeIllustration] = useState(false)
 
   const charger = useCallback(async () => {
     const m = await listerMachines(db)
@@ -62,6 +70,9 @@ export function Garage({ db, onEcrit }: {
   useEffect(() => { void charger() }, [charger])
 
   const machine = machines[actif]
+  const localPortrait = useLocalPortrait(machine?.id)
+  const illustrationGardee = estIllustrationImportee(machine?.sprite)
+  const portraitAffiche = illustrationGardee ? machine?.sprite : localPortrait ?? machine?.sprite
   useEffect(() => {
     if (!machine) { setBilan(null); return }
     void bilanMachine(db, machine.id).then(setBilan)
@@ -70,7 +81,7 @@ export function Garage({ db, onEcrit }: {
   // La photo se sert TOUJOURS depuis la copie locale : une photo « en attente
   // d'envoi » ne peut pas être une photo absente à l'écran (FR-10, NFR-7).
   useEffect(() => {
-    setCandidat(null); setSouci(null)
+    setCandidat(null); setIllustrationCandidate(null); setSouci(null)
     let vivant = true
     void photoMachine(machine?.photo_chemin ?? null).then((f) => {
       if (!vivant) return
@@ -117,6 +128,35 @@ export function Garage({ db, onEcrit }: {
     await poserSprite(db, machine.id, candidat.dataUri)
     setCandidat(null)
     await charger(); onEcrit()
+  }
+
+  const importerVisuel = async (file: File) => {
+    if (!machine) return
+    const machineId = machine.id
+    setImporteIllustration(true); setSouci(null); setCandidat(null)
+    setIllustrationCandidate(null)
+    try {
+      const src = await importerIllustration(file)
+      setIllustrationCandidate({ machineId, src })
+    } catch (error) {
+      setSouci(error instanceof Error ? error.message : "Cette image n'a pas pu être préparée. Essaie un autre fichier.")
+    } finally {
+      setImporteIllustration(false)
+    }
+  }
+
+  const garderIllustration = async () => {
+    if (!machine || illustrationCandidate?.machineId !== machine.id || gardeIllustration) return
+    setGardeIllustration(true); setSouci(null)
+    try {
+      await poserSprite(db, machine.id, illustrationCandidate.src)
+      setIllustrationCandidate(null)
+      await charger(); onEcrit()
+    } catch {
+      setSouci("L'enregistrement de l'illustration n'a pas pu être confirmé. Réessaie dans un instant.")
+    } finally {
+      setGardeIllustration(false)
+    }
   }
 
   // Reprise explicite, jamais silencieuse : le pilote voit ce qu'il importe et pourquoi.
@@ -166,13 +206,16 @@ export function Garage({ db, onEcrit }: {
 
   if (!machines.length) {
     return (
-      <section className="garage vide">
-        <p className="libelle">garage</p>
-        <h1 className="titre">Aucune moto</h1>
-        <p className="texte">
-          Le garage est le centre du produit : le roulage s'y rattache, l'entretien s'y rattache,
-          l'usure s'y lit. Une moto se crée sans photo — le portrait vient après, s'il vient.
-        </p>
+      <section className="garage garage-selection vide">
+        <header className="garage-empty-header">
+          <span className="garage-empty-icon" aria-hidden="true"><Bike size={40} strokeWidth={1.4} /></span>
+          <p className="libelle">Ton garage</p>
+          <h1 className="titre">Tout commence<br />par ta moto.</h1>
+          <p className="texte">
+            Tes roulages, ton entretien, ta progression. Ajoute ta première moto
+            pour lui donner sa place au paddock. La photo peut attendre.
+          </p>
+        </header>
         {/* ⚠ LE SEUL BOUTON D'ICI CRÉAIT LA HONDA DE JULIAN, EN DUR. Un inconnu
             n'avait aucun moyen d'entrer sa propre moto : le garage restait vide
             ou portait une machine qui n'était pas la sienne. Trouvé par une
@@ -212,7 +255,7 @@ export function Garage({ db, onEcrit }: {
   }
 
   return (
-    <section className="garage">
+    <section className="garage garage-selection">
       {/* ⚠ LE COMPTEUR DE MACHINES MÈNE À L'ÉQUIPEMENT — « en haut à droite : X
           machine, et si je clique je peux aller sur mon équipement ».
 
@@ -222,17 +265,20 @@ export function Garage({ db, onEcrit }: {
           introuvable. La tête du garage est l'endroit où l'on compte ce qu'on
           possède ; c'est de là qu'on doit atteindre l'autre inventaire. */}
       <header className="garage-tete">
-        <p className="libelle">garage</p>
+        <p className="libelle"><Bike size={17} aria-hidden="true" /> Ton garage</p>
         <button className="lien tete-inventaire"
                 onClick={() => setVersEquipement((n) => n + 1)}>
-          <b>{machines.length}</b> moto{machines.length > 1 ? 's' : ''} · équipement ›
+          <Shirt size={17} aria-hidden="true" />
+          <span><b>{machines.length}</b> moto{machines.length > 1 ? 's' : ''} · équipement</span>
+          <ChevronRight size={16} aria-hidden="true" />
         </button>
       </header>
 
       {machines.length > 1 && (
-        <nav className="onglets">
+        <nav className="onglets" aria-label="Choisir une moto">
           {machines.map((m, i) => (
             <button key={m.id} className={`onglet ${i === actif ? 'actif' : ''}`}
+                    aria-current={i === actif ? 'true' : undefined}
                     onClick={() => setActif(i)}>{m.modele}</button>
           ))}
         </nav>
@@ -243,8 +289,12 @@ export function Garage({ db, onEcrit }: {
           déclaration et n'apparaissait NULLE PART ensuite — donc invérifiable,
           donc fausse en silence : la CBR de Julian est entrée en 2012 alors
           qu'elle est de 2010. Elle s'affiche, et elle se corrige. */}
+      <div className="garage-vehicle">
       <div className="garage-titre">
-        <p className="marque">{machine.marque}{machine.annee ? ` · ${machine.annee}` : ''}</p>
+        <div className="garage-identity-line">
+          <p className="marque">{machine.marque}{machine.annee ? ` · ${machine.annee}` : ''}</p>
+          <span className="garage-slot">{String(actif + 1).padStart(2, '0')} / {String(machines.length).padStart(2, '0')}</span>
+        </div>
         <h1 className="modele">{machine.modele}</h1>
         {/* ⚠ CE QUI SE SAISIT DOIT SE LIRE. L'année a passé une semaine dans la
             base sans jamais apparaître à l'écran, donc fausse sans que personne
@@ -276,7 +326,8 @@ export function Garage({ db, onEcrit }: {
             réellement lue ici, et un chemin qui ne peut pas aboutir ne doit pas
             s'offrir. */}
         <div className="actions-titre">
-          <button className="lien" onClick={() => setCorriger(!corriger)}>
+          <button className="lien garage-edit" aria-expanded={corriger} onClick={() => setCorriger(!corriger)}>
+            {corriger ? <X size={16} aria-hidden="true" /> : <Pencil size={16} aria-hidden="true" />}
             {corriger ? 'Annuler la modification' : machine.annee ? 'Modifier la moto' : "Ajouter l'année"}
           </button>
           {photoUrl && (
@@ -298,9 +349,10 @@ export function Garage({ db, onEcrit }: {
           été gardé, la photo réelle sinon, la silhouette en dernier. Une machine
           sans média reste pleinement une machine (AD-2) — le garage n'exige
           jamais une image pour fonctionner. */}
-      <div className="scene">
-        {machine.sprite
-          ? <img className="sprite" src={machine.sprite} alt={`${machine.marque} ${machine.modele}`} />
+      <div className="scene garage-showroom">
+        <div className="garage-scene-label" aria-hidden="true"><span>MY PADDOCK</span><span>PERSONAL GARAGE</span></div>
+        {portraitAffiche
+          ? <img className={illustrationGardee || localPortrait ? 'portrait-night' : 'sprite'} src={portraitAffiche} alt={`${machine.marque} ${machine.modele}`} />
           : photoUrl
             ? <img className="photo-machine" src={photoUrl} alt={`${machine.marque} ${machine.modele}`} />
             : (
@@ -314,10 +366,10 @@ export function Garage({ db, onEcrit }: {
                  demandé une fois déjà : la PHOTO est la sienne et ne dépend de
                  rien, le PORTRAIT PIXEL se fabrique à partir d'elle. */
               <div className="silhouette" aria-label="moto sans portrait">
+                <Bike size={72} strokeWidth={1.2} aria-hidden="true" />
                 <p className="absente">
-                  <b>pas encore d'image</b>
-                  Sa photo prendra cette place — elle reste sur ce téléphone.
-                  Le portrait pixel, lui, se fabrique à partir d'elle.
+                  <b>Ta moto, en plein cadre.</b>
+                  Ajoute sa photo pour personnaliser ton garage.
                 </p>
               </div>
             )}
@@ -351,7 +403,7 @@ export function Garage({ db, onEcrit }: {
           encore, là où `—` dit qu'il n'y a rien à savoir. */}
       <div className="chiffres" data-charge={bilan ? '1' : '0'}>
         <div>
-          <p className="et">roulages</p>
+          <p className="et"><Flag size={14} aria-hidden="true" /> roulages</p>
           <p className="va">{bilan ? bilan.roulages : '…'}</p>
         </div>
         <div>
@@ -364,19 +416,46 @@ export function Garage({ db, onEcrit }: {
           ) : <p className="va">—</p>}
         </div>
         <div>
-          <p className="et">circuit favori</p>
+          <p className="et"><MapPin size={14} aria-hidden="true" /> circuit favori</p>
           {!bilan ? <p className="va">…</p> : bilan.favori ? (
             <>
-              <p className="va" style={{ fontSize: 16 }}>{bilan.favori.nom}</p>
+              <p className="va garage-circuit-name">{bilan.favori.nom}</p>
               <p className="ou">{bilan.favori.roulages} journée{bilan.favori.roulages > 1 ? 's' : ''}</p>
             </>
           ) : <p className="va">—</p>}
         </div>
       </div>
+      </div>
 
       {/* ─── LE PORTRAIT DE JEU — récit 3bis.3 ─────────────────────────── */}
       <input ref={fichier} type="file" accept="image/*" hidden
              onChange={(e) => { const f = e.target.files?.[0]; if (f) void verser(f) }} />
+      <input ref={fichierIllustration} type="file" accept="image/png,image/jpeg,image/webp" hidden
+             onChange={(e) => {
+               const file = e.target.files?.[0]
+               e.target.value = ''
+               if (file) void importerVisuel(file)
+             }} />
+
+      {illustrationCandidate?.machineId === machine.id ? (
+        <section className="bloc pile garage-illustration-preview" aria-labelledby="illustration-preview-titre">
+          <p className="libelle" id="illustration-preview-titre">Ta nouvelle illustration</p>
+          <div className="scene garage-showroom">
+            <img className="portrait-night" src={illustrationCandidate.src} alt={`Aperçu de l'illustration de ${machine.modele}`} />
+          </div>
+          <p className="note">Garde cette illustration pour l'afficher dans ton garage. Ta photo reste inchangée.</p>
+          <button className="bouton" disabled={gardeIllustration} onClick={() => void garderIllustration()}>
+            {gardeIllustration ? 'Enregistrement…' : 'Garder cette illustration'}
+          </button>
+          <button className="bouton secondaire" disabled={gardeIllustration} onClick={() => setIllustrationCandidate(null)}>Annuler</button>
+        </section>
+      ) : (
+        <button className="bouton secondaire garage-import-illustration" disabled={importeIllustration || enCours}
+                onClick={() => fichierIllustration.current?.click()}>
+          <ImagePlus size={18} aria-hidden="true" />
+          {importeIllustration ? "Préparation de l'image…" : 'Importer une illustration'}
+        </button>
+      )}
 
       {candidat ? (
         <div className="bloc pile">
@@ -443,7 +522,8 @@ export function Garage({ db, onEcrit }: {
               Refaire un portrait raté demandait donc de l'effacer d'abord. Un
               seul bouton les remplace, en tête d'écran, et il annonce son coût
               avant d'appeler. */}
-          <button className="lien" onClick={() => fichier.current?.click()}>
+          <button className="lien garage-photo-action" onClick={() => fichier.current?.click()}>
+            <Camera size={18} aria-hidden="true" />
             {machine.photo_chemin ? 'Remplacer la photo de la moto' : 'Photographier la moto'}
           </button>
         </>
@@ -475,9 +555,11 @@ export function Garage({ db, onEcrit }: {
           ne change pas de combinaison. */}
       <Equipement db={db} onEcrit={onEcrit} appele={versEquipement} />
 
-      <button className="lien" onClick={() => void importerSaison()}>
-        Reprendre la saison 2026 · Pau-Arnos
-      </button>
+      <div className="garage-import">
+        <button className="lien" onClick={() => void importerSaison()}>
+          Reprendre la saison 2026 · Pau-Arnos
+        </button>
+      </div>
     </section>
   )
 }
@@ -502,6 +584,7 @@ function Declarer({ machine, onValider }: {
     prixAchatCentimes: number | null; acheteeLe: string | null
   }) => Promise<void>
 }) {
+  const champId = useId()
   const [marque, setMarque] = useState(machine?.marque ?? '')
   const [modele, setModele] = useState(machine?.modele ?? '')
   const [annee, setAnnee] = useState(machine?.annee ? String(machine.annee) : '')
@@ -512,18 +595,18 @@ function Declarer({ machine, onValider }: {
   const [valider, occupe] = useGeste(onValider)
 
   return (
-    <div className="pile">
-      <div className="libelle">Marque</div>
-      <input className="champ" value={marque} onChange={(e) => setMarque(e.target.value)}
+    <div className="pile garage-machine-form">
+      <label className="libelle" htmlFor={`${champId}-marque`}>Marque</label>
+      <input id={`${champId}-marque`} className="champ" value={marque} onChange={(e) => setMarque(e.target.value)}
              placeholder="Honda" autoComplete="off" />
-      <div className="libelle">Modèle</div>
-      <input className="champ" value={modele} onChange={(e) => setModele(e.target.value)}
+      <label className="libelle" htmlFor={`${champId}-modele`}>Modèle</label>
+      <input id={`${champId}-modele`} className="champ" value={modele} onChange={(e) => setModele(e.target.value)}
              placeholder="CBR 1000 RR" autoComplete="off" />
       {/* L'ANNÉE N'EST PAS UN DÉTAIL D'ÉTAT CIVIL : c'est elle qui désigne le
           barème d'entretien de cette moto-là, donc l'intervalle des horloges
           d'usure. Une CBR 2010 et une CBR 2016 n'ont pas la même page de manuel. */}
-      <div className="libelle">Année · elle désigne le bon barème d'entretien</div>
-      <input className="champ" value={annee} onChange={(e) => setAnnee(e.target.value)}
+      <label className="libelle" htmlFor={`${champId}-annee`}>Année · elle désigne le bon barème d'entretien</label>
+      <input id={`${champId}-annee`} className="champ" value={annee} onChange={(e) => setAnnee(e.target.value)}
              placeholder="2010" inputMode="numeric" />
 
       {/* LE PRIX D'ACHAT — demandé par Julian. Il ne rejoint PAS les dépenses,
@@ -536,11 +619,11 @@ function Declarer({ machine, onValider }: {
           Facultatif, et le libellé le dit. Un pilote qui a acheté d'occasion il
           y a six ans ne se souvient pas du mois, et l'exiger transformerait une
           déclaration de trente secondes en fouille de papiers. */}
-      <div className="libelle">Prix d'achat · facultatif</div>
-      <input className="champ" value={prix} onChange={(e) => setPrix(e.target.value)}
+      <label className="libelle" htmlFor={`${champId}-prix`}>Prix d'achat · facultatif</label>
+      <input id={`${champId}-prix`} className="champ" value={prix} onChange={(e) => setPrix(e.target.value)}
              placeholder="7500" inputMode="decimal" />
-      <div className="libelle">Achetée en · le mois suffit</div>
-      <input className="champ" type="month" value={achat}
+      <label className="libelle" htmlFor={`${champId}-achat`}>Achetée en · le mois suffit</label>
+      <input id={`${champId}-achat`} className="champ" type="month" value={achat}
              onChange={(e) => setAchat(e.target.value)} />
 
       <button className="bouton" disabled={!pret || occupe} onClick={() => void valider({
@@ -549,6 +632,7 @@ function Declarer({ machine, onValider }: {
         prixAchatCentimes: prix.trim() ? enCentimes(prix) : null,
         acheteeLe: /^\d{4}-\d{2}$/.test(achat) ? achat : null,
       })}>
+        {!occupe && <Plus size={18} aria-hidden="true" />}
         {occupe ? 'enregistrement…' : machine ? 'Modifier' : 'Déclarer ma moto'}
       </button>
     </div>

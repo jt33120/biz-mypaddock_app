@@ -2883,7 +2883,7 @@ const essais = [
     const brut = Object.entries(ECRANS).find(([c]) => c.endsWith('/Budget.tsx'))?.[1] ?? ''
     const source = sansCommentaires(brut)
     vrai(/TRACE_EQUIPEMENT/.test(source), 'l\'équipement sans média n\'a plus de figure')
-    vrai(/\(e\.sprite \|\| photoUrl\) \?/.test(source),
+    vrai(/\(portraitAffiche \|\| photoUrl\) \?/.test(source),
       'le tracé n\'est plus le DERNIER recours : il peut s\'afficher à côté du sprite')
     vrai(/protection: 'casque'/.test(source), 'la protection ne porte plus le casque')
     /* ⚠ ET AUCUNE ÉCHÉANCE, AUCUN ÂGE, AUCUN COMPTEUR sur cette figure. Un
@@ -3444,7 +3444,7 @@ const essais = [
     vrai(!/<button/.test(bloc), 'l\'avertissement porte un bouton : il se refermera')
     vrai(/risque/i.test(bloc), 'l\'avertissement ne nomme plus le risque')
     // Il est SOUS l'écran et au-dessus de la barre : « en bas de l'app ».
-    vrai(i > source.indexOf('className="ecran"') && i < source.indexOf('<nav className="barre">'),
+    vrai(i > source.indexOf('className="ecran"') && i < source.indexOf('<nav className="barre"'),
       'l\'avertissement a quitté le pied de l\'application')
     // Et la feuille lui laisse la place de la barre fixe, sinon il vit derrière.
     vrai(/\.avertissement\s*\{[^}]*safe-area-inset-bottom/.test(FEUILLE),

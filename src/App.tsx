@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ArrowUpRight, CalendarDays, Flag, Gauge, House, MoreHorizontal, ShieldCheck, UserRound, Wrench } from 'lucide-react'
 import { ENVIRONNEMENT, EST_PRODUCTION, MOT_ENVIRONNEMENT, PRODUCT_NAME } from './product'
 import { demanderPersistance, ouvrirBase } from './db/powersync'
 import { direLAbri, lireAbri, proposerInstallation, surAbri, type Abri } from './db/abri'
@@ -52,6 +53,9 @@ import { useGeste } from './ecrans/geste'
 import { Trophee } from './ecrans/Trophee'
 import { Journee } from './ecrans/Journee'
 import { aujourdhui, estAVenir, sePrepare } from './db/vecu'
+import { LOCAL_NIGHT_PREVIEW, prepareLocalPreview } from './visuals/local-preview'
+import { localPortraitData } from './visuals/local-portraits'
+import { estIllustrationImportee } from './visuals/import-illustration'
 
 type Db = ReturnType<typeof ouvrirBase>
 
@@ -88,7 +92,8 @@ export default function App() {
   // attend une application qui ne viendra jamais, et le message qui le lui dirait
   // est caché dessous.
   useEffect(() => { if (db || panne) retirerLEcranDeChargement() }, [db, panne])
-  const [ecran, setEcran] = useState<Ecran>('accueil')
+  const [ecran, setEcran] = useState<Ecran>(LOCAL_NIGHT_PREVIEW ? 'garage' : 'accueil')
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }) }, [ecran])
   /** L'accueil ouvre une dépense libre ; une journée conserve son rattachement.
    *  Sans ce témoin, le dernier roulage resté en mémoire gagnerait en silence. */
   const [depenseLibre, setDepenseLibre] = useState(false)
@@ -121,11 +126,12 @@ export default function App() {
   const [essai, setEssai] = useState(0)
 
   useEffect(() => {
-    const d = ouvrirBase()
+    const d = ouvrirBase(LOCAL_NIGHT_PREVIEW ? 'mypaddock-night-preview.db' : undefined)
     // La reprise des circuits tourne AVANT que quoi que ce soit puisse partir :
     // une base écrite par la v0 range le nom du circuit dans la référence, et
     // aucune de ses lignes ne franchirait la clé étrangère (récit 1.2).
     d.init()
+      .then(() => prepareLocalPreview(d))
       // AD-5 / NFR-1 : la persistance SE DEMANDE À CHAQUE DÉMARRAGE. Ce n'est
       // pas une formalité — tant qu'elle est refusée, tout ce qui n'est pas
       // encore parti au serveur, photos de la journée comprises, vit dans un
@@ -151,7 +157,7 @@ export default function App() {
 
   // L'identité est lue en local et survit hors ligne : traverser un tunnel ne
   // déconnecte personne, ça suspend seulement la synchronisation.
-  useEffect(() => surCompte(setIdentite), [])
+  useEffect(() => { if (!LOCAL_NIGHT_PREVIEW) return surCompte(setIdentite) }, [])
 
   // La synchronisation continue ne s'allume qu'à TROIS conditions : un compte,
   // une instance à qui parler, et une base déjà adoptée une fois. La troisième
@@ -339,6 +345,7 @@ export default function App() {
     const ph = await photosDuRoulage(db, id)
     const caps = await listerCaps(db)
     const g = await gestesDuRoulage(db, id)
+    const moto = (await listerMachines(db)).find(m => m.id === b.machine_id)
     return {
       circuit: b.circuit, date: b.date, sessions: b.sessions,
       meilleurMs: b.meilleur, ecartMs: b.ecart,
@@ -347,7 +354,7 @@ export default function App() {
       gestes: g.map((x) => caps.find((c) => c.code === x.cap_code)?.libelle ?? x.cap_code),
       // À défaut de photo, le portrait de la machine qui a roulé. Déjà local,
       // déjà payé : la bande visuelle du récapitulatif ne reste jamais vide.
-      sprite: (await listerMachines(db))[0]?.sprite ?? null,
+      sprite: estIllustrationImportee(moto?.sprite) ? moto!.sprite : await localPortraitData(moto?.id) ?? moto?.sprite ?? null,
       fond: ph[0] ? await lireLocale(nomLocal(ph[0])) : null,
     }
   }
@@ -428,8 +435,13 @@ export default function App() {
     onRecap: () => void rassembler(courant).then((m) => { setMatiere(m); setEcran('recap') }),
   } : null
 
+  const ongletActif = ecran === 'garage' ? 'garage'
+    : ['compte', 'sonde', 'legal'].includes(ecran) ? 'compte'
+    : ecran === 'accueil' || (ecran === 'depense' && depenseLibre) ? 'accueil'
+    : 'roulages'
+
   return (
-    <>
+    <div className="app-shell">
       <div className="sol" aria-hidden />
       {/* ⚠ LE BANDEAU N'EST PAS DÉCORATIF. Recette et production sont identiques
           au pixel près et parlent à la MÊME base : sans ces mots, on retire une
@@ -437,10 +449,17 @@ export default function App() {
           referme pas, et il dit la conséquence — pas seulement le nom. */}
       {!EST_PRODUCTION && (
         <p className="bandeau-environnement" role="status">
-          {MOT_ENVIRONNEMENT[ENVIRONNEMENT as Exclude<typeof ENVIRONNEMENT, 'production'>]}
+          {LOCAL_NIGHT_PREVIEW ? 'APERÇU LOCAL · Copie de ton garage, sans synchronisation avec ton compte' : MOT_ENVIRONNEMENT[ENVIRONNEMENT as Exclude<typeof ENVIRONNEMENT, 'production'>]}
         </p>
       )}
-      <div className="ecran" data-environnement={ENVIRONNEMENT}
+      <header className="app-header">
+        <button className="app-brand" onClick={() => setEcran('accueil')} aria-label={`${PRODUCT_NAME} · Accueil`}>
+          <Flag aria-hidden="true" /><span className="app-wordmark">{PRODUCT_NAME}</span>
+          <span className="app-edition">Night Session</span>
+        </button>
+        <span className="app-season"><Gauge aria-hidden="true" /> Saison {new Date().getFullYear()}</span>
+      </header>
+      <div className="ecran" data-ecran={ecran} data-environnement={ENVIRONNEMENT}
            data-abri={abri ? (abri.menace ? 'menace' : 'persistant') : 'inconnu'}>
         {/* ⚠ ELLE SE DIT UNE FOIS ET NE SE REDIT PLUS — récit 22.3. Elle porte
             la seule chose que le pilote ne peut pas déduire de l'écran : ce qui
@@ -457,6 +476,7 @@ export default function App() {
           <Accueil db={db} src={src} conseil={conseil} abri={abri}
                    onNouveau={() => { setDepenseNote(null); setEcran('nouveau') }}
                    onOuvrir={(id) => { setDepenseNote(null); return ouvrirRoulage(id) }}
+                   onGarage={() => { setDepenseNote(null); setEcran('garage') }}
                    onLegal={() => { setDepenseNote(null); setEcran('legal') }}
                    depenseNote={depenseNote}
                    onDepense={() => {
@@ -582,7 +602,8 @@ export default function App() {
                    }} />
         )}
         {ecran === 'garage' && <Garage db={db} onEcrit={() => void rafraichir(db)} />}
-        {ecran === 'compte' && <Compte db={db} identite={identite} adoption={adoption}
+        {ecran === 'compte' && LOCAL_NIGHT_PREVIEW && <section className="bloc pile"><span className="libelle">Aperçu privé</span><h1 className="titre">Ton garage, en local.</h1><p className="texte">Cette copie permet de découvrir les nouveaux portraits de ta moto, de ta combinaison et de ton casque. Les modifications de cet aperçu restent sur ce navigateur.</p><a className="bouton secondaire" href="/">Revenir à l’application</a></section>}
+        {ecran === 'compte' && !LOCAL_NIGHT_PREVIEW && <Compte db={db} identite={identite} adoption={adoption}
                                        onLegal={() => setEcran('legal')}
                                        onSonde={() => setEcran('sonde')} />}
         {ecran === 'sonde' && <Sonde db={db} onFermer={() => setEcran('compte')} />}
@@ -654,13 +675,13 @@ export default function App() {
         validation, ni une raison de forcer.
       </p>
 
-      <nav className="barre">
-        <button className="onglet" data-actif={ecran === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')}>ACCUEIL</button>
-        <button className="onglet" data-actif={ecran === 'garage' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('garage') }}>GARAGE</button>
-        <button className="onglet" data-actif={ecran === 'roulages' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('roulages') }}>ROULAGES</button>
-        <button className="onglet" data-actif={ecran === 'compte' || ecran === 'sonde' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('compte') }}>COMPTE</button>
+      <nav className="barre" aria-label="Navigation principale">
+        <button className="onglet" data-actif={ongletActif === 'accueil' ? '1' : '0'} onClick={() => setEcran('accueil')} aria-current={ongletActif === 'accueil' ? 'page' : undefined}><House aria-hidden="true" /><span>ACCUEIL</span></button>
+        <button className="onglet" data-actif={ongletActif === 'garage' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('garage') }} aria-current={ongletActif === 'garage' ? 'page' : undefined}><Wrench aria-hidden="true" /><span>GARAGE</span></button>
+        <button className="onglet" data-actif={ongletActif === 'roulages' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('roulages') }} aria-current={ongletActif === 'roulages' ? 'page' : undefined}><Flag aria-hidden="true" /><span>ROULAGES</span></button>
+        <button className="onglet" data-actif={ongletActif === 'compte' ? '1' : '0'} onClick={() => { setDepenseNote(null); setEcran('compte') }} aria-current={ongletActif === 'compte' ? 'page' : undefined}><UserRound aria-hidden="true" /><span>COMPTE</span></button>
       </nav>
-    </>
+    </div>
   )
 }
 
@@ -679,11 +700,12 @@ export default function App() {
    FR-13, testé ligne par ligne : chaque libellé ÉNONCE UN FAIT et jamais une
    échéance ni une injonction. Pas d'impératif, pas d'exclamation, pas de mot de
    rareté. Un libellé qui y échoue est un défaut au même titre qu'un calcul faux. */
-function Accueil({ db, src, conseil, abri, depenseNote, onNouveau, onOuvrir, onLegal, onDepense, onAller }: {
+function Accueil({ db, src, conseil, abri, depenseNote, onNouveau, onOuvrir, onLegal, onGarage, onDepense, onAller }: {
   db: Db; src: Source | null; conseil: string | null; abri: Abri | null
   depenseNote: string | null
   onNouveau: () => void; onOuvrir: (id: string) => void
   onLegal: () => void
+  onGarage: () => void
   onDepense: () => void
   /** Chaque tâche de préparation MÈNE QUELQUE PART. Une liste de rappels dont
    *  les lignes ne mènent nulle part se lit une fois et ne se relit jamais. */
@@ -692,15 +714,21 @@ function Accueil({ db, src, conseil, abri, depenseNote, onNouveau, onOuvrir, onL
   return (
     <>
       <header className="tete">
-        <h1 className="titre neon">{PRODUCT_NAME}</h1>
-        <nav className="reglages">
-          {/* ATTEIGNABLE SANS COMPTE, et c'est le point : un inconnu venu d'une
-              publicité doit pouvoir lire ce qu'on fait de ses données AVANT de
-              donner son adresse, pas après. Le compte, lui, est descendu dans la
-              barre basse — voir le commentaire de la barre. */}
-          <button className="lien" onClick={onLegal}>à propos</button>
-        </nav>
+        <div className="home-heading"><span className="libelle">Le plaisir, entre deux sessions</span><h1 className="titre">Ton paddock.</h1></div>
+        <nav className="reglages"><button className="lien" onClick={onLegal}>à propos</button></nav>
       </header>
+      <section className="night-hero" aria-labelledby="night-title">
+        <img src="/images/night-session.webp" alt="" width="1536" height="1024" fetchPriority="high" />
+        <div className="night-hero-copy">
+          <span className="night-hero-kicker"><Flag aria-hidden="true" /> La piste. Ta moto. Ton histoire.</span>
+          <h2 id="night-title">Ride.<br /><span>Remember.</span><br />Repeat.</h2>
+          <p>Les journées qui comptent.<br />La moto qui les accompagne.</p>
+          <button className="bouton" onClick={onGarage}>Entrer au garage <ArrowUpRight aria-hidden="true" /></button>
+        </div>
+      </section>
+      <div className="home-dashboard">
+      <div className="home-primary">
+        <h2 className="home-section-title"><CalendarDays aria-hidden="true" /> Dans ton carnet</h2>
       <ZoneTemporelle src={src} onNouveau={onNouveau} onOuvrir={onOuvrir} />
       {/* ⚠ IL EST ICI, ET PAS DANS L'ÉCRAN DU COMPTE. Celui que ça menace est
           justement celui qui n'a pas de compte : un inconnu venu d'une publicité
@@ -722,10 +750,15 @@ function Accueil({ db, src, conseil, abri, depenseNote, onNouveau, onOuvrir, onL
       )}
       {/* La saisie vit avant l'analyse et sur tout accueil, même sans roulage :
           un achat existe toute l'année. Le formulaire s'ouvre sur sa page. */}
+      </div>
+      <div className="home-secondary">
+        <h2 className="home-section-title"><ShieldCheck aria-hidden="true" /> Au fil de la saison</h2>
       <NoterUneDepense onOuvrir={onDepense} />
       {depenseNote && <p className="note" role="status">{depenseNote}</p>}
       {src && src.genre !== 'vide' && <ZoneChiffres db={db} />}
       {conseil && <Conseil texte={conseil} />}
+      </div>
+      </div>
     </>
   )
 }
@@ -881,7 +914,7 @@ function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
 
   return (
     <>
-      <div className="bloc pile" onClick={() => onOuvrir(r.id)}>
+      <button className="bloc pile time-card" onClick={() => onOuvrir(r.id)}>
         <div className="rang">
           <span className="libelle">{aVenir ? 'Prochain roulage' : 'Dernier roulage'}</span>
           {/* « dans 12 jours » et « il y a 3 jours » énoncent. Ni « plus que »,
@@ -932,9 +965,9 @@ function ZoneTemporelle({ src, onNouveau, onOuvrir }: {
             </div>
           </>
         )}
-      </div>
+      </button>
 
-      <button className="bouton" onClick={onNouveau}>Saisir un roulage</button>
+      <button className="bouton secondaire" onClick={onNouveau}>Saisir un roulage</button>
 
     </>
   )
@@ -1068,6 +1101,7 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
   const groupes = classerRoulages(liste)
   return (
     <>
+      <header className="rides-header"><div><span className="libelle">Le carnet de ta saison</span><h1 className="titre">Tes roulages.</h1><p className="texte faible">Les circuits changent. Les souvenirs restent.</p></div><Flag aria-hidden="true" /></header>
       {/* Le bilan de saison ouvre l'écran des roulages : c'est la vue d'ensemble
           de ce que la liste détaille en dessous. Consultable à tout moment
           (FR-55), jamais réservé à une fin de saison. */}
@@ -1076,7 +1110,7 @@ function Roulages({ db, liste, onOuvrir, onModifier, onNouveau, onEcrit }: {
       {/* UN ROULAGE EST UNE JOURNÉE, jamais une session — Julian a eu à le
           rappeler, ce qui veut dire que l'écran ne le disait pas. Il le dit
           maintenant, une fois, à l'endroit où l'on compte. */}
-      <div className="libelle">Roulages · {liste.length} journée{liste.length > 1 ? 's' : ''}</div>
+      <div className="libelle rides-count">Roulages · {liste.length} journée{liste.length > 1 ? 's' : ''}</div>
       <SectionRoulages id="aujourdhui" titre="Aujourd'hui" vide="Aucun roulage aujourd'hui."
                        db={db} liste={groupes.aujourdhui} onOuvrir={onOuvrir}
                        onModifier={onModifier} onEcrit={onEcrit} />
@@ -1164,6 +1198,14 @@ function LigneRoulage({ db, r, onOuvrir, onModifier, onEcrit }: {
       {/* ⚠ `touch-action: pan-y` VIT DANS LA FEUILLE, SUR CETTE CLASSE. Sans lui
           le navigateur ne sait pas qu'il garde le défilement vertical pour lui,
           et une liste qu'on fait défiler s'entrouvre sous le pouce. */}
+      <div className="ride-card-meta">
+        <span className="libelle">{r.date_jour}</span>
+        <button className="ride-options" aria-expanded={glisse.ouvert}
+                aria-label={`Options pour ${r.circuit_nom}, ${r.date_jour}`}
+                onClick={() => { if (glisse.ouvert) glisse.fermer(); else glisse.ouvrir() }}>
+          <MoreHorizontal aria-hidden="true" /> Options
+        </button>
+      </div>
       <div className="pile glissable" {...glisse.liaisons}
            role="button" tabIndex={0}
            aria-label={`Ouvrir ${r.circuit_nom}, ${r.date_jour}, ${chronoAccessible}, ${crashAccessible}`}
@@ -1175,7 +1217,6 @@ function LigneRoulage({ db, r, onOuvrir, onModifier, onEcrit }: {
            }}>
         <div className="rang">
           <span className="titre" style={{ fontSize: 20 }}>{r.circuit_nom}</span>
-          <span className="libelle">{r.date_jour}</span>
         </div>
         <div className="rang">
           <span className="hud-12 faible">

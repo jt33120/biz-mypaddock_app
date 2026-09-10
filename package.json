@@ -10,12 +10,17 @@
     "preview": "vite preview",
     "essais": "node banc-rendu/essais.mjs",
     "essais:unite": "node banc-rendu/unite.mjs",
-    "types": "tsc -b"
+    "types": "tsc -b",
+    "design:tokens": "node scripts/build-design-tokens.mjs",
+    "prebuild": "npm run design:tokens"
   },
   "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
     "@powersync/react": "^2.0.0",
     "@powersync/web": "^2.2.0",
     "@supabase/supabase-js": "^2.112.3",
+    "lucide-react": "^1.44.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "uuid": "^14.0.2"

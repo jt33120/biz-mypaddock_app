@@ -174,6 +174,14 @@ verifier('   le nom accessible conserve circuit, date, chrono et crash',
   nomAccessibleCarte ?? 'absent')
 await page.click('.glissable:has-text("Nogaro")')
 await page.waitForSelector('.chute:has-text("Virage 3")', { timeout: 20_000 })
+// The dossier, linked repairs and local image bytes load independently.
+// Its narrative alone cannot establish that all three reads have completed.
+await page.waitForFunction(() => {
+  const dossier = document.querySelector('.chute')
+  const image = document.querySelector('.case-photo-crash img')
+  return dossier?.textContent.includes('Levier droit')
+    && dossier.textContent.includes('123,45') && image?.complete && image.naturalWidth > 0
+}, null, { timeout: 20_000 })
 verifier('   récit, réparation et photo sont relus',
   (await texte('.chute')).includes('Levier droit')
     && (await texte('.chute')).includes('123,45')

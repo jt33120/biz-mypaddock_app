@@ -2,8 +2,10 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { readFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { localNightPortraits } from './scripts/local-night-plugin.js'
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   // Le nom vient d'UNE SEULE source, y compris pour le manifeste (récit 0.3).
   const env = loadEnv(mode, process.cwd(), '')
   const name = env.VITE_APP_NAME || 'MyPaddock'
@@ -35,10 +37,18 @@ export default defineConfig(({ mode }) => {
     return dict
   })()
 
+  // Vite's React refresh preamble needs a nonce in development. Production
+  // and preview retain the deployed CSP verbatim.
+  const devNonce = command === 'serve' ? randomBytes(24).toString('base64') : undefined
+  const devHeaders = { ...enTetes }
+  if (devNonce && devHeaders['Content-Security-Policy'])
+    devHeaders['Content-Security-Policy'] = devHeaders['Content-Security-Policy'].replace('script-src ', `script-src 'nonce-${devNonce}' `)
+
   return {
+    html: devNonce ? { cspNonce: devNonce } : undefined,
     // Le banc et le serveur de développement voient donc la MÊME politique que
     // le produit en ligne.
-    server: { headers: enTetes },
+    server: { headers: devHeaders, host: '127.0.0.1', fs: { deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/.local/**'] } },
     preview: { headers: enTetes },
     // Horodatage de build affiché à l'écran : sans lui, une PWA iOS installée
     // qui sert encore l'ancienne version se débogue comme un fantôme.
@@ -49,6 +59,7 @@ export default defineConfig(({ mode }) => {
     worker: { format: 'es' },
     plugins: [
       react(),
+      localNightPortraits(),
       // Le banc d'essai de rendu est servi sous /banc, émis depuis sa SOURCE UNIQUE
       // (banc-rendu/). Pas de copie dans public/ : une copie versionnée finit toujours
       // par diverger de l'original, et c'est l'original qu'on débogue.
@@ -67,7 +78,7 @@ export default defineConfig(({ mode }) => {
       // laisserait le marqueur brut dans la page.
       {
         name: 'titre-depuis-la-constante',
-        transformIndexHtml: (html) => html.replace(/<title>.*?<\/title>/, `<title>${name}</title>`),
+        transformIndexHtml: (html) => html.replace(/<title>.*?<\/title>/, `<title>${name}</title>`).replaceAll('__PRODUCT_NAME__', name),
       },
       VitePWA({
         registerType: 'autoUpdate',
@@ -78,7 +89,7 @@ export default defineConfig(({ mode }) => {
         // La limite Workbox par défaut est de 2 Mio ; wa-sqlite-async.wasm
         // pèse 2,18 Mo et serait silencieusement écarté.
         workbox: {
-          globPatterns: ['**/*.{js,css,html,svg,png,woff2,wasm}'],
+          globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,wasm}'],
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         },
         manifest: {
@@ -90,8 +101,8 @@ export default defineConfig(({ mode }) => {
           scope: '/',
           display: 'standalone',
           orientation: 'portrait',
-          background_color: '#070B14',
-          theme_color: '#070B14',
+          background_color: '#10131c',
+          theme_color: '#10131c',
           icons: [
             { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },

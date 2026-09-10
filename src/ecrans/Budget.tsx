@@ -1,3 +1,5 @@
+import { useLocalPortrait } from '../visuals/local-portraits'
+import { estIllustrationImportee, importerIllustration } from '../visuals/import-illustration'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
@@ -477,6 +479,8 @@ export function Equipement({ db, onEcrit, appele }: {
 function LigneMateriel({ db, e, onEcrit }: {
   db: PowerSyncDatabase; e: Materiel; onEcrit: () => void
 }) {
+  const portraitLocal = useLocalPortrait(e.id)
+  const portraitAffiche = estIllustrationImportee(e.sprite) ? e.sprite : portraitLocal ?? e.sprite
   const [retirer, occupe] = useGeste(async () => {
     await oublierEquipement(db, e.id)
     onEcrit()
@@ -490,9 +494,34 @@ function LigneMateriel({ db, e, onEcrit }: {
      plafond — le quota porte sur le PILOTE, pas sur l'objet. */
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [candidat, setCandidat] = useState<Sprite | null>(null)
+  const [illustrationCandidate, setIllustrationCandidate] = useState<string | null>(null)
+  const [importe, setImporte] = useState(false)
   const [enCours, setEnCours] = useState(false)
   const [souci, setSouci] = useState<string | null>(null)
   const fichier = useRef<HTMLInputElement>(null)
+  const fichierIllustration = useRef<HTMLInputElement>(null)
+  const [garderIllustration, gardeIllustration] = useGeste(async () => {
+    if (!illustrationCandidate) return
+    setSouci(null)
+    try {
+      await poserSpriteEquipement(db, e.id, illustrationCandidate)
+      setIllustrationCandidate(null)
+      onEcrit()
+    } catch {
+      setSouci("L'illustration n'a pas été enregistrée. Réessaie.")
+    }
+  })
+
+  const importer = async (file: File) => {
+    setImporte(true)
+    setSouci(null)
+    setCandidat(null)
+    setIllustrationCandidate(null)
+    try { setIllustrationCandidate(await importerIllustration(file)) }
+    catch (error) {
+      setSouci(error instanceof Error ? error.message : "L'illustration n'a pas pu être préparée.")
+    } finally { setImporte(false) }
+  }
 
   useEffect(() => {
     let vivant = true
@@ -539,10 +568,10 @@ function LigneMateriel({ db, e, onEcrit }: {
       {/* TROIS ÉTATS, même préséance qu'au garage : le portrait pixel s'il a été
           gardé, la photo réelle sinon, et rien du tout en dernier — un
           équipement sans média reste pleinement un équipement. */}
-      {(e.sprite || photoUrl) ? (
+      {(portraitAffiche || photoUrl) ? (
         <div className="scene-equipement">
-          <img className={e.sprite ? 'sprite' : 'photo-machine'}
-               src={e.sprite ?? photoUrl!} alt={e.nom} />
+          <img className={portraitLocal || estIllustrationImportee(e.sprite) ? 'portrait-night' : e.sprite ? 'sprite' : 'photo-machine'}
+               src={portraitAffiche ?? photoUrl!} alt={e.nom} width={1254} height={1254} loading="lazy" />
         </div>
       ) : (
         /* ⚠ QUATRIÈME ÉTAT, ET IL EST LE DERNIER — récit 20.4. Le tracé ne
@@ -577,8 +606,29 @@ function LigneMateriel({ db, e, onEcrit }: {
 
       <input ref={fichier} type="file" accept="image/*" hidden
              onChange={(ev) => { const f = ev.target.files?.[0]; if (f) void verser(f) }} />
+      <input ref={fichierIllustration} type="file" accept="image/png,image/jpeg,image/webp" hidden
+             aria-label={`Illustration de ${e.nom}`}
+             onChange={(ev) => {
+               const file = ev.target.files?.[0]
+               ev.target.value = ''
+               if (file) void importer(file)
+             }} />
 
-      {candidat ? (
+      {illustrationCandidate ? (
+        <div className="pile" role="region" aria-label={`Aperçu de l'illustration de ${e.nom}`}>
+          <div className="scene-equipement">
+            <img className="portrait-night" src={illustrationCandidate} alt={`Nouvelle illustration de ${e.nom}`} />
+          </div>
+          <p className="note">Aperçu de ton illustration. Ta photo originale est conservée.</p>
+          <button className="bouton secondaire" disabled={gardeIllustration}
+                  onClick={() => void garderIllustration()}>
+            {gardeIllustration ? 'Enregistrement…' : 'Garder ce portrait'}
+          </button>
+          <button className="lien" disabled={gardeIllustration} onClick={() => setIllustrationCandidate(null)}>
+            Annuler
+          </button>
+        </div>
+      ) : candidat ? (
         <div className="pile">
           <div className="scene-equipement">
             <img className="sprite" src={candidat.dataUri} alt={`${e.nom} en pixel`} />
@@ -614,22 +664,26 @@ function LigneMateriel({ db, e, onEcrit }: {
            « Retirer » tout court, lui, reste et détruit vraiment : il oublie la
            pièce d'équipement. Il porte donc le rouge, et pas ses voisins. */
         <div className="rang actions-materiel">
-          <button className="lien" onClick={() => fichier.current?.click()}>
+          <button className="bouton secondaire petit" disabled={importe || enCours || occupe}
+                  onClick={() => fichierIllustration.current?.click()}>
+            {importe ? 'Préparation…' : 'Importer une illustration'}
+          </button>
+          <button className="lien" disabled={importe || enCours || occupe} onClick={() => fichier.current?.click()}>
             {e.photo_chemin ? 'Remplacer la photo' : 'Photographier'}
           </button>
           {/* ⚠ LA PHOTO RELUE, PAS LA COLONNE — même règle qu'au garage. La
               colonne descend sur tous les appareils, le fichier reste sur un
               seul : conditionner la dépense sur la colonne, c'est offrir un
               chemin qui ne peut pas aboutir. */}
-          {photoUrl && (
+          {photoUrl && !importe && (
             <Refaire db={db} aUnPortrait={!!e.sprite} enCours={enCours}
                      onFabriquer={() => void fabriquer()} />
           )}
-          <button className="lien destructif" disabled={occupe}
+          <button className="lien destructif" disabled={occupe || importe || enCours}
                   onClick={() => void retirer()}>retirer</button>
         </div>
       )}
-      {souci && <p className="mot-erreur">{souci}</p>}
+      {souci && <p className="mot-erreur" role="alert">{souci}</p>}
     </div>
   )
 }

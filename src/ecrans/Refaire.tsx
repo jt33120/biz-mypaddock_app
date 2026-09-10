@@ -1,3 +1,4 @@
+import { LOCAL_NIGHT_PREVIEW } from '../local-mode'
 import { useEffect, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import { formaterEuros } from '../db/depot'
@@ -47,7 +48,7 @@ import {
  * donc même annonce. Deux textes séparés auraient divergé, et c'est celui qu'on
  * relit le moins qui se serait mis à mentir.
  */
-export function Refaire({ db, aUnPortrait, enCours, onFabriquer }: {
+function RefairePixels({ db, aUnPortrait, enCours, onFabriquer }: {
   db: PowerSyncDatabase
   /** Seul le MOT change selon qu'un portrait existe déjà. Le coût, lui, est le
    *  même dans les deux cas — et c'est le coût qui commande la confirmation. */
@@ -147,4 +148,13 @@ export function Refaire({ db, aUnPortrait, enCours, onFabriquer }: {
       <button className="lien" onClick={() => setOuvert(false)}>Ne rien lancer</button>
     </div>
   )
+}
+
+/** The historical paid pixel generator is separate from local illustration import. */
+export function Refaire(props: Parameters<typeof RefairePixels>[0]) {
+  if (LOCAL_NIGHT_PREVIEW) return null
+  return <details className="legacy-portraits">
+    <summary>Ancien générateur 16 bits</summary>
+    <RefairePixels {...props} />
+  </details>
 }

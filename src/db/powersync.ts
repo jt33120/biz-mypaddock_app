@@ -21,13 +21,13 @@ import { AppSchema } from './schema'
 export const NOM_BASE = 'mypaddock.db'
 export const VFS_DEMANDE = 'OPFSCoopSyncVFS'
 
-export const ouvrirBase = () =>
+export const ouvrirBase = (nom = NOM_BASE) =>
   new PowerSyncDatabase({
     schema: AppSchema,
     // En 2.2.0 toutes les options web vivent DANS `database`, pas au niveau
     // supérieur — vérifié dans adapters/options.d.ts.
     database: {
-      dbFilename: NOM_BASE,
+      dbFilename: nom,
       vfs: WASQLiteVFS.OPFSCoopSyncVFS,
       // OPFS exige un worker dédié : le SDK lève une erreur explicite sinon.
       useWebWorker: true,

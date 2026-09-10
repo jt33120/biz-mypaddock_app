@@ -1,3 +1,4 @@
+import { LOCAL_NIGHT_PREVIEW } from '../local-mode'
 import { createClient } from '@supabase/supabase-js'
 
 /**
@@ -8,7 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 const url = import.meta.env.VITE_SUPABASE_URL
 const cle = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
-export const supabaseConfigure = Boolean(url && cle)
+export const supabaseConfigure = Boolean(url && cle) && !LOCAL_NIGHT_PREVIEW
 
 export const supabase = supabaseConfigure
   ? createClient(url, cle, {

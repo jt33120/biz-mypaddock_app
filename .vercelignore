@@ -15,6 +15,9 @@
 *.pem
 .npmrc
 supabase/.temp/
+.local/
+artifacts/
+graft/
 
 # Trois dépôts MyPaddock antérieurs, clonés comme dépôts imbriqués.
 context/

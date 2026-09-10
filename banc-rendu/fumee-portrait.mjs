@@ -85,6 +85,12 @@ verifier('« Retirer le portrait pixel » n\'existe plus',
 //    apparaît ferait un essai qui passe ou rate selon la vitesse du disque.
 const refaire = page.locator(
   '.garage-titre .actions-titre .lien:has-text("Refaire le portrait pixel")')
+const ancienneFabrique = page.locator('.garage-titre .actions-titre details.legacy-portraits')
+await ancienneFabrique.waitFor({ state: 'visible', timeout: 20_000 })
+verifier('le générateur historique est identifié et replié',
+  (await ancienneFabrique.textContent()).includes('Ancien générateur 16 bits')
+    && !await refaire.isVisible())
+await ancienneFabrique.locator('summary').click()
 await refaire.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => { /* dit plus bas */ })
 verifier('un seul bouton fait tout, et il est en tête d\'écran', await refaire.isVisible())
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { CircleUserRound, CloudDownload, KeyRound, LogOut, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import { supabaseConfigure } from '../db/supabase'
 import {
@@ -90,14 +91,23 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
          data-supabase-configure={supabaseConfigure ? '1' : '0'}
          data-session={identite ? '1' : '0'}>
       <header className="compte-entete">
-        <p className="libelle">Réglages</p>
-        <h1 className="titre">Compte</h1>
+        <div className="compte-heading">
+          <div>
+            <p className="libelle">Ton espace pilote</p>
+            <h1 className="titre">Compte</h1>
+          </div>
+          <span className="compte-avatar" aria-hidden="true"><CircleUserRound size={36} strokeWidth={1.4} /></span>
+        </div>
+        <p className="texte compte-intro">Ta saison t'appartient. Garde le contrôle.</p>
+        <span className={`compte-session ${identite ? 'connecte' : ''}`}>
+          <span aria-hidden="true" />{identite ? 'Compte connecté' : 'Mode local · sans compte'}
+        </span>
       </header>
 
       {!engage && (
         <>
           <section className="compte compte-groupe" aria-labelledby="compte-connexion">
-            <h2 id="compte-connexion" className="titre-section">Connexion</h2>
+            <h2 id="compte-connexion" className="titre-section"><KeyRound size={19} aria-hidden="true" /> Connexion</h2>
             {!supabaseConfigure ? (
               <>
                 <p className="libelle">Sauvegarde non configurée</p>
@@ -116,7 +126,7 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
           </section>
 
           <section className="compte compte-groupe" aria-labelledby="compte-sauvegarde">
-            <h2 id="compte-sauvegarde" className="titre-section">Sauvegarde</h2>
+            <h2 id="compte-sauvegarde" className="titre-section"><CloudDownload size={19} aria-hidden="true" /> Sauvegarde</h2>
             {identite && supabaseConfigure && (
               <SauvegardeConnectee db={db} identite={identite} adoption={adoption} />
             )}
@@ -124,7 +134,7 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
           </section>
 
           <section className="compte compte-groupe" aria-labelledby="compte-donnees">
-            <h2 id="compte-donnees" className="titre-section">Données et confidentialité</h2>
+            <h2 id="compte-donnees" className="titre-section"><ShieldCheck size={19} aria-hidden="true" /> Données et confidentialité</h2>
             <EnvoiDesPhotos />
             <Mesures />
             <button type="button" className="lien" onClick={onLegal}>
@@ -133,7 +143,7 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
           </section>
 
           <details className="compte compte-groupe compte-diagnostic">
-            <summary className="titre-section">Diagnostic et aide</summary>
+            <summary className="titre-section"><SlidersHorizontal size={19} aria-hidden="true" /> Diagnostic et aide</summary>
             <button type="button" className="lien" onClick={onSonde}>
               Ouvrir — Instruments et sonde
             </button>
@@ -152,7 +162,7 @@ export function Compte({ db, identite, adoption, onLegal, onSonde }: {
           {!engage && (
             <>
               <button type="button" className="lien" onClick={() => void seDeconnecter()}>
-                Se déconnecter de cet appareil
+                <LogOut size={17} aria-hidden="true" /> Se déconnecter de cet appareil
               </button>
               <p className="note">
                 La déconnexion ne touche que cet appareil et n'efface aucune saisie.

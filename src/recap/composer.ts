@@ -1,5 +1,6 @@
 import { formaterChrono, formaterEcart, formaterEuros, type CoutRoulage } from '../db/depot'
 import { enBlob } from '../pixel/octets'
+import design from '../../design/tokens.json'
 
 /**
  * LA COMPOSITION D'IMAGE — récit 4.1.
@@ -51,19 +52,19 @@ const direDate = (iso: string) =>
   new Date(iso + 'T12:00:00Z').toLocaleDateString('fr-FR',
     { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
-const NUIT = '#070B1A'
-const ENCRE = '#EDF3FF'
-const FAIBLE = '#8FA3CE'
-const MIAMI = '#3DE0FF'
-const MAGENTA = '#FF2E9A'
+const NUIT = design.tokens.nuit
+const ENCRE = design.tokens.encre
+const FAIBLE = design.tokens['encre-faible']
+const MIAMI = design.tokens.miami
+const MAGENTA = design.tokens.magenta
 
 /** Les fontes DOIVENT être prêtes avant le premier `fillText`. Sinon le canevas
  *  dessine en repli système, silencieusement, et l'image partie est fausse. */
 const attendreLesFontes = async () => {
   try {
     await Promise.all([
-      document.fonts.load('600 96px "Chakra Petch"'),
-      document.fonts.load('500 32px "Chakra Petch"'),
+      document.fonts.load('700 96px "Barlow Condensed"'),
+      document.fonts.load('500 32px "Barlow"'),
     ])
     await document.fonts.ready
   } catch { /* repli système : l'image sort quand même, moins belle */ }
@@ -73,19 +74,19 @@ const fond = (c: CanvasRenderingContext2D) => {
   c.fillStyle = NUIT
   c.fillRect(0, 0, LARGEUR, HAUTEUR)
   const g = c.createLinearGradient(0, HAUTEUR, 0, 0)
-  g.addColorStop(0, '#3A1550'); g.addColorStop(0.45, '#1A1140'); g.addColorStop(1, NUIT)
+  g.addColorStop(0, design.tokens.horizon); g.addColorStop(0.45, design.tokens['nuit-2']); g.addColorStop(1, NUIT)
   c.fillStyle = g
   c.fillRect(0, 0, LARGEUR, HAUTEUR)
   // La ligne d'horizon du produit — le seul décor, et il est structurel.
   const h = c.createLinearGradient(0, 0, LARGEUR, 0)
   h.addColorStop(0, 'transparent'); h.addColorStop(0.22, MIAMI)
-  h.addColorStop(0.5, '#FFFFFF'); h.addColorStop(0.78, MAGENTA); h.addColorStop(1, 'transparent')
+  h.addColorStop(0.5, ENCRE); h.addColorStop(0.78, MAGENTA); h.addColorStop(1, 'transparent')
   c.fillStyle = h
   c.fillRect(0, HAUTEUR * 0.62, LARGEUR, 2)
 }
 
 const libelle = (c: CanvasRenderingContext2D, t: string, x: number, y: number) => {
-  c.font = '500 28px "Chakra Petch", sans-serif'
+  c.font = '500 28px "Barlow", sans-serif'
   c.fillStyle = FAIBLE
   c.letterSpacing = '4px'
   c.fillText(t.toUpperCase(), x, y)
@@ -93,7 +94,7 @@ const libelle = (c: CanvasRenderingContext2D, t: string, x: number, y: number) =
 }
 
 const chiffre = (c: CanvasRenderingContext2D, t: string, x: number, y: number, taille = 120, teinte = ENCRE) => {
-  c.font = `600 ${taille}px "Chakra Petch", sans-serif`
+  c.font = `700 ${taille}px "Barlow Condensed", sans-serif`
   c.fillStyle = teinte
   c.fillText(t, x, y)
 }
@@ -147,9 +148,8 @@ export const composer = async (m: Matiere, gabarit: Gabarit, masquerBudget: bool
     // ne l'autorise pas. Voir src/pixel/octets.ts — c'est ce qui cassait la
     // vitrine en ligne alors que tout passait en local.
     const bmp = await createImageBitmap(await enBlob(m.sprite))
-    // `imageSmoothingEnabled = false` : c'est ce qui rend le sprite légitime.
-    // Lissé, il se trahirait en photo floue ; au plus proche voisin il reste net.
-    c.imageSmoothingEnabled = false
+    // Illustrations are rendered smoothly at export resolution.
+    c.imageSmoothingEnabled = true
     const ech = Math.min((LARGEUR - M * 2) / bmp.width, (BAS - HAUT - 60) / bmp.height)
     const w = bmp.width * ech, h = bmp.height * ech
     c.drawImage(bmp, (LARGEUR - w) / 2, HAUT + (BAS - HAUT - h) / 2, w, h)
@@ -160,12 +160,12 @@ export const composer = async (m: Matiere, gabarit: Gabarit, masquerBudget: bool
   // L'horizon passe SOUS la bande : il pose l'image au lieu de la couper.
   const h = c.createLinearGradient(0, 0, LARGEUR, 0)
   h.addColorStop(0, 'transparent'); h.addColorStop(0.22, MIAMI)
-  h.addColorStop(0.5, '#FFFFFF'); h.addColorStop(0.78, MAGENTA); h.addColorStop(1, 'transparent')
+  h.addColorStop(0.5, ENCRE); h.addColorStop(0.78, MAGENTA); h.addColorStop(1, 'transparent')
   c.fillStyle = h
   c.fillRect(0, BAS, LARGEUR, 2)
 
   libelle(c, direDate(m.date), M, 100)
-  c.font = '600 76px "Chakra Petch", sans-serif'
+  c.font = 'italic 700 76px "Barlow Condensed", sans-serif'
   c.fillStyle = ENCRE
   c.fillText(m.circuit, M, 180)
 
@@ -205,7 +205,7 @@ export const composer = async (m: Matiere, gabarit: Gabarit, masquerBudget: bool
     y += 100
     const l = m.gestes.length ? m.gestes : ['Roulage saisi']
     for (const g of l.slice(0, 3)) {
-      c.font = '600 62px "Chakra Petch", sans-serif'
+      c.font = '600 62px "Barlow", sans-serif'
       c.fillStyle = ENCRE
       c.fillText(g, M, y)
       y += 84

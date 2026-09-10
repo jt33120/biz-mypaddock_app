@@ -1,3 +1,4 @@
+import { LOCAL_NIGHT_PREVIEW } from '../local-mode'
 /**
  * LE COFFRE — les octets d'un fichier, sur CE téléphone, en attendant le réseau.
  *
@@ -69,7 +70,7 @@ export type Capacite = {
   raison: string
 }
 
-const DOSSIER = 'photos'
+const DOSSIER = LOCAL_NIGHT_PREVIEW ? 'photos-night-preview' : 'photos'
 /** Le nom du fichier d'épreuve commence par un point : il ne peut collisionner
  *  avec aucun nom local du produit, qui dérivent tous d'un UUID ou d'un préfixe. */
 const FICHIER_EPREUVE = '.epreuve-ecriture'
@@ -187,7 +188,7 @@ const retrograder = async (pourquoi: string) => {
 
 /* ─── LE MAGASIN INDEXEDDB ────────────────────────────────────────────────── */
 
-const NOM_COFFRE = 'mypaddock-coffre'
+const NOM_COFFRE = LOCAL_NIGHT_PREVIEW ? 'mypaddock-night-preview-coffre' : 'mypaddock-coffre'
 const RAYON = 'fichiers'
 
 type Range = { blob: Blob; type: string; modifie: number }
