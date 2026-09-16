@@ -51,7 +51,7 @@ body { background: var(--nuit); font-family: var(--face); -webkit-font-smoothing
 .home-heading { display: flex; flex-direction: column; gap: var(--space-1); }
 .home-heading .libelle { color: var(--magenta); }
 .night-hero { position: relative; isolation: isolate; overflow: hidden; border-radius: var(--radius-card); min-height: 23rem; background: var(--nuit-2); border: 1px solid var(--filet); display: flex; align-items: flex-end; padding: var(--space-8); }
-.night-hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 58%; z-index: -2; filter: grayscale(1) brightness(.6); }
+.night-hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 58%; z-index: -2; filter: saturate(.86) brightness(.62) contrast(1.04); }
 .night-hero::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, color-mix(in srgb, var(--nuit) 80%, transparent), transparent 78%); }
 .night-hero::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 92% 12%, color-mix(in srgb, var(--violet-electrique) 13%, transparent), transparent 62%), radial-gradient(ellipse at 8% 90%, color-mix(in srgb, var(--bleu-electrique) 9%, transparent), transparent 55%); }
 .night-hero-copy { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-4); max-width: 27rem; }
