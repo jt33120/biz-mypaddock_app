@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { Bike, Camera, ChevronRight, Flag, ImagePlus, MapPin, Pencil, Plus, Shirt, X } from 'lucide-react'
+import { Bike, Camera, ChevronRight, Flag, ImagePlus, MapPin, Pencil, Plus, Shirt, Snowflake, Wrench, X } from 'lucide-react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
   ajouterSession, anneeSaison, bilanMachine, creerMachine, creerRoulage, enCentimes,
@@ -14,6 +14,8 @@ import { genererPortrait } from '../pixel/portrait'
 import type { Sprite } from '../pixel/spritifier'
 import { Atelier } from './Atelier'
 import { Poste } from './Poste'
+import { PageChantier, RaccourciChantier, StatutMoto } from './Chantier'
+import { NOM_STATUT } from '../db/chantier'
 import { Refaire } from './Refaire'
 import type { Categorie } from '../db/atelier'
 import { SPRITE_CBR83 } from '../assets/sprite-cbr83'
@@ -62,6 +64,8 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
   const [corriger, setCorriger] = useState(false)
   /** Le poste d'atelier ouvert EN PAGE. Non nul = le garage cède l'écran. */
   const [poste, setPoste] = useState<Categorie | null>(null)
+  /** Le chantier ouvert EN PAGE — même règle que le poste : le garage cède l'écran. */
+  const [chantierId, setChantierId] = useState<string | null>(null)
   /** Un compteur, pas un booléen : « X machine et si je clique je peux aller
    *  sur mon équipement ». Un booléen déjà vrai ne rappellerait rien au second
    *  tap, et un pilote qui tape deux fois s'attend deux fois à arriver. */
@@ -282,6 +286,14 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
   // LA PAGE D'UN POSTE PREND TOUT L'ÉCRAN. Elle ne se superpose pas au garage :
   // un poste d'atelier est un lieu, pas un tiroir, et c'est ce que demandait
   // « une page à part entière ».
+  if (chantierId) {
+    return (
+      <PageChantier db={db} machine={machine} chantierId={chantierId}
+                    onFermer={() => { setChantierId(null); window.scrollTo({ top: 0 }) }}
+                    onEcrit={() => { void charger(); onEcrit() }} />
+    )
+  }
+
   if (poste) {
     return (
       <Poste db={db} machine={machine} categorie={poste}
@@ -332,6 +344,10 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
           <span className="garage-slot">{String(actif + 1).padStart(2, '0')} / {String(machines.length).padStart(2, '0')}</span>
         </div>
         <h1 className="modele">{machine.modele}</h1>
+        {/* LE STATUT — « ready, en réparation, hivernation » (Julian, 16 sept.
+            2026). Sous le nom, parce que c'est ce qu'on dit d'une moto juste
+            après l'avoir nommée : « la CBR, elle hiberne ». */}
+        <StatutMoto db={db} machine={machine} onEcrit={() => { void charger(); onEcrit() }} />
         {/* ⚠ CE QUI SE SAISIT DOIT SE LIRE. L'année a passé une semaine dans la
             base sans jamais apparaître à l'écran, donc fausse sans que personne
             ne puisse s'en apercevoir. Le prix d'achat ne refera pas le même
@@ -385,8 +401,14 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
           été gardé, la photo réelle sinon, la silhouette en dernier. Une machine
           sans média reste pleinement une machine (AD-2) — le garage n'exige
           jamais une image pour fonctionner. */}
-      <div className="scene garage-showroom">
+      <div className="scene garage-showroom" data-statut={machine.statut}>
         <div className="garage-scene-label" aria-hidden="true"><span>MY PADDOCK</span><span>PERSONAL GARAGE</span></div>
+        {machine.statut !== 'prete' && (
+          <div className="garage-scene-statut" aria-hidden="true">
+            {machine.statut === 'hivernage' ? <Snowflake size={14} /> : <Wrench size={14} />}
+            {machine.statut === 'hivernage' ? NOM_STATUT.hivernage : "Sur l'établi"}
+          </div>
+        )}
         {portraitAffiche
           ? <img className={illustrationGardee || localPortrait ? 'portrait-night' : 'sprite'} src={portraitAffiche} alt={`${machine.marque} ${machine.modele}`} />
           : photoUrl
@@ -480,6 +502,12 @@ export function Garage({ db, onEcrit, onArgentParMoto }: {
           ⚠ ET IL N'EST PAS DANS LA BRANCHE SANS MACHINE. Là-bas il n'y a pas de
           page de moto, donc pas de question à laquelle il répondrait ; le budget
           et l'équipement, eux, y sont déjà — voir plus haut pourquoi. */}
+      {/* LE CHANTIER — juste sous la carte, parce qu'il dit ce que la moto
+          ATTEND, et avant l'argent, parce que c'est lui qui en fabriquera. Il
+          n'existe que pour une moto en hivernage ou en réparation. */}
+      <RaccourciChantier db={db} machine={machine} onOuvrir={setChantierId}
+                         onEcrit={() => { void charger(); onEcrit() }} />
+
       {onArgentParMoto && (
         <button className="lien" onClick={onArgentParMoto}>
           Ce que chaque moto t'a coûté

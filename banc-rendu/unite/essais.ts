@@ -167,6 +167,10 @@ const BANC = import.meta.glob('../*.mjs',
  * `git status` ET téléversé : c'est la forme exacte du défaut de `graft/`, dont
  * 4,5 Mo de cache contenaient les prompts en texte brut.
  */
+import {
+  declarerStatut, libelleDuChantier, lienAcceptable, marquerAchete, rechercheChez, resumer,
+  terminerEtape, type Achat, type Etape,
+} from '../../src/db/chantier'
 import VERCELIGNORE from '../../.vercelignore?raw'
 import GITIGNORE from '../../.gitignore?raw'
 
@@ -5412,6 +5416,140 @@ const essais = [
       'le tracé de l\'argent pose un <svg> à lui : le jeu d\'icônes se rouvre')
     vrai(/<polyline/.test(sansCommentaires(fichierDe(ECRANS, '/Courbe.tsx'))),
       'la ligne a quitté Courbe.tsx : elle est allée poser un <svg> dans un troisième fichier')
+  }),
+
+  /* ─── LE CHANTIER D'HIVER — retour de Julian du 16 septembre 2026 ───────── */
+
+  doit('chantier — les trois tables sont publiées, sous RLS, dans leur propre migration', () => {
+    const entree = Object.entries(MIGRATIONS).find(([nom]) => nom.includes('son_chantier_s_ouvre'))
+    vrai(!!entree, 'la migration du chantier est introuvable')
+    const sql = entree![1]
+    for (const t of ['chantier', 'chantier_etape', 'achat']) {
+      vrai(new RegExp(`'${t}'`).test(sql.slice(sql.indexOf('foreach'))), `${t} n'est jamais publiée`)
+      vrai(new RegExp(`alter table ${t} enable row level security`).test(sql), `${t} sans RLS`)
+      vrai(new RegExp(`on ${t} for all[\\s\\S]*?\\(select auth\\.uid\\(\\)\\)`).test(sql),
+        `${t} : aucune politique ne la rend à son seul pilote`)
+    }
+    vrai(/execute format\('alter publication powersync add table public\.%I'/.test(sql),
+      'la migration ne publie rien')
+    // Deux téléphones hors ligne ouvrent chacun un chantier, ou montent chacun une
+    // étape : un index unique écarterait l'une des écritures POUR DE BON (23505).
+    vrai(!/create unique index/i.test(sansCommentaires(sql)),
+      'un index unique ferait perdre une écriture hors ligne')
+  }),
+
+  doit('chantier — hiverner ouvre un chantier ; prête le clôt sans rien effacer', async () => {
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    const tx = {
+      getOptional: async () => null,
+      getAll: async () => [],
+      execute: async (sql: string, params: unknown[] = []) => { ecrites.push({ sql, params }); return {} },
+    }
+    const db = {
+      writeTransaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+      execute: async () => ({}),
+    } as any
+    const id = await declarerStatut(db, 'm1', 'hivernage', '2026-09-16')
+    vrai(!!id, "l'hivernage n'a ouvert aucun chantier")
+    const statut = ecrites.find((e) => /UPDATE machine SET statut/.test(e.sql))
+    egal(statut?.params, ['hivernage', '2026-09-16', 'm1'])
+    const ouvert = ecrites.find((e) => /INSERT INTO chantier /.test(e.sql))
+    vrai(!!ouvert, 'le chantier manque')
+    egal(ouvert!.params.slice(1), ['m1', 'hivernage', 'Hivernage 2026–2027', '2026-09-16'])
+
+    ecrites.length = 0
+    egal(await declarerStatut(db, 'm1', 'prete', '2027-03-20'), null)
+    vrai(ecrites.some((e) => /UPDATE chantier SET clos_le/.test(e.sql)), 'prête ne clôt pas le chantier')
+    vrai(!ecrites.some((e) => /DELETE/i.test(e.sql)), 'déclarer prête a effacé quelque chose')
+    let refuse = false
+    try { await declarerStatut(db, 'm1', 'hivernation' as any, '2026-09-16') } catch { refuse = true }
+    vrai(refuse, 'un statut inventé est écrit — le serveur le refuserait en 23514, pour de bon')
+  }),
+
+  doit('chantier — cocher une étape consigne au carnet, dans SA catégorie, une seule fois', async () => {
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    let faite: string | null = null
+    const tx = {
+      getOptional: async () => ({
+        libelle: 'Peinture des carénages', categorie: 'reparation_non_vitale', faite_le: faite,
+        horloge_id: 'h1', machine_id: 'm1',
+      }),
+      execute: async (sql: string, params: unknown[] = []) => { ecrites.push({ sql, params }); return {} },
+    }
+    const db = {
+      writeTransaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+      execute: async () => ({}),
+    } as any
+    const id = await terminerEtape(db, 'e1', '2026-10-04')
+    const intervention = ecrites.find((e) => /INSERT INTO intervention/.test(e.sql))
+    vrai(!!intervention && /'faite'/.test(intervention.sql), "le geste n'entre pas au carnet comme fait")
+    egal(intervention!.params, [id, 'm1', 'reparation_non_vitale', 'Peinture des carénages', '2026-10-04'],
+      'FR-46 : la peinture doit atterrir aux bricoles, pas ailleurs')
+    vrai(!/cout_centimes/.test(intervention!.sql),
+      "l'intervention porte un coût : il compterait deux fois avec la dépense de l'achat")
+    egal(ecrites.find((e) => /UPDATE horloge/.test(e.sql))?.params, [id, 'h1'],
+      "l'horloge désignée ne repart pas du geste")
+    faite = '2026-10-04'; ecrites.length = 0
+    egal(await terminerEtape(db, 'e1', '2026-10-05'), null)
+    egal(ecrites.length, 0, 'une étape déjà faite consigne une seconde intervention')
+  }),
+
+  doit('chantier — « acheté » écrit une vraie dépense : la moto en entretien, le garage en équipement', async () => {
+    const ecrites: { sql: string; params: unknown[] }[] = []
+    let machine: string | null = 'm1'
+    const tx = {
+      getOptional: async () => ({ libelle: 'Plaquettes avant', machine_id: machine, achete_le: null }),
+      execute: async (sql: string, params: unknown[] = []) => { ecrites.push({ sql, params }); return {} },
+    }
+    const db = {
+      writeTransaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+      execute: async () => ({}),
+    } as any
+    const id = await marquerAchete(db, 'a1', { centimes: 8334, jour: '2027-01-09' })
+    const depense = ecrites.find((e) => /INSERT INTO depense/.test(e.sql))!
+    egal(depense.params, [id, 'machine', 'm1', 2027, 8334, 'Plaquettes avant', 'entretien', '2027-01-09'])
+    egal(ecrites.find((e) => /UPDATE achat/.test(e.sql))?.params, ['2027-01-09', id, 'a1'])
+    machine = null; ecrites.length = 0
+    const tente = await marquerAchete(db, 'a2', { centimes: 12999, jour: '2026-11-02' })
+    egal(ecrites.find((e) => /INSERT INTO depense/.test(e.sql))?.params,
+      [tente, 'saison', null, 2026, 12999, 'Plaquettes avant', 'equipement', '2026-11-02'],
+      "un achat pour le garage doit viser la saison (AD-7), pas une moto")
+  }),
+
+  doit("chantier — l'estimation ne compte que ce qui reste à acheter, et dit ce qu'elle ignore", () => {
+    const achat = (x: Partial<Achat>): Achat => ({
+      id: 'a', chantier_id: 'c', etape_id: null, machine_id: 'm', libelle: 'x', quantite: 1,
+      prix_centimes: null, url: null, note: null, achete_le: null, depense_id: null,
+      paye_centimes: null, ...x,
+    })
+    const etape = (x: Partial<Etape>): Etape => ({
+      id: 'e', chantier_id: 'c', ordre: 1, libelle: 'x', categorie: 'entretien', note: null,
+      faite_le: null, intervention_id: null, horloge_id: null, horloge_operation: null, ...x,
+    })
+    const r = resumer(
+      [etape({ id: 'e1', libelle: 'Nettoyage', faite_le: '2026-09-20' }),
+        etape({ id: 'e2', libelle: 'Vidange' }), etape({ id: 'e3', libelle: 'Batterie' })],
+      [achat({ prix_centimes: 4167, quantite: 2 }), achat({ prix_centimes: null }),
+        achat({ prix_centimes: 6099, achete_le: '2026-09-18', paye_centimes: 5800 })])
+    egal(r.estimeCentimes, 8334, "l'estimé additionne ce qui est déjà acheté, ou oublie la quantité")
+    egal(r.payeCentimes, 5800, "l'acheté ne lit pas la dépense réelle")
+    egal([r.faites, r.aVenir, r.sansPrix, r.aAcheter], [1, 2, 1, 2])
+    egal(r.prochaine?.libelle, 'Vidange', "la prochaine étape n'est pas la première non faite")
+  }),
+
+  doit('chantier — le pont marchand ne pose aucune affiliation, et un lien reste en https', () => {
+    egal(libelleDuChantier('hivernage', '2027-02-10'), 'Hivernage 2026–2027',
+      "un hiver ouvert en février s'attribue à la mauvaise année")
+    for (const m of ['dafy', 'amazon'] as const) {
+      const u = new URL(rechercheChez(m, 'plaquettes & disques'))
+      egal(u.protocol, 'https:')
+      vrai(![...u.searchParams.keys()].some((k) => /tag|aff|ref|utm/i.test(k)),
+        `${m} : un paramètre d'affiliation sans contrat ni mention légale`)
+    }
+    egal(lienAcceptable('www.dafy-moto.com/stabilizer-250ml-motul.html'),
+      'https://www.dafy-moto.com/stabilizer-250ml-motul.html')
+    egal(lienAcceptable('http://exemple.fr/x'), null, 'un lien http passe : le serveur le refusera en 23514')
+    egal(lienAcceptable('javascript:alert(1)'), null)
   }),
 ]
 

@@ -51,6 +51,13 @@ const machine = new Table({
   /** Un MOIS, `AAAA-MM`. Même raison qu'à l'équipement : personne ne cherche sa
    *  carte grise pour saisir un garage. */
   achetee_le: column.text,
+  /** CE QUE LE PILOTE DÉCLARE DE SA MOTO — 'prete' | 'en_reparation' |
+   *  'hivernage'. Une déclaration, jamais un verdict. ⚠ NUL EN LOCAL pour les
+   *  machines synchronisées avant la colonne : le défaut serveur n'émet rien
+   *  dans le flux, donc tout lecteur passe par `coalesce(statut, 'prete')`. */
+  statut: column.text,
+  /** Le jour de la déclaration, `AAAA-MM-JJ`. Nul pour les machines d'avant. */
+  statut_depuis: column.text,
 })
 
 // ─── LA CHUTE ─────────────────────────────────────────────────────────────
@@ -346,6 +353,50 @@ const document_ = new Table({
   rapatrie_le: column.text,
 })
 
+// ─── LE CHANTIER — retour de Julian du 16 septembre 2026 ───────────────────
+// « La mienne passe en hivernation, avec une liste d'actions à mener et
+// ordonnées, et une liste de choses à acheter avec le prix pour estimer le
+// coût. » Un ORDRE DE TRAVAIL sur une machine, ouvert avec le statut et clos
+// quand elle redevient prête. Voir src/db/chantier.ts pour FR-46.
+const chantier = new Table({
+  machine_id: column.text,
+  /** 'hivernage' | 'reparation' — le statut qui l'a ouvert. */
+  genre: column.text,
+  libelle: column.text,
+  ouvert_le: column.text,
+  clos_le: column.text,
+})
+
+/** Une étape, À SON RANG. Elle porte sa catégorie d'atelier : la cocher consigne
+ *  une intervention dans CETTE catégorie, et le carnet ne mélange toujours rien. */
+const chantier_etape = new Table({
+  chantier_id: column.text,
+  ordre: column.integer,
+  libelle: column.text,
+  categorie: column.text,
+  note: column.text,
+  faite_le: column.text,
+  intervention_id: column.text,
+  horloge_id: column.text,
+})
+
+/** Ce qu'il y a à acheter, au prix ESTIMÉ — comme `evenement_vise`, ce coût ne
+ *  se présente jamais comme un fait. « Acheté » écrit une vraie dépense. */
+const achat = new Table({
+  chantier_id: column.text,
+  etape_id: column.text,
+  /** Nul = pour le garage : une tente n'appartient à aucune moto. */
+  machine_id: column.text,
+  libelle: column.text,
+  quantite: column.integer,
+  /** UNITAIRE, en centimes, estimé. Nul = pas encore de prix. */
+  prix_centimes: column.integer,
+  url: column.text,
+  note: column.text,
+  achete_le: column.text,
+  depense_id: column.text,
+})
+
 // ─── Référentiel — lu, jamais écrit par la PWA (AD-12) ────────────────────
 // Le corpus de conseils y appartient (AD-10) : il s'enrichit sans redéploiement.
 const conseil = new Table({ texte: column.text, actif: column.integer })
@@ -502,6 +553,9 @@ export const AppSchema = new Schema({
   geste,
   plan_si_alors,
   document: document_,
+  chantier,
+  chantier_etape,
+  achat,
   generation,
   coefficient_usure,
   regle_organisateur,

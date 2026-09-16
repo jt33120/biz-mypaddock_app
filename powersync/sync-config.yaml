@@ -46,6 +46,11 @@ streams:
       # l'ordre d'envoi. C'est le serveur qui l'écrit, et c'est ce qui le rend
       # crédible — un compteur écrit par le compté ne compte rien.
       - SELECT * FROM generation   WHERE pilote_id = auth.user_id()
+      # LE CHANTIER — l'hivernage se prépare au garage, pas au paddock, mais
+      # il se coche là où la clé est en main : souvent sans réseau.
+      - SELECT * FROM chantier       WHERE pilote_id = auth.user_id()
+      - SELECT * FROM chantier_etape WHERE pilote_id = auth.user_id()
+      - SELECT * FROM achat          WHERE pilote_id = auth.user_id()
 
   # ─── Le référentiel — lu par tous, écrit par personne (AD-12) ───────────
   # Le BARÈME CONSTRUCTEUR EST VOLONTAIREMENT ABSENT. Un flux global le ferait
