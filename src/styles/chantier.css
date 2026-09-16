@@ -1,0 +1,342 @@
+/* LE STATUT DE LA MOTO ET SON CHANTIER — Garage Studio, 16 septembre 2026.
+
+   Aucune couleur écrite ici : tout passe par les jetons (UX-DR1). Le bleu et le
+   violet restent de la PRÉSENTATION — le givre de l'hivernage répète le badge,
+   il ne porte jamais le statut seul (UX-DR8). Aucune animation en boucle : la
+   seule transition est celle du filtre quand le statut change, et le
+   `prefers-reduced-motion` global la coupe. */
+
+/* ─── ① LE BADGE ─────────────────────────────────────────────────────────── */
+.garage-selection .garage-statut {
+  display: flex;
+  margin-top: var(--space-3);
+}
+
+.statut-moto {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-small);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--bleu-electrique) 28%, var(--filet));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bleu-electrique) 6%, var(--nuit));
+  color: var(--encre);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.statut-moto > svg:first-child { color: var(--bleu-electrique); }
+.statut-moto .statut-mot { font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.statut-moto .statut-depuis { color: var(--encre-tenue); }
+.statut-moto[data-statut='hivernage'] > svg:first-child { color: var(--violet-electrique); }
+
+.garage-selection .statut-panneau {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--filet);
+  border-radius: var(--radius-card);
+  background: var(--nuit-2);
+}
+
+.statut-panneau .statut-puce {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--cible-primaire);
+}
+
+/* ─── ② LA SCÈNE SELON LE STATUT ─────────────────────────────────────────── */
+/* HIVERNAGE : le givre monte du sol, les halos virent au froid, la moto pâlit
+   à peine. Elle reste le sujet : tout passe SOUS l'image. */
+.garage-selection .garage-showroom[data-statut='hivernage'] {
+  background:
+    radial-gradient(ellipse at 18% 100%, color-mix(in srgb, var(--bleu-electrique) 20%, transparent), transparent 60%),
+    radial-gradient(ellipse at 82% 8%, color-mix(in srgb, var(--violet-electrique) 10%, transparent), transparent 55%),
+    var(--nuit-2);
+}
+
+.garage-selection .garage-showroom[data-statut='hivernage']::after {
+  display: block;
+  inset: 55% 0 0;
+  opacity: .55;
+  background:
+    linear-gradient(0deg, color-mix(in srgb, var(--bleu-electrique) 22%, transparent), transparent 85%),
+    repeating-linear-gradient(90deg, transparent 0 17px, color-mix(in srgb, var(--encre) 7%, transparent) 17px 18px),
+    repeating-linear-gradient(0deg, transparent 0 22px, var(--filet) 22px 23px);
+}
+
+.garage-selection .garage-showroom > img {
+  transition: filter var(--motion-base) var(--ease), transform var(--motion-base) var(--ease);
+}
+
+.garage-selection .garage-showroom[data-statut='hivernage'] > img {
+  filter: saturate(.6) brightness(.92) contrast(1.03);
+}
+
+/* EN RÉPARATION : la moto sur l'établi — une ligne de sol et deux béquilles. */
+.garage-selection .garage-showroom[data-statut='en_reparation']::before {
+  display: block;
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 14%;
+  height: 8px;
+  background:
+    linear-gradient(var(--filet-vif), var(--filet-vif)) left top / 100% 1px no-repeat,
+    linear-gradient(var(--filet-vif), var(--filet-vif)) 18% top / 1px 8px no-repeat,
+    linear-gradient(var(--filet-vif), var(--filet-vif)) 82% top / 1px 8px no-repeat;
+}
+
+.garage-selection .garage-showroom[data-statut='en_reparation'] > img {
+  filter: brightness(.9);
+  transform: translateY(-4px);
+}
+
+/* Le mot sur la scène. Décoratif (`aria-hidden`) : le badge porte le statut. */
+.garage-scene-statut {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--encre-faible);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+/* ─── ③ LE RACCOURCI SOUS LA CARTE ───────────────────────────────────────── */
+.garage-selection .chantier-raccourci {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--bleu-electrique) 22%, var(--filet));
+  border-radius: var(--radius-card);
+  background:
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--violet-electrique) 9%, transparent), transparent 60%),
+    var(--surface);
+  color: var(--encre);
+  text-align: left;
+  cursor: pointer;
+}
+
+.garage-selection .chantier-raccourci::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--space-5);
+  width: var(--space-16);
+  height: 2px;
+  background: linear-gradient(90deg, var(--bleu-electrique), var(--violet-electrique));
+  border-radius: var(--radius-pill);
+}
+
+.chantier-raccourci-corps { gap: var(--space-1); min-width: 0; }
+
+.chantier-kicker { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+.chantier-raccourci-titre {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.chantier-raccourci-titre > svg { flex: 0 0 auto; color: var(--bleu-electrique); }
+
+.chantier-raccourci-chiffre { align-items: flex-end; gap: 0; text-align: right; }
+
+.garage-selection .chantier-ouvrir { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* ─── ④ LA PAGE ──────────────────────────────────────────────────────────── */
+.chantier-page .chantier-titre .marque { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+.chantier-page .chantier-section {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* Un montant ne se coupe jamais avant son « € » : la cellule garage le tient
+   à 34 px, trop pour « ≈ 1 234,56 € » dans un tiers d'écran de 375 px. */
+.garage-selection.chantier-page .chiffres .va.chantier-va-euros {
+  font-size: var(--text-xl);
+  white-space: nowrap;
+}
+
+/* DEUX sommes, jamais trois cases : la grille du garage en prévoit trois. */
+.garage-selection.chantier-page .chiffres.chantier-sommes { grid-template-columns: 1fr 1fr; }
+
+/* LES ÉTAPES — un rail : chaque rang est un anneau, la prochaine est allumée. */
+.chantier-etapes {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chantier-etapes::before {
+  content: '';
+  position: absolute;
+  top: var(--space-6);
+  bottom: var(--space-6);
+  left: calc(var(--space-4) + 17px);
+  width: 1px;
+  background: var(--filet);
+}
+
+.chantier-etape {
+  position: relative;
+  border: 1px solid var(--filet);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.chantier-etape[data-prochaine='1'] {
+  border-color: color-mix(in srgb, var(--bleu-electrique) 45%, var(--filet));
+  background:
+    radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--bleu-electrique) 10%, transparent), transparent 55%),
+    var(--surface);
+}
+
+.chantier-etape-tete {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--cible-primaire);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chantier-rang {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--filet-vif);
+  border-radius: var(--radius-pill);
+  background: var(--nuit-2);
+  color: var(--encre-faible);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.chantier-etape[data-prochaine='1'] .chantier-rang {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--gradient-debut), var(--gradient-fin));
+  color: var(--encre);
+}
+
+.chantier-etape[data-faite='1'] .chantier-rang {
+  border-color: var(--encre-faible);
+  background: var(--encre);
+  color: var(--accent-ink);
+}
+
+.chantier-etape-nom { gap: 2px; min-width: 0; }
+.chantier-etape-nom .texte { font-size: var(--text-base); overflow-wrap: anywhere; }
+.chantier-etape[data-faite='1'] .chantier-etape-nom .texte { color: var(--encre-faible); }
+
+.chantier-categorie {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  color: var(--encre-tenue);
+  font-size: var(--text-xs);
+}
+
+.chantier-etape-corps {
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-4) calc(var(--space-4) + 36px + var(--space-3));
+}
+
+.chantier-etape-corps .chantier-fait { justify-content: center; gap: var(--space-2); }
+
+.chantier-etape-outils { justify-content: flex-start; gap: var(--space-2); flex-wrap: wrap; }
+.chantier-fleche { min-width: var(--target-small); justify-content: center; }
+
+.chantier-jour { flex-wrap: wrap; gap: var(--space-2); }
+.chantier-jour > .champ { flex: 1 1 140px; min-width: 0; }
+
+.chantier-ajout,
+.chantier-deplier { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* LES ACHATS — une étagère : chaque ligne est une fiche, le total à droite. */
+.chantier-achats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chantier-achat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--filet);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.chantier-achat[data-achete='1'] { background: var(--nuit-2); }
+
+.chantier-achat .rang { align-items: baseline; gap: var(--space-3); }
+.chantier-achat .texte { min-width: 0; overflow-wrap: anywhere; }
+
+.chantier-achat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.chantier-achat-actions > .bouton { flex: 1 1 100%; justify-content: center; gap: var(--space-2); }
+.chantier-achat-actions > .lien { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+.chantier-payer .bouton { justify-content: center; gap: var(--space-2); }
+
+.chantier-ajout-achat { justify-content: center; gap: var(--space-2); }
+
+.chantier-formulaire { gap: var(--space-2); }
+
+.chantier-prix-qte {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.chantier-prix-qte .champ { width: 100%; min-width: 0; }
+
+.chantier-marchands { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chantier-marchands > .lien { display: inline-flex; align-items: center; gap: var(--space-2); }
+.chantier-marchands > .lien[data-inactif='1'] { opacity: .5; pointer-events: none; }

@@ -49,7 +49,7 @@ export type Resultat = { bilan: BilanEnvoi; refus: Refus[] }
 // qui part avant celle qu'elle référence est refusée en 23503, écartée
 // définitivement — quatre fois le même incident sur ce produit, et deux d'entre
 // eux découverts des jours plus tard.
-export const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'chute', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'intervention', 'photo', 'evenement_vise', 'horloge', 'checklist_ligne', 'document', 'video'] as const
+export const ORDRE = ['machine', 'equipement', 'roulage', 'session', 'tour', 'chute', 'depense', 'budget_saison', 'mesure', 'plan_si_alors', 'geste', 'intervention', 'photo', 'evenement_vise', 'horloge', 'checklist_ligne', 'document', 'video', 'chantier', 'chantier_etape', 'achat'] as const
 
 /**
  * CE QUE CHAQUE TABLE RÉFÉRENCE, parmi les tables du pilote — les clés
@@ -78,6 +78,11 @@ export const DEPENDANCES: Readonly<Record<string, readonly string[]>> = {
   // l'ordre se règle sur le cas plein : une ligne détachée ne peut pas violer
   // une clé étrangère qu'elle ne porte plus.
   video: ['roulage', 'chute'],
+  // Le chantier et ses étapes pointent le carnet et l'horloge, jamais l'inverse :
+  // un second lien retour créerait un cycle que `LIEN_DIFFERE` ne sait pas couper.
+  chantier: ['machine'],
+  chantier_etape: ['chantier', 'intervention', 'horloge'],
+  achat: ['chantier', 'chantier_etape', 'machine', 'depense'],
 }
 
 /**
@@ -133,6 +138,9 @@ export const NOM_TABLE: Readonly<Record<string, readonly [string, string]>> = {
   checklist_ligne: ['ligne de checklist', 'lignes de checklist'],
   document: ['document', 'documents'],
   video: ['vidéo', 'vidéos'],
+  chantier: ['chantier', 'chantiers'],
+  chantier_etape: ['étape de chantier', 'étapes de chantier'],
+  achat: ['achat prévu', 'achats prévus'],
 }
 
 /** Le nom seul, accordé. Une table sans nom retombe sur le sien plutôt que de
@@ -216,6 +224,7 @@ export const DEFAUTS_SERVEUR: Readonly<Record<string, Readonly<Record<string, un
   mesure: { valeur: 0 },                       // écrite : src/db/mesures.ts:102-103
   photo: { etat: 'locale', genre: 'photo' },   // écrites : src/db/photos.ts:169-172
   video: { etat: 'locale' },                   // écrite : src/db/video.ts, verserVideo
+  machine: { statut: 'prete' },                // écrite : src/db/depot.ts, creerMachine ; src/db/chantier.ts
   roulage: { chrono_visible: 0, etat: 'usage', crash_statut: 'a_renseigner' },
   // Les trois valeurs sont écrites explicitement dans `depot.ts` et `chute.ts`.
 }

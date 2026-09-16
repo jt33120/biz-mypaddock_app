@@ -7,6 +7,7 @@ import { supprimerVideosEnAttente } from './video'
 import { A_EU_LIEU, aujourdhui, TOUTES_JOURNEES } from './vecu'
 import type { Poste } from './budget'
 import type { StatutCrash } from './chute'
+import type { StatutMachine } from './chantier'
 import type { GenreDeTenue } from './equipement'
 import { cacheDeChargement, retenirNouvelleMotoDeChargement } from '../visuals/splash-cache'
 
@@ -39,6 +40,9 @@ export type Machine = {
   /** La photo RÉELLE, indépendante du sprite — c'est elle qui reprend la scène
    *  quand un portrait de jeu est refusé ou retiré (récit 3bis.3). */
   photo_chemin: string | null
+  /** Ce que le pilote DÉCLARE — jamais nul à la lecture (`coalesce`). */
+  statut: StatutMachine
+  statut_depuis: string | null
 }
 
 /** Le chrono vit en MILLISECONDES ENTIÈRES. Jamais de flottant sur un temps. */
@@ -67,8 +71,8 @@ export const creerMachine = async (
   const id = nouvelId()
   const proprietaire = cacheDeChargement()?.ticket() ?? null
   await db.execute(
-    `INSERT INTO machine (id, marque, modele, annee, sprite, prix_achat_centimes, achetee_le)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO machine (id, marque, modele, annee, sprite, prix_achat_centimes, achetee_le, statut)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'prete')`,
     [id, m.marque, m.modele, m.annee, m.sprite,
       m.prixAchatCentimes ?? null, m.acheteeLe || null],
   )
@@ -80,7 +84,8 @@ export const creerMachine = async (
 export const listerMachines = (db: PowerSyncDatabase) =>
   db.getAll<Machine>(
     `SELECT id, marque, modele, annee, sprite, photo_chemin,
-            prix_achat_centimes, achetee_le
+            prix_achat_centimes, achetee_le,
+            coalesce(statut, 'prete') AS statut, statut_depuis
        FROM machine ORDER BY id DESC`)
 
 /** Le sprite se pose et se retire sans toucher au reste de la machine : c'est une
