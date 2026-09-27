@@ -12,6 +12,7 @@
  * les besoins de l'essai. Ce qui est éprouvé ici est exactement ce qui part.
  */
 import { UpdateType } from '@powersync/web'
+import { formaterKm, lireKm } from '../../src/db/atelier'
 import {
   anneeSaison, aplati, classerRoulages, coutDuRoulage, creerDepense, enCentimes, formaterChrono,
   formaterEcart, formaterEuros, supprimerRoulage,
@@ -5550,6 +5551,15 @@ const essais = [
       'https://www.dafy-moto.com/stabilizer-250ml-motul.html')
     egal(lienAcceptable('http://exemple.fr/x'), null, 'un lien http passe : le serveur le refusera en 23514')
     egal(lienAcceptable('javascript:alert(1)'), null)
+  }),
+
+  doit('carnet — le compteur se lit comme on le tape, et un champ vide ne vaut jamais zéro', () => {
+    for (const x of ['31737', '31 737', '31\u202f737 km', '31.737', '31,737', '31737,4'])
+      egal(lireKm(x), 31737, `« ${x} » ne se lit pas 31 737`)
+    for (const x of ['', '   ', 'km', 'trente mille', '-5', '3 000 000'])
+      egal(lireKm(x), null, `« ${x} » devient un relevé`)
+    egal(lireKm('0'), 0, 'un compteur neuf ne se relève pas')
+    vrai(/^31\s737 km$/.test(formaterKm(31737)), `le relevé s'affiche « ${formaterKm(31737)} »`)
   }),
 ]
 

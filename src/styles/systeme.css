@@ -197,7 +197,7 @@ body {
    Un rouge qui sert à deux choses ne sert plus à rien.
 
    ⚠ ET LA COULEUR N'EST JAMAIS SEULE (UX-DR8). Deux signes la doublent PARTOUT,
-   sur les 23 gestes rouges du produit : le MOT dit ce qui part — retirer,
+   sur les 24 gestes rouges du produit : le MOT dit ce qui part — retirer,
    supprimer, effacer, oublier — et la FORME — filet plein sur tout le tour,
    texte de la même teinte — se distingue du secondaire même pour un œil qui ne
    sépare pas les rouges des gris. Retirer l'un des deux ramène le défaut que
@@ -208,14 +208,15 @@ body {
    existent pour 6 gestes — une journée de roulage et tout ce qu'elle emporte,
    une chute, le compte entier, une photo de l'album, une photo de crash et une
    vidéo de crash —
-   soit 12 boutons rouges sur 23, l'ouvrant et le confirmant. Les 11 autres partent au premier tap :
+   soit 12 boutons rouges sur 24, l'ouvrant et le confirmant. Les 12 autres partent au premier tap :
    « Retirer ce que la sonde a écrit », et six « retirer » au bout d'une ligne
    de liste (une horloge, une pièce d'atelier, une pièce d'équipement, une ligne
    de chargement, une tâche d'avant d'y aller, une chose qu'on venait chercher),
    et les quatre du chantier d'hiver (16 sept. 2026) : « retirer » une étape ou
    un achat, « Pas encore faite » qui retire du carnet le geste qu'une coche
-   avait consigné, « Annuler l'achat » qui retire sa dépense du budget. Tous se
-   refont en un tap.
+   avait consigné, « Annuler l'achat » qui retire sa dépense du budget. Et
+   « Retirer le relevé » du compteur sur une ligne du carnet (27 sept. 2026).
+   Tous se refont en un tap.
    La règle réelle est là : les deux temps gardent ce qui ne se retape pas, pas
    ce qui se retape en cinq secondes.
 
@@ -231,7 +232,7 @@ body {
    la retire. Sa confirmation dit donc, comme celle de la photo, que les deux
    copies partent — maintenant ou au retour du réseau.
 
-   Ces 23 se répartissent en 6 `.bouton.destructif` et 17 `.lien.destructif`, et
+   Ces 24 se répartissent en 6 `.bouton.destructif` et 18 `.lien.destructif`, et
    un essai unitaire recompte les trois nombres écrits ici. Un commentaire est la
    mémoire du défaut dans ce dépôt : celui-ci décrivait une garde qu'on croyait
    tenue et qui ne tenait qu'à moitié, et c'est pire qu'une garde absente, parce

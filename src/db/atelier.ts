@@ -46,6 +46,9 @@ export type Intervention = {
   cout_centimes: number | null
   depense_id: string | null
   photo_id: string | null
+  /** Le compteur lu le jour du geste. Nul = non relevé — un geste consigné d'un
+   *  tap au paddock n'en a pas, et « pas relevé » n'est pas « zéro ». */
+  compteur_km: number | null
 }
 
 /**
@@ -97,7 +100,7 @@ export const interventions = (
   db: PowerSyncDatabase, machineId: string, categorie: Categorie,
 ) => db.getAll<Intervention>(
   `SELECT id, machine_id, categorie, etat, libelle, date_jour, cout_centimes,
-          chute_id, depense_id, photo_id
+          chute_id, depense_id, photo_id, compteur_km
      FROM intervention WHERE machine_id = ? AND categorie = ?
     ORDER BY etat DESC, coalesce(date_jour, '9999') DESC, id DESC`,
   [machineId, categorie])
@@ -125,17 +128,17 @@ export const consigner = async (
   i: {
     machineId: string; categorie: Categorie; libelle: string; date: string
     centimes?: number | null; depenseId?: string | null; photoId?: string | null
-    chuteId?: string | null
+    chuteId?: string | null; km?: number | null
   },
 ) => {
   const id = nouvelId()
   await db.execute(
     `INSERT INTO intervention
        (id, machine_id, chute_id, categorie, etat, libelle, date_jour,
-        cout_centimes, depense_id, photo_id)
-     VALUES (?, ?, ?, ?, 'faite', ?, ?, ?, ?, ?)`,
+        cout_centimes, depense_id, photo_id, compteur_km)
+     VALUES (?, ?, ?, ?, 'faite', ?, ?, ?, ?, ?, ?)`,
     [id, i.machineId, i.chuteId ?? null, i.categorie, i.libelle.trim(), i.date,
-      i.centimes ?? null, i.depenseId ?? null, i.photoId ?? null])
+      i.centimes ?? null, i.depenseId ?? null, i.photoId ?? null, i.km ?? null])
   await marquerSaisie(db)
   return id
 }
@@ -164,6 +167,33 @@ export const viser = async (
       i.centimes ?? null, i.depenseId ?? null, i.photoId ?? null])
   await marquerSaisie(db)
   return id
+}
+
+/* ─── LE COMPTEUR — retour de Julian du 27 septembre 2026 ──────────────── */
+
+/** « 31 737 », « 31737 », « 31.737 km » : ce qu'on tape en lisant un compteur.
+ *  Un point ou une virgule suivi de TROIS chiffres sépare les milliers ; suivi
+ *  d'autre chose, c'est le totaliseur partiel et la décimale tombe. `null` pour
+ *  un champ vide ou illisible — jamais zéro par défaut, jamais un nombre deviné. */
+export const lireKm = (saisie: string): number | null => {
+  const t = saisie.replace(/\s|km/gi, '')
+  const n = /^\d{1,3}([.,]\d{3})+$/.test(t) ? Number(t.replace(/[.,]/g, ''))
+    : /^\d+([.,]\d+)?$/.test(t) ? Number(t.split(/[.,]/)[0])
+    : null
+  return n !== null && n <= 2_000_000 ? n : null
+}
+
+/** « 31 737 km » — le relevé se lit comme sur le compteur. */
+export const formaterKm = (km: number): string => `${km.toLocaleString('fr-FR')} km`
+
+/** Noter le compteur APRÈS COUP. Le geste d'un tap reste d'un tap — au
+ *  chantier comme au paddock — et le relevé se rattrape sur la ligne du carnet,
+ *  le jour où on a le compteur sous les yeux. Nul efface un relevé faux. */
+export const releverCompteur = async (
+  db: PowerSyncDatabase, interventionId: string, km: number | null,
+) => {
+  await db.execute(`UPDATE intervention SET compteur_km = ? WHERE id = ?`, [km, interventionId])
+  await marquerSaisie(db)
 }
 
 /** « C'est fait aujourd'hui » — l'acte visé devient un acte posé, et il garde

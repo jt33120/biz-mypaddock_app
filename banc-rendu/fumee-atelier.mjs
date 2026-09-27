@@ -185,6 +185,28 @@ verifier('   le document gardé s\'annonce avec son poids',
   /Manuel d'atelier · \d+/.test(garde), garde.slice(0, 120))
 verifier('   et il s\'ouvre', (await page.isVisible('.materiel .lien:has-text("ouvrir")')))
 
+// ── ⑪ LE COMPTEUR — retour de Julian du 27 sept. 2026 : « la vidange à
+//    31 737 km ». Il se note à la saisie OU après coup, et le tap reste un tap.
+await page.click('text=Consigner un geste')
+await page.fill('.champ[placeholder="Plaquettes avant"]', 'Vidange moteur')
+await page.fill('.champ[placeholder="compteur en km, si tu l\'as"]', '31737')
+await page.click('.bouton:has-text("C\'est fait aujourd\'hui")')
+const vidange = '.geste-atelier:has-text("Vidange moteur")'
+await page.waitForSelector(vidange, { timeout: 15_000 })
+verifier('⑪ le relevé se lit sur la ligne du carnet',
+  /31\s737 km/.test(await texte(vidange)), (await texte(vidange)).slice(0, 60))
+const plaquettes = '.geste-atelier:has-text("Plaquettes avant")'
+verifier('   un geste d\'un tap n\'a pas de relevé, et ne l\'invente pas',
+  !/\d km/.test(await texte(plaquettes)) && await page.isVisible(`${plaquettes} .lien:has-text("Noter le compteur")`))
+await page.click(`${plaquettes} .lien:has-text("Noter le compteur")`)
+await page.fill(`${plaquettes} .champ[placeholder="31 737"]`, '31 700')
+await page.click(`${plaquettes} .bouton:has-text("À 31")`)
+await page.waitForFunction(() => [...document.querySelectorAll('.geste-atelier')]
+  .some((n) => /Plaquettes avant/.test(n.textContent) && /31\s700 km/.test(n.textContent)),
+  null, { timeout: 15_000 }).catch(() => {})
+verifier('   et il se rattrape après coup', /31\s700 km/.test(await texte(plaquettes)),
+  (await texte(plaquettes)).slice(0, 60))
+
 await page.screenshot({ path: process.argv[2] ?? '/tmp/atelier.png', fullPage: true })
 verifier('aucune erreur de console', erreurs.length === 0, erreurs.join(' | '))
 await nav.close()
