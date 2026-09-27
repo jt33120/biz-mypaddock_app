@@ -35,8 +35,10 @@ import '../styles/garage-night.css'
  *     portent sur l'objet — ses roulages, son meilleur tour, le circuit où elle va le plus.
  *
  * ⚠ CETTE LIGNE NOMMAIT « ses kilomètres, ses roulages, ce qu'elle a coûté », et
- * deux de ses trois exemples étaient faux. Aucun kilométrage n'a jamais existé :
- * ni colonne, ni saisie, ni affichage. Et « ce qu'elle a coûté » a été retiré des
+ * deux de ses trois exemples étaient faux. Aucun kilométrage n'existait alors :
+ * ni colonne, ni saisie, ni affichage. Depuis le 27 sept. 2026 il existe, mais
+ * comme RELEVÉ DU CARNET (`intervention.compteur_km`), pas comme case du
+ * garage : une moto de piste ne se résume pas à son compteur. Et « ce qu'elle a coûté » a été retiré des
  * trois cases sur la proposition de Julian, remplacé par « circuit favori » — le
  * raisonnement est plus bas, à sa place. Le commentaire, lui, avait gardé
  * l'ancienne liste : il décrivait un garage qui n'existe plus, et il le décrivait

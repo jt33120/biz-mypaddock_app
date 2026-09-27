@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerSyncDatabase } from '@powersync/web'
 import {
-  cestFait, consigner, coutAtelier, interventions, NOM_CATEGORIE, SOUS_TITRE, VIDE, viser,
-  type Categorie, type Intervention,
+  cestFait, consigner, coutAtelier, formaterKm, interventions, lireKm, NOM_CATEGORIE,
+  releverCompteur, SOUS_TITRE, VIDE, viser, type Categorie, type Intervention,
 } from '../db/atelier'
 import { enCentimes, formaterEuros, type Machine } from '../db/depot'
 import {
@@ -381,6 +381,7 @@ function Geste({ db, i, onEcrit }: {
         <span className="texte">{i.libelle}</span>
         <span className="libelle faible">
           {i.date_jour ?? 'en attente'}
+          {i.compteur_km !== null ? ` · ${formaterKm(i.compteur_km)}` : ''}
           {i.cout_centimes ? ` · ${formaterEuros(i.cout_centimes)}` : ''}
         </span>
       </div>
@@ -415,6 +416,8 @@ function Geste({ db, i, onEcrit }: {
         </button>
       </div>
 
+      {i.etat === 'faite' && <Compteur db={db} i={i} onEcrit={onEcrit} />}
+
       {/* ⚠ LA DATE SE CHOISIT — retour de Julian : « quand on met un geste :
           possibilité de mettre la date ». Le produit n'offrait que « c'est fait
           aujourd'hui », donc consigner une vidange faite trois semaines plus tôt
@@ -447,6 +450,50 @@ function Geste({ db, i, onEcrit }: {
           <button className="lien" onClick={() => setQuand(null)}>Annuler</button>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * LE COMPTEUR, APRÈS COUP — retour de Julian du 27 septembre 2026 : « nous
+ * avons fait aujourd'hui la vidange à 31 737 km ».
+ *
+ * Un geste coché au chantier ou consigné d'un tap n'a pas de relevé, et c'est
+ * voulu : le tap reste un tap. Le kilométrage se rattrape ICI, sur la ligne du
+ * carnet, le jour où on a le compteur sous les yeux — d'où un lien discret et
+ * pas un champ toujours ouvert. Un relevé faux se corrige au même endroit.
+ */
+function Compteur({ db, i, onEcrit }: {
+  db: PowerSyncDatabase; i: Intervention; onEcrit: () => void
+}) {
+  const [saisie, setSaisie] = useState<string | null>(null)
+  const km = saisie === null ? null : lireKm(saisie)
+  const [noter, occupe] = useGeste(async (valeur: number | null) => {
+    await releverCompteur(db, i.id, valeur)
+    setSaisie(null)
+    onEcrit()
+  })
+
+  if (saisie === null)
+    return (
+      <button className="lien" onClick={() => setSaisie(i.compteur_km?.toString() ?? '')}>
+        {i.compteur_km === null ? 'Noter le compteur' : 'Corriger le compteur'}
+      </button>
+    )
+  return (
+    <div className="pile">
+      <input className="champ" value={saisie} onChange={(e) => setSaisie(e.target.value)}
+             placeholder="31 737" inputMode="numeric" autoComplete="off" autoFocus />
+      <button className="bouton secondaire" disabled={occupe || km === null}
+              onClick={() => void noter(km)}>
+        {occupe ? 'enregistrement…' : km === null ? 'Kilométrage au compteur' : `À ${formaterKm(km)}`}
+      </button>
+      {i.compteur_km !== null && (
+        <button className="lien destructif" disabled={occupe} onClick={() => void noter(null)}>
+          Retirer le relevé
+        </button>
+      )}
+      <button className="lien" onClick={() => setSaisie(null)}>Annuler</button>
     </div>
   )
 }
@@ -513,12 +560,16 @@ function Saisir({ db, machineId, categorie, onFini }: {
 }) {
   const [libelle, setLibelle] = useState('')
   const [montant, setMontant] = useState('')
+  const [compteur, setCompteur] = useState('')
   const [jour, setJour] = useState(aujourdhui())
   const [dater, setDater] = useState(false)
   const centimes = montant.trim() ? enCentimes(montant) : null
+  const km = lireKm(compteur)
   const [poser, occupe] = useGeste(async (maintenant: boolean) => {
     const commun = { machineId, categorie, libelle, centimes }
-    if (maintenant) await consigner(db, { ...commun, date: jour })
+    // Le relevé n'accompagne que l'acte POSÉ : une pièce achetée et pas encore
+    // montée n'a pas été montée à un kilométrage.
+    if (maintenant) await consigner(db, { ...commun, date: jour, km })
     else await viser(db, commun)
     onFini()
   })
@@ -529,6 +580,8 @@ function Saisir({ db, machineId, categorie, onFini }: {
              placeholder="Plaquettes avant" autoComplete="off" />
       <input className="champ" value={montant} onChange={(e) => setMontant(e.target.value)}
              placeholder="montant, si tu l'as" inputMode="decimal" />
+      <input className="champ" value={compteur} onChange={(e) => setCompteur(e.target.value)}
+             placeholder="compteur en km, si tu l'as" inputMode="numeric" autoComplete="off" />
 
       {/* Même arbitrage qu'au-dessus : un tap par défaut, la date pour qui
           rattrape. Un champ date toujours ouvert ajoute une décision à chaque

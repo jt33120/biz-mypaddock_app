@@ -240,6 +240,9 @@ const intervention = new Table({
   cout_centimes: column.integer,
   depense_id: column.text,
   photo_id: column.text,
+  /** Le kilométrage lu au compteur le jour du geste. Nul = non relevé, jamais
+   *  zéro — et jamais lu par une horloge d'usure, qui compte des roulages. */
+  compteur_km: column.integer,
 })
 
 // FR-54 — « un objet léger, désiré avant d'être réservé ». Il ne touche pas la
